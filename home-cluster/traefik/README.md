@@ -1,6 +1,6 @@
 Manually create email address secret:
 ```
-kubectl create secret generic externaldns-cloudflare-token \
-  --from-literal=cloudflare-api-token=<your-cloudflare-api-token> \
+kubectl create secret generic cloudflare-dns-token \
+  --from-literal=token=<your-token> \
   --namespace=external-dns
 ```

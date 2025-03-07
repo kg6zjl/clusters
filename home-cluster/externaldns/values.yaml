@@ -1,8 +1,8 @@
 provider: cloudflare
 cloudflare:
   apiTokenSecret:
-    name: externaldns-cloudflare-token
-    key: cloudflare-api-token
+    name: cloudflare-dns-token
+    key: token
 rbac:
   create: true
 logLevel: info
