@@ -1,0 +1,21 @@
+ports:
+  web:
+    redirectTo: websecure
+  websecure:
+    tls:
+      enabled: true
+ingressRoute:
+  dashboard:
+    enabled: true
+providers:
+  kubernetesCRD:
+    enabled: true
+  kubernetesIngress:
+    enabled: true
+certificatesResolvers:
+  default:
+    acme:
+      email: <your-email@example.com>
+      storage: /data/acme.json
+      httpChallenge:
+        entryPoint: web
