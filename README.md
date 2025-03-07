@@ -1,2 +1,2 @@
-# clusters
-ArgoCD Dir for my Cluster Configs
+# Cluster Configs
+ArgoCD monitored repo for my cluster configs
