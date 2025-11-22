@@ -1,0 +1,10 @@
+apiVersion: externaldns.k8s.io/v1alpha1
+kind: DNSEndpoint
+metadata:
+  name: dashboard
+spec:
+  endpoints:
+  - dnsName: dashboard.kube.stevearnett.com
+    recordType: CNAME
+    targets:
+    - kube.stevearnett.com

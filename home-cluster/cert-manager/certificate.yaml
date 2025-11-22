@@ -1,0 +1,19 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: wildcard-stevearnett-com-tls
+  namespace: cert-manager
+spec:
+  secretTemplate:
+    annotations:
+      reflector.v1.k8s.emberstack.com/reflection-allowed: "true"
+      reflector.v1.k8s.emberstack.com/reflection-auto-enabled: "true"
+      reflector.v1.k8s.emberstack.com/reflection-allowed-namespaces: "caddy,plex"
+  secretName: wildcard-stevearnett-com-tls
+  dnsNames:
+    - "*.stevearnett.com"
+    - "*.kube.stevearnett.com"
+    - "stevearnett.com"
+  issuerRef:
+    name: letsencrypt-issuer
+    kind: ClusterIssuer

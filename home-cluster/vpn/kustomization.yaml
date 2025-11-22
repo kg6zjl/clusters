@@ -1,0 +1,31 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: vpn
+
+resources:
+  - test-vpn.yaml
+
+secretGenerator:
+- name: vpn-secret
+  envs:
+  - .env
+
+patches:
+- target:
+    kind: ConfigMap
+    name: qbittorrent-config
+  patch: |-
+    - op: replace
+      path: /data/qBittorrent.conf
+      value: |
+        [Preferences]
+        WebUI\Address=*
+        WebUI\Port=8080
+        WebUI\Username=admin
+        WebUI\Password=$(QB_PASSWORD_HASH)
+        [BitTorrent]
+        Session\DefaultSavePath=/downloads
+        Session\TempPath=/downloads/temp
+        Session\TempPathEnabled=true
+

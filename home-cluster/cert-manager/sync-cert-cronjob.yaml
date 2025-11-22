@@ -1,0 +1,50 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: sync-wildcard-cert
+  namespace: cert-manager
+spec:
+  schedule: "0 */12 * * *"
+  successfulJobsHistoryLimit: 2  # Keep the last 2 successful jobs
+  failedJobsHistoryLimit: 1      # Keep the last 1 failed job
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: OnFailure
+          volumes:
+            - name: cert-storage
+              emptyDir: {}  # temp shared volume
+            - name: nas-creds
+              secret:
+                secretName: nas-smb-credentials
+          containers:
+            - name: fetch-certs
+              image: bitnami/kubectl:latest
+              command:
+                - /bin/sh
+                - -c
+                - |
+                  CERT=$(kubectl get secret wildcard-stevearnett-com-tls -n cert-manager -o jsonpath='{.data.tls\.crt}' | base64 -d)
+                  KEY=$(kubectl get secret wildcard-stevearnett-com-tls -n cert-manager -o jsonpath='{.data.tls\.key}' | base64 -d)
+                  echo "$CERT" > /certs/fullchain.pem
+                  echo "$KEY" > /certs/privkey.pem
+              volumeMounts:
+                - name: cert-storage
+                  mountPath: /certs
+            - name: push-to-nas
+              image: alpine:latest
+              command:
+                - /bin/sh
+                - -c
+                - |
+                  apk add --no-cache samba-client
+                  smbclient //192.168.1.176/cert \
+                    -W WORKGROUP -U "$(cat /creds/username)%$(cat /creds/password)" \
+                    -c "put /certs/fullchain.pem cert.pem; put /certs/privkey.pem privkey.pem"
+              volumeMounts:
+                - name: cert-storage
+                  mountPath: /certs
+                - name: nas-creds
+                  mountPath: /creds
+                  readOnly: true

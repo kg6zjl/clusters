@@ -1,0 +1,136 @@
+repositories:
+  - name: emberstack
+    url: https://emberstack.github.io/helm-charts
+  - name: oauth2-proxy
+    url: https://oauth2-proxy.github.io/manifests
+  - name: stakater
+    url: https://stakater.github.io/stakater-charts
+  - name: external-dns
+    url: https://kubernetes-sigs.github.io/external-dns/
+  - name: plexinc
+    url: https://plexinc.github.io/pms-docker/
+  - name: csi-driver-smb
+    url: https://raw.githubusercontent.com/kubernetes-csi/csi-driver-smb/master/charts
+
+releases:
+  - name: reflector
+    namespace: clustersecret
+    chart: emberstack/reflector
+    version: 9.0.322
+    values:
+      - updateOnChange: true
+  - name: reloader
+    namespace: kube-system
+    chart: stakater/reloader
+    version: 1.0.72
+  - name: oauth2-proxy
+    namespace: auth
+    chart: oauth2-proxy/oauth2-proxy
+    version: 7.12.6
+    values:
+      - config:
+          existingSecret: "oauth2-proxy-secret"
+        extraArgs:
+          provider: google
+          email-domain: "stevearnett.com"
+          upstream: "static://200"
+          cookie-secure: "false"
+          client-id: "${GOOGLE_CLIENT_ID}"
+          client-secret: "${GOOGLE_CLIENT_SECRET}"
+          redirect-url: "https://auth.stevearnett.com/oauth2/callback"
+          http-address: "0.0.0.0:4180"
+        containerPorts:
+          http: 4180
+        service:
+          portNumber: 4180
+          type: ClusterIP
+          ports:
+            - name: proxy
+              port: 4180
+              targetPort: 4180
+            - name: metrics
+              port: 44180
+              targetPort: 44180
+          annotations:
+            prometheus.io/scrape: "true"
+            prometheus.io/port: "44180"
+            prometheus.io/path: "/metrics"
+        ingress:
+          enabled: false
+  - name: external-dns
+    namespace: kube-system
+    chart: external-dns/external-dns
+    version: 1.14.5
+    values:
+      - provider: cloudflare
+        cloudflare:
+          apiToken:
+            secretName: cloudflare-api-creds-root
+            secretKey: CLOUDFLARE_API_TOKEN
+        domainFilters:
+          - stevearnett.com
+        txtOwnerId: home-cluster
+        logLevel: debug
+        env:
+          - name: CF_API_TOKEN
+            valueFrom:
+              secretKeyRef:
+                name: cloudflare-api-creds-root
+                key: CLOUDFLARE_API_TOKEN
+        extraArgs:
+          - --source=crd
+        service:
+          annotations:
+            prometheus.io/scrape: "true"
+            prometheus.io/port: "7979"
+            prometheus.io/path: "/metrics"
+  - name: kube-prometheus-stack
+    namespace: monitoring
+    chart: prometheus-community/kube-prometheus-stack
+    version: 55.5.0
+    values:
+      - crds:
+          enabled: true
+        prometheus:
+          serviceMonitorSelectorNilUsesHelmValues: false
+        grafana:
+          enabled: true
+          adminPassword: "admin"
+        alertmanager:
+          enabled: true
+  - name: csi-driver-smb
+    namespace: kube-system
+    chart: csi-driver-smb/csi-driver-smb
+  - name: plex
+    namespace: plex
+    chart: plexinc/plex-media-server
+    version: "1.2.0"
+    values:
+      - service:
+          type: ClusterIP
+        ingress:
+          enabled: false
+        persistence:
+          config:
+            enabled: true
+            size: 10Gi
+          data:
+            enabled: true
+            size: 100Gi
+        extraVolumes:
+          - name: media-tv
+            hostPath:
+              path: /mnt/nas/tv
+              type: Directory
+          - name: media-movies
+            hostPath:
+              path: /mnt/nas/movies
+              type: Directory
+        extraVolumeMounts:
+          - name: media-tv
+            mountPath: /media/tv
+          - name: media-movies
+            mountPath: /media/movies
+        claimSecret:
+          name: plex-claim-secret
+          key: PLEX_CLAIM

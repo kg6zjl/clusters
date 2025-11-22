@@ -1,0 +1,52 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: caddy
+  namespace: caddy
+spec:
+  strategy:
+    type: Recreate
+  replicas: 1
+  selector:
+    matchLabels:
+      app: caddy
+  template:
+    metadata:
+      labels:
+        app: caddy
+      annotations:
+        # Automatically restart the pod if the ConfigMap changes
+        configmap.reloaded: "{{ .Release.Revision }}"  # Custom annotation for reloading
+        secret.reloader.stakater.com/reload: "wildcard-stevearnett-com-tls"
+    spec:
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      containers:
+        - name: caddy
+          image: caddy:2.10-alpine
+          ports:
+            - containerPort: 80
+              name: http
+            - containerPort: 443
+              name: https
+          env:
+            - name: CADDY_PLUGINS
+              value: "github.com/greenpau/caddy-security"
+            - name: CLOUDFLARE_API_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: cloudflare-api-creds-root
+                  key: CLOUDFLARE_API_TOKEN
+          volumeMounts:
+            - name: caddy-cert-volume
+              mountPath: /etc/caddy/certs
+              readOnly: true
+            - name: caddy-config
+              mountPath: /etc/caddy
+      volumes:
+        - name: caddy-cert-volume
+          secret:
+            secretName: wildcard-stevearnett-com-tls
+        - name: caddy-config
+          configMap:
+            name: caddy-config

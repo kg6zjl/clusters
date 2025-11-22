@@ -1,2 +1,1 @@
-# Cluster Configs
-ArgoCD monitored repo for my cluster configs
+# Home Lab Cluster Configs

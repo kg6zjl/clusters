@@ -1,0 +1,13 @@
+namespace: kube-system 
+
+resources:
+  - deployment.yaml
+  - service.yaml
+  - serviceaccount.yaml
+  - secrets.yaml
+  - role.yaml
+  - rolebinding.yaml
+  - clusterrole.yaml
+  - clusterrolebinding.yaml
+  - configmap.yaml
+  - dnsendpoint.yaml

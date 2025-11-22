@@ -1,0 +1,4 @@
+.env
+.env*
+NOTES.md
+.DS_Store

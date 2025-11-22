@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kubernetes-dashboard-settings
+  namespace: kube-system
+data:
+  settings: |
+    {
+      "global": {
+        "baseHref": "/dashboard"
+      }
+    }

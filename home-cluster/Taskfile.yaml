@@ -1,0 +1,13 @@
+version: "3"
+tasks:
+  default:
+    desc: "You are here"
+    cmds:
+      - task --list-all
+
+  apply:
+    cmds:
+      - helm repo update
+      - source .env && helmfile sync
+      - kubectl apply -k .
+      - kubectl rollout restart deployment caddy -n caddy || true
