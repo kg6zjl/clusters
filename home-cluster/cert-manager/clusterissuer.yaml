@@ -1,0 +1,19 @@
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-issuer
+  namespace: cert-manager
+spec:
+  acme:
+    email: 1igo1ixn4@mozmail.com
+    preferredChain: "ISRG Root X1"
+    server: https://acme-v02.api.letsencrypt.org/directory
+    privateKeySecretRef:
+      name: cloudflare-private-key
+    solvers:
+      - dns01:
+          cloudflare:
+            email: 1igo1ixn4@mozmail.com
+            apiTokenSecretRef:
+              name: cloudflare-api-creds-root
+              key: CLOUDFLARE_API_TOKEN

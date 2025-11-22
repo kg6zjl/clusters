@@ -1,8 +1,0 @@
-provider: cloudflare
-cloudflare:
-  apiTokenSecret:
-    name: cloudflare-dns-token
-    key: token
-rbac:
-  create: true
-logLevel: info

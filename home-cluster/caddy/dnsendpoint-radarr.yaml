@@ -1,0 +1,11 @@
+apiVersion: externaldns.k8s.io/v1alpha1
+kind: DNSEndpoint
+metadata:
+  name: radarr
+  namespace: kube-system
+spec:
+  endpoints:
+  - dnsName: radarr.kube.stevearnett.com
+    recordType: CNAME
+    targets:
+    - kube.stevearnett.com

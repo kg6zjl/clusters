@@ -1,0 +1,16 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - configmap.yaml
+  - deployment.yaml
+  - namespace.yaml
+  - service.yaml
+  - ingress.yaml
+  - dnsendpoint-grafana.yaml
+  - dnsendpoint-prometheus.yaml
+  - dnsendpoint-prowlarr.yaml
+  - dnsendpoint-qb.yaml
+  - dnsendpoint-radarr.yaml
+  - dnsendpoint-sonarr.yaml
+generatorOptions:
+  disableNameSuffixHash: true
