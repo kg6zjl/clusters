@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cloudflared-config
+  namespace: cloudflared
+data:
+  config.yaml: |
+    tunnel: 15278342-2956-4d13-946f-cb2f5ae03bdb
+    protocol: auto
+
+    metrics: 0.0.0.0:2000
+    no-autoupdate: true
+
+    ingress:
+      - hostname: quotes.stevearnett.com
+        service: http://nginx-dummy.cloudflared.svc.cluster.local
+        originRequest:
+          noTLSVerify: true
+      - service: http_status:404
