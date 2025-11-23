@@ -11,6 +11,15 @@ repositories:
     url: https://plexinc.github.io/pms-docker/
   - name: csi-driver-smb
     url: https://raw.githubusercontent.com/kubernetes-csi/csi-driver-smb/master/charts
+  - name: caddy
+    url: https://caddyserver.github.io/ingress
+  - name: cloudflare
+    url: https://cloudflare.github.io/helm-charts
+  - name: bitnami
+    url: https://charts.bitnami.com/bitnami
+
+helmDefaults:
+  historyMax: 3
 
 releases:
   - name: reflector
