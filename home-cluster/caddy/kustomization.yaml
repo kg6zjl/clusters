@@ -6,11 +6,13 @@ resources:
   - namespace.yaml
   - service.yaml
   - ingress.yaml
+  - dnsendpoint-auth.yaml
   - dnsendpoint-grafana.yaml
   - dnsendpoint-prometheus.yaml
   - dnsendpoint-prowlarr.yaml
   - dnsendpoint-qb.yaml
   - dnsendpoint-radarr.yaml
   - dnsendpoint-sonarr.yaml
+  - dnsendpoint-zb.yaml
 generatorOptions:
   disableNameSuffixHash: true

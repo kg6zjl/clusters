@@ -2,8 +2,12 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: home-assistant
+  namespace: home-assistant
 spec:
+  strategy:
+    type: Recreate
   replicas: 1
+  revisionHistoryLimit: 3
   selector:
     matchLabels:
       app: home-assistant
@@ -15,13 +19,29 @@ spec:
       initContainers:
       - name: init-config
         image: alpine
-        command: ['sh', '-c', 'apk add --no-cache unzip curl && rm -f /config/configuration.yaml && cp /tmp/config/configuration.yaml /config/configuration.yaml && mkdir -p /config/custom_components/hacs && cd /config/custom_components/hacs && curl -L https://github.com/hacs/integration/releases/latest/download/hacs.zip -o hacs.zip && unzip -o hacs.zip && rm hacs.zip']
+        command:
+          - sh
+          - -c
+          - |
+            apk add --no-cache unzip curl &&
+            rm -f /config/configuration.yaml &&
+            cp /tmp/config/configuration.yaml /config/configuration.yaml &&
+            mkdir -p /config/custom_components/hacs &&
+            cd /config/custom_components/hacs &&
+            curl -L https://github.com/hacs/integration/releases/latest/download/hacs.zip -o hacs.zip &&
+            unzip -o hacs.zip &&
+            rm hacs.zip &&
+            # only create stub files if they don't exist
+            [ ! -f /config/automations.yaml ] && echo '[]' > /config/automations.yaml || true &&
+            [ ! -f /config/scripts.yaml ] && echo '[]' > /config/scripts.yaml || true &&
+            [ ! -f /config/scenes.yaml ] && echo '[]' > /config/scenes.yaml || true
         volumeMounts:
         - name: config
           mountPath: /config
         - name: init-config
           mountPath: /tmp/config
-      hostNetwork: true
+      hostNetwork: 
+      dnsPolicy: ClusterFirstWithHostNet
       containers:
       - name: home-assistant
         image: homeassistant/home-assistant:2025.11
@@ -30,6 +50,19 @@ spec:
         volumeMounts:
         - name: config
           mountPath: /config
+      - name: matter-server
+        image: ghcr.io/home-assistant-libs/python-matter-server:8.1.0
+        ports:
+        - containerPort: 5580
+        volumeMounts:
+        - name: matter-data
+          mountPath: /data
+        env:
+        - name: MATTER_SERVER_PORT
+          value: "5580"
+        securityContext:
+          capabilities:
+            add: ["NET_ADMIN", "NET_RAW"]
       volumes:
       - name: config
         persistentVolumeClaim:
@@ -37,3 +70,6 @@ spec:
       - name: init-config
         configMap:
           name: home-assistant-config
+      - name: matter-data
+        persistentVolumeClaim:
+          claimName: matter-server-pvc

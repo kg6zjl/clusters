@@ -11,12 +11,17 @@ data:
         - 10.0.0.0/8
         - 192.168.1.96
     mobile_app:
+    assist_pipeline:
     wemo:
       discovery: true
+    history:
     homeassistant:
+      time_zone: America/Los_Angeles
       customize:
-        # Unhide specific pool size sensors (replace with actual entity IDs)
         sensor.ugreen_dxp2800_d460_pool_1:
           hidden: false
         sensor.ugreen_xp2800_d460_pool_2:
           hidden: false
+    automation: !include automations.yaml
+    script: !include scripts.yaml
+    scene: !include scenes.yaml

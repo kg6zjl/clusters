@@ -26,6 +26,7 @@ metadata:
     app: gluetun
 spec:
   replicas: 1
+  revisionHistoryLimit: 3
   selector:
     matchLabels:
       app: gluetun
@@ -43,7 +44,7 @@ spec:
         image: busybox:1.36
         securityContext:
           privileged: true
-        command: ['sh', '-c', 'mkdir -p /config/qBittorrent && cp /config-init/qBittorrent.conf /config/qBittorrent/qBittorrent.conf || true']
+        command: ['sh', '-c', 'mkdir -p /config/qBittorrent'] # && cp /config-init/qBittorrent.conf /config/qBittorrent/qBittorrent.conf || true']
         volumeMounts:
         - name: config
           mountPath: /config
@@ -103,6 +104,11 @@ spec:
           value: "8080"
         - name: WEBUI_ADDRESS
           value: "0.0.0.0"
+        - name: QBITTORRENT__AUTH__ADMIN_PASSWORD_HASH
+          valueFrom:
+            secretKeyRef:
+              name: qbittorrent-secret
+              key: QBITTORRENT__AUTH__ADMIN_PASSWORD_HASH
         volumeMounts:
         - name: config
           mountPath: /config
@@ -130,8 +136,7 @@ data:
     [Preferences]
     WebUI\Address=*
     WebUI\Port=8080
-    WebUI\Username=admin
-    WebUI\Password=
+    WebUI\Username=admin123
     [BitTorrent]
     Session\DefaultSavePath=/downloads
     Session\TempPath=/downloads/temp
