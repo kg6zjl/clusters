@@ -3,9 +3,11 @@ kind: Kustomization
 namespace: cert-manager
 
 secretGenerator:
-  - name: nas-smb-credentials
-    envs:
-      - .env
+- name: nas-smb-credentials
+  envs:
+    - .env
+  options:
+    disableNameSuffixHash: true
 
 resources:
   # - namespace.yaml # created via microk8s command

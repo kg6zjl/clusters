@@ -40,7 +40,8 @@ spec:
           mountPath: /config
         - name: init-config
           mountPath: /tmp/config
-      hostNetwork: true
+      hostNetwork: 
+      dnsPolicy: ClusterFirstWithHostNet
       containers:
       - name: home-assistant
         image: homeassistant/home-assistant:2025.11
@@ -59,6 +60,9 @@ spec:
         env:
         - name: MATTER_SERVER_PORT
           value: "5580"
+        securityContext:
+          capabilities:
+            add: ["NET_ADMIN", "NET_RAW"]
       volumes:
       - name: config
         persistentVolumeClaim:

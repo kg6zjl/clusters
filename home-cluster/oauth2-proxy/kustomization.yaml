@@ -6,10 +6,10 @@ namespace: auth
 resources:
   - namespace.yaml
 
-secretGenerator:
-  - name: oauth2-proxy-secret
-    envs:
-      - .env
+# secretGenerator:
+#   - name: oauth2-proxy-secret
+#     envs:
+#       - .env
 
 generatorOptions:
   disableNameSuffixHash: true

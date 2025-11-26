@@ -10,22 +10,10 @@ secretGenerator:
 - name: vpn-secret
   envs:
   - .env
-
-patches:
-- target:
-    kind: ConfigMap
-    name: qbittorrent-config
-  patch: |-
-    - op: replace
-      path: /data/qBittorrent.conf
-      value: |
-        [Preferences]
-        WebUI\Address=*
-        WebUI\Port=8080
-        WebUI\Username=admin
-        WebUI\Password=$(QB_PASSWORD_HASH)
-        [BitTorrent]
-        Session\DefaultSavePath=/downloads
-        Session\TempPath=/downloads/temp
-        Session\TempPathEnabled=true
-
+  options:
+    disableNameSuffixHash: true
+- name: qbittorrent-secret
+  envs:
+  - .env.qb
+  options:
+    disableNameSuffixHash: true

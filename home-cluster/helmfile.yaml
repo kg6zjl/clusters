@@ -17,10 +17,15 @@ repositories:
     url: https://cloudflare.github.io/helm-charts
   - name: bitnami
     url: https://charts.bitnami.com/bitnami
-
+---
 helmDefaults:
   historyMax: 3
-
+---
+environments:
+  default:
+---
+templates:
+---
 releases:
   - name: reflector
     namespace: clustersecret
@@ -38,15 +43,15 @@ releases:
     version: 7.12.6
     values:
       - config:
-          existingSecret: "oauth2-proxy-secret"
+          clientID: {{ env "GOOGLE_CLIENT_ID" }}
+          clientSecret: {{ env "GOOGLE_CLIENT_SECRET" }}
+          cookieSecret: {{ env "GOOGLE_COOKIE_SECRET" }}
         extraArgs:
           provider: google
           email-domain: "stevearnett.com"
           upstream: "static://200"
           cookie-secure: "false"
-          client-id: "${GOOGLE_CLIENT_ID}"
-          client-secret: "${GOOGLE_CLIENT_SECRET}"
-          redirect-url: "https://auth.stevearnett.com/oauth2/callback"
+          redirect-url: "https://auth.kube.stevearnett.com/oauth2/callback"
           http-address: "0.0.0.0:4180"
         containerPorts:
           http: 4180
