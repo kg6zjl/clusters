@@ -12,6 +12,7 @@ resources:
   - media
   - vpn
   - cloudflared
+  - speedtest
   - kube-system/coredns-configmap-patch.yaml
 
 

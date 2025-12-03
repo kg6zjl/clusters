@@ -27,6 +27,8 @@ metadata:
 spec:
   replicas: 1
   revisionHistoryLimit: 3
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app: gluetun
@@ -58,6 +60,14 @@ spec:
           privileged: true
           capabilities:
             add: [NET_ADMIN, SYS_MODULE]
+        readinessProbe:
+          exec:
+            command:
+              - sh
+              - -c
+              - ip link show tun0 | grep -q UP
+          initialDelaySeconds: 30
+          periodSeconds: 10
         env:
         - name: VPN_SERVICE_PROVIDER
           value: expressvpn
@@ -75,16 +85,18 @@ spec:
           value: "USA"
         - name: TZ
           value: America/New_York
-        - name: FIREWALL
+        - name: DNS_KEEP_NAMESERVER
           value: "on"
         - name: FIREWALL_OUTBOUND_SUBNETS
-          value: "10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,fd00::/8,1.1.1.1/32,1.0.0.1/32"
+          value: "10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,fd00::/8,1.1.1.1/32,1.0.0.1/32,8.8.8.8/32,8.8.4.4/32"
         - name: FIREWALL_INPUT_PORTS
           value: "8080"
         - name: FIREWALL_VPN_ENDPOINT_IP
           value: "1"
         - name: HEALTH_CHECK_PERIOD
-          value: "0"
+          value: "30"
+        - name: HEALTH_TARGET_ADDRESS
+          value: "1.1.1.1:443"
         ports:
         - containerPort: 8000
           name: http
@@ -93,6 +105,11 @@ spec:
           mountPath: /downloads
       - name: qbittorrent
         image: linuxserver/qbittorrent:latest
+        readinessProbe:
+          tcpSocket:
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
         env:
         - name: PUID
           value: "0"
@@ -136,7 +153,7 @@ data:
     [Preferences]
     WebUI\Address=*
     WebUI\Port=8080
-    WebUI\Username=admin123
+    WebUI\Username=admin
     [BitTorrent]
     Session\DefaultSavePath=/downloads
     Session\TempPath=/downloads/temp

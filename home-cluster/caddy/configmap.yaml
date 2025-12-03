@@ -82,6 +82,23 @@ data:
         reverse_proxy http://sonarr.media.svc.cluster.local:8989
     }
 
+    speedtest.kube.stevearnett.com {
+        import tls-wildcard
+        reverse_proxy http://speedtest-tracker.speedtest.svc.cluster.local:80 {
+            header_up X-Forwarded-Proto https
+        }
+    }
+
+    readarr.kube.stevearnett.com {
+        import tls-wildcard
+        reverse_proxy http://readarr.media.svc.cluster.local:8787
+    }
+
+    overseerr.kube.stevearnett.com {
+        import tls-wildcard
+        reverse_proxy http://overseerr.media.svc.cluster.local:5055
+    }
+
     kube.stevearnett.com {
         import tls-wildcard
     }

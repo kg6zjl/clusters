@@ -3,9 +3,6 @@ kind: Kustomization
 
 namespace: vpn
 
-resources:
-  - vpn-qbittorent.yaml
-
 secretGenerator:
 - name: vpn-secret
   envs:
@@ -17,3 +14,6 @@ secretGenerator:
   - .env.qb
   options:
     disableNameSuffixHash: true
+
+resources:
+  - vpn-qbittorent.yaml

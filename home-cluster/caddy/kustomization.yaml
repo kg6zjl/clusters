@@ -14,5 +14,8 @@ resources:
   - dnsendpoint-radarr.yaml
   - dnsendpoint-sonarr.yaml
   - dnsendpoint-zb.yaml
+  - dnsendpoint-speedtest.yaml
+  - dnsendpoint-readarr.yaml
+  - dnsendpoint-overseerr.yaml
 generatorOptions:
   disableNameSuffixHash: true
