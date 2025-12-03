@@ -1,0 +1,62 @@
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: overseerr-config
+  namespace: media
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 2Gi
+  storageClassName: microk8s-hostpath
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: overseerr
+  namespace: media
+spec:
+  replicas: 1
+  revisionHistoryLimit: 3
+  selector:
+    matchLabels:
+      app: overseerr
+  template:
+    metadata:
+      labels:
+        app: overseerr
+    spec:
+      containers:
+      - name: overseerr
+        image: sctx/overseerr:latest
+        env:
+        - name: LOG_LEVEL
+          value: info
+        - name: TZ
+          value: America/New_York
+        ports:
+        - containerPort: 5055
+          protocol: TCP
+        volumeMounts:
+        - name: overseerr-config
+          mountPath: /app/config
+      volumes:
+      - name: overseerr-config
+        persistentVolumeClaim:
+          claimName: overseerr-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: overseerr
+  namespace: media
+spec:
+  selector:
+    app: overseerr
+  ports:
+  - port: 5055
+    targetPort: 5055
+    protocol: TCP
+  type: ClusterIP

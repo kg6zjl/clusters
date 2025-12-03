@@ -4,7 +4,7 @@ metadata:
   name: caddy-ingress
   namespace: caddy
   annotations:
-    external-dns.alpha.kubernetes.io/hostname: kube.stevearnett.com,auth.kube.stevearnett.com,dashboard.kube.stevearnett.com,grafana.kube.stevearnett.com,prometheus.kube.stevearnett.com,ha.kube.stevearnett.com,qb.kube.stevearnett.com,prowlarr.kube.stevearnett.com,radarr.kube.stevearnett.com,sonarr.kube.stevearnett.com
+    external-dns.alpha.kubernetes.io/hostname: kube.stevearnett.com,auth.stevearnett.com,dashboard.kube.stevearnett.com,grafana.kube.stevearnett.com,prometheus.kube.stevearnett.com,ha.kube.stevearnett.com,qb.kube.stevearnett.com,prowlarr.kube.stevearnett.com,radarr.kube.stevearnett.com,sonarr.kube.stevearnett.com,speedtest.kube.stevearnett.com,readarr.kube.stevearnett.com,overseerr.kube.stevearnett.com,plex.kube.stevearnett.com
 spec:
   rules:
     - host: kube.stevearnett.com
@@ -18,6 +18,16 @@ spec:
                 port:
                   number: 80
     - host: auth.kube.stevearnett.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: caddy
+                port:
+                  number: 80
+    - host: plex.kube.stevearnett.com
       http:
         paths:
           - path: /
@@ -98,6 +108,36 @@ spec:
                 port:
                   number: 80
     - host: sonarr.kube.stevearnett.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: caddy
+                port:
+                  number: 80
+    - host: overseerr.kube.stevearnett.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: caddy
+                port:
+                  number: 80
+    - host: readarr.kube.stevearnett.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: caddy
+                port:
+                  number: 80
+    - host: speedtest.kube.stevearnett.com
       http:
         paths:
           - path: /

@@ -10,6 +10,5 @@ secretGenerator:
     envs:
       - .env
 
-
 generatorOptions:
   disableNameSuffixHash: true

@@ -4,5 +4,12 @@ kind: Kustomization
 namespace: media
 
 resources:
-  - arr-stack.yaml
-
+  - namespace.yaml
+  - overseerr.yaml
+  - readarr.yaml
+  - prowlarr.yaml
+  - radarr.yaml
+  - sonarr.yaml
+  - flaresolverr.yaml
+  - lidarr.yaml
+  #- bazarr.yaml?
