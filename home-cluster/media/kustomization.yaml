@@ -12,4 +12,11 @@ resources:
   - sonarr.yaml
   - flaresolverr.yaml
   - lidarr.yaml
+  - ingress-overseerr.yaml
+  - ingress-readarr.yaml
+  - ingress-prowlarr.yaml
+  - ingress-radarr.yaml
+  - ingress-sonarr.yaml
+  - ingress-lidarr.yaml
+  - dnsendpoint-lidarr.yaml
   #- bazarr.yaml?

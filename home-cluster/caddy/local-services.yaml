@@ -1,0 +1,72 @@
+---
+# Service for Unifi Controller (with Endpoints pointing to external IP)
+apiVersion: v1
+kind: Service
+metadata:
+  name: unifi-local
+  namespace: caddy
+spec:
+  ports:
+  - port: 443
+    targetPort: 443
+    protocol: TCP
+---
+apiVersion: v1
+kind: Endpoints
+metadata:
+  name: unifi-local
+  namespace: caddy
+subsets:
+- addresses:
+  - ip: 192.168.1.1
+  ports:
+  - port: 443
+    protocol: TCP
+---
+# Service for NAS (with Endpoints pointing to external IP)
+apiVersion: v1
+kind: Service
+metadata:
+  name: nas-local
+  namespace: caddy
+spec:
+  ports:
+  - port: 9999
+    targetPort: 9999
+    protocol: TCP
+---
+apiVersion: v1
+kind: Endpoints
+metadata:
+  name: nas-local
+  namespace: caddy
+subsets:
+- addresses:
+  - ip: 192.168.1.176
+  ports:
+  - port: 9999
+    protocol: TCP
+---
+# Service for Zigbee (with Endpoints pointing to external IP)
+apiVersion: v1
+kind: Service
+metadata:
+  name: zb-local
+  namespace: caddy
+spec:
+  ports:
+  - port: 80
+    targetPort: 80
+    protocol: TCP
+---
+apiVersion: v1
+kind: Endpoints
+metadata:
+  name: zb-local
+  namespace: caddy
+subsets:
+- addresses:
+  - ip: 192.168.1.36
+  ports:
+  - port: 80
+    protocol: TCP

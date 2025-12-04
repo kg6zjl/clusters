@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: caddy-config
+  namespace: caddy
+data:
+  # Disable automatic HTTPS - we use Cloudflare for SSL termination
+  email: ""

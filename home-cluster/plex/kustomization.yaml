@@ -4,6 +4,7 @@ namespace: plex
 resources:
 - namespace.yaml
 - dnsendpoint.yaml
+- ingress.yaml
 
 secretGenerator:
   - name: plex-claim-secret
