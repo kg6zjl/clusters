@@ -8,7 +8,7 @@ spec:
     annotations:
       reflector.v1.k8s.emberstack.com/reflection-allowed: "true"
       reflector.v1.k8s.emberstack.com/reflection-auto-enabled: "true"
-      reflector.v1.k8s.emberstack.com/reflection-allowed-namespaces: "caddy,plex"
+      reflector.v1.k8s.emberstack.com/reflection-allowed-namespaces: "caddy,plex,kube-system,auth,home-assistant,monitoring,media,speedtest,vpn"
   secretName: wildcard-stevearnett-com-tls
   dnsNames:
     - "*.stevearnett.com"

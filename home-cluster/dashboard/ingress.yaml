@@ -1,0 +1,25 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: dashboard
+  namespace: kube-system
+  annotations:
+    kubernetes.io/ingress.class: caddy
+    external-dns.alpha.kubernetes.io/hostname: dashboard.kube.stevearnett.com
+    external-dns.alpha.kubernetes.io/target: kube.stevearnett.com
+spec:
+  tls:
+  - hosts:
+    - dashboard.kube.stevearnett.com
+    secretName: wildcard-stevearnett-com-tls
+  rules:
+  - host: dashboard.kube.stevearnett.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: kubernetes-dashboard
+            port:
+              number: 80

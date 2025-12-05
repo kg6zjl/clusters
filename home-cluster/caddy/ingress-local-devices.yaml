@@ -1,0 +1,54 @@
+---
+# Ingress for NAS
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: nas
+  namespace: caddy
+  annotations:
+    kubernetes.io/ingress.class: caddy
+    external-dns.alpha.kubernetes.io/hostname: nas.stevearnett.com
+    external-dns.alpha.kubernetes.io/target: kube.stevearnett.com
+spec:
+  tls:
+  - hosts:
+    - nas.stevearnett.com
+    secretName: wildcard-stevearnett-com-tls
+  rules:
+  - host: nas.stevearnett.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: nas-local
+            port:
+              number: 9999
+---
+# Ingress for Zigbee (zb)
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: zb
+  namespace: caddy
+  annotations:
+    kubernetes.io/ingress.class: caddy
+    external-dns.alpha.kubernetes.io/hostname: zb.stevearnett.com
+    external-dns.alpha.kubernetes.io/target: kube.stevearnett.com
+spec:
+  tls:
+  - hosts:
+    - zb.stevearnett.com
+    secretName: wildcard-stevearnett-com-tls
+  rules:
+  - host: zb.stevearnett.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: zb-local
+            port:
+              number: 80

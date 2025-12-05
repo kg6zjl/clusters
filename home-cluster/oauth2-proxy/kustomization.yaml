@@ -5,6 +5,7 @@ namespace: auth
 
 resources:
   - namespace.yaml
+  - ingress-auth.yaml
 
 # secretGenerator:
 #   - name: oauth2-proxy-secret

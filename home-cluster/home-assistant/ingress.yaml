@@ -1,0 +1,25 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: home-assistant
+  namespace: home-assistant
+  annotations:
+    kubernetes.io/ingress.class: caddy
+    external-dns.alpha.kubernetes.io/hostname: ha.kube.stevearnett.com
+    external-dns.alpha.kubernetes.io/target: kube.stevearnett.com
+spec:
+  tls:
+  - hosts:
+    - ha.kube.stevearnett.com
+    secretName: wildcard-stevearnett-com-tls
+  rules:
+  - host: ha.kube.stevearnett.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: home-assistant
+            port:
+              number: 8123
