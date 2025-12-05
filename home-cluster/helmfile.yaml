@@ -132,7 +132,7 @@ releases:
   - name: plex
     namespace: plex
     chart: plexinc/plex-media-server
-    version: "1.2.0"
+    version: "1.4.0"
     values:
       - service:
           type: ClusterIP
