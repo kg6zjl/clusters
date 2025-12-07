@@ -6,7 +6,7 @@ namespace: registry
 resources:
   - namespace.yaml
   - pvc.yaml
-  - ingress.yaml
+  - ingressroute.yaml
   - deployment.yaml
   - service.yaml
 
