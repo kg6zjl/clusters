@@ -6,11 +6,22 @@ namespace: auth
 resources:
   - namespace.yaml
   - ingress-auth.yaml
+  - ingress-dashboard.yaml
+  - servicemonitor.yaml
 
-# secretGenerator:
-#   - name: oauth2-proxy-secret
-#     envs:
-#       - .env
+secretGenerator:
+  - name: oauth2-proxy-secret
+    envs:
+      - .env
+  - name: oauth2-proxy-emails
+    files:
+      - .env.authenticated-emails
+
+commonAnnotations:
+  reflector.v1.k8s.emberstack.com/reflection-allowed: "true"
+  reflector.v1.k8s.emberstack.com/reflection-auto-enabled: "true"
+  reflector.v1.k8s.emberstack.com/reflection-allowed-namespaces: "quotes"
+  reflector.v1.k8s.emberstack.com/reflection-auto-namespaces: "quotes"
 
 generatorOptions:
   disableNameSuffixHash: true

@@ -1,0 +1,25 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: registry
+  namespace: registry
+  annotations:
+    external-dns.alpha.kubernetes.io/hostname: registry.kube.stevearnett.com
+    external-dns.alpha.kubernetes.io/target: kube.stevearnett.com
+spec:
+  ingressClassName: traefik
+  tls:
+  - hosts:
+    - registry.kube.stevearnett.com
+    secretName: wildcard-stevearnett-com-tls
+  rules:
+  - host: registry.kube.stevearnett.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: registry
+            port:
+              number: 5000

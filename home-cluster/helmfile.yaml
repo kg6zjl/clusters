@@ -17,6 +17,12 @@ repositories:
     url: https://cloudflare.github.io/helm-charts
   - name: bitnami
     url: https://charts.bitnami.com/bitnami
+  - name: renovate
+    url: https://docs.renovatebot.com/helm-charts
+  - name: traefik
+    url: https://traefik.github.io/charts
+  - name: jellyfin
+    url: https://jellyfin.github.io/jellyfin-helm
 ---
 helmDefaults:
   historyMax: 3
@@ -27,19 +33,6 @@ environments:
 templates:
 ---
 releases:
-  - name: caddy-ingress-controller
-    namespace: caddy
-    chart: caddy/caddy-ingress-controller
-    version: 1.3.0
-    values:
-      - ingressController:
-          ingressClass: caddy
-        loadBalancer:
-          enabled: false
-        service:
-          type: ClusterIP
-          externalIPs:
-            - 192.168.1.96
   - name: reflector
     namespace: clustersecret
     chart: emberstack/reflector
@@ -53,19 +46,71 @@ releases:
   - name: oauth2-proxy
     namespace: auth
     chart: oauth2-proxy/oauth2-proxy
-    version: 7.12.6
+    version: 9.0.0
     values:
       - config:
-          clientID: {{ env "GOOGLE_CLIENT_ID" }}
-          clientSecret: {{ env "GOOGLE_CLIENT_SECRET" }}
-          cookieSecret: {{ env "GOOGLE_COOKIE_SECRET" }}
+          existingSecret: oauth2-proxy-secret
         extraArgs:
           provider: google
-          email-domain: "stevearnett.com"
-          upstream: "static://200"
-          cookie-secure: "false"
-          redirect-url: "https://auth.kube.stevearnett.com/oauth2/callback"
+          authenticated-emails-file: "/etc/oauth2-proxy/.env.authenticated-emails"
+          upstream: "http://kubernetes-dashboard.kube-system.svc.cluster.local:80"
+          cookie-secure: "true"
+          redirect-url: "https://dashboard.kube.stevearnett.com/oauth2/callback"
           http-address: "0.0.0.0:4180"
+          whitelist-domain: ".stevearnett.com"
+          cookie-domain: ".stevearnett.com"
+          skip-provider-button: "true"
+        extraVolumes:
+          - name: authenticated-emails
+            secret:
+              secretName: oauth2-proxy-emails
+        extraVolumeMounts:
+          - name: authenticated-emails
+            mountPath: /etc/oauth2-proxy
+            readOnly: true
+        containerPorts:
+          http: 4180
+        service:
+          portNumber: 4180
+          type: ClusterIP
+          ports:
+            - name: proxy
+              port: 4180
+              targetPort: 4180
+            - name: metrics
+              port: 44180
+              targetPort: 44180
+          annotations:
+            prometheus.io/scrape: "true"
+            prometheus.io/port: "44180"
+            prometheus.io/path: "/metrics"
+        ingress:
+          enabled: false
+  - name: oauth2-proxy-quotes
+    namespace: quotes
+    chart: oauth2-proxy/oauth2-proxy
+    version: 9.0.0
+    values:
+      - config:
+          existingSecret: oauth2-proxy-secret
+        extraArgs:
+          provider: google
+          authenticated-emails-file: "/etc/oauth2-proxy/.env.authenticated-emails"
+          upstream: "http://quotes-app.quotes.svc.cluster.local:8000"
+          cookie-secure: "true"
+          redirect-url: "https://quotes.stevearnett.com/oauth2/callback"
+          http-address: "0.0.0.0:4180"
+          whitelist-domain: ".stevearnett.com"
+          cookie-domain: ".stevearnett.com"
+          skip-provider-button: "true"
+        extraVolumes:
+          - name: authenticated-emails
+            secret:
+              secretName: oauth2-proxy-emails
+        extraVolumeMounts:
+          - name: authenticated-emails
+            mountPath: /etc/oauth2-proxy
+            readOnly: true
         containerPorts:
           http: 4180
         service:
@@ -168,3 +213,81 @@ releases:
         claimSecret:
           name: plex-claim-secret
           key: PLEX_CLAIM
+  - name: renovate
+    namespace: renovate
+    chart: renovate/renovate
+    version: 39.142.0
+    values:
+      - cronjob:
+          schedule: "0 * * * *"  # Run every hour
+        renovate:
+          config: |
+            {
+              "platform": "github",
+              "repositories": ["kg6zjl/clusters"],
+              "baseBranches": ["main"],
+              "onboarding": false,
+              "requireConfig": "optional",
+              "enabledManagers": ["helmfile", "kubernetes", "helm-values"],
+              "helmfile": {
+                "fileMatch": ["helmfile\\.yaml$"]
+              }
+            }
+        existingSecret: renovate-github-token
+        env:
+          - name: LOG_LEVEL
+            value: "info"
+  - name: traefik
+    namespace: traefik
+    chart: traefik/traefik
+    version: 33.2.0
+    values:
+      - ports:
+          web:
+            port: 8000
+            exposedPort: 80
+          websecure:
+            port: 8443
+            exposedPort: 443
+        service:
+          type: ClusterIP
+          externalIPs:
+            - 192.168.1.96
+        ingressRoute:
+          dashboard:
+            enabled: true
+        logs:
+          general:
+            level: INFO
+          access:
+            enabled: true
+        providers:
+          kubernetesIngress:
+            enabled: true
+            publishedService:
+              enabled: true
+  - name: jellyfin
+    namespace: media
+    chart: jellyfin/jellyfin
+    version: 2.6.0
+    values:
+      - service:
+          type: ClusterIP
+          port: 8096
+        ingress:
+          enabled: false
+        persistence:
+          config:
+            enabled: true
+            size: 10Gi
+          cache:
+            enabled: true
+            size: 5Gi
+          media:
+            enabled: true
+            type: hostPath
+            hostPath: /mnt/nas
+        metrics:
+          enabled: true
+          serviceMonitor:
+            enabled: true

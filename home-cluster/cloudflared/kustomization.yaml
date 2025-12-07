@@ -7,6 +7,3 @@ resources:
   - namespace.yaml
   - configmap.yaml
   - deployment.yaml
-  - configmap-nginx.yaml
-  - deployment-nginx.yaml
-  - service-nginx.yaml

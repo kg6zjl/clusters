@@ -1,15 +1,16 @@
+---
+# Ingress for Unifi
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: unifi
-  namespace: caddy
+  namespace: local-services
   annotations:
-    kubernetes.io/ingress.class: caddy
     external-dns.alpha.kubernetes.io/hostname: unifi.stevearnett.com
     external-dns.alpha.kubernetes.io/target: kube.stevearnett.com
-    caddy.ingress.kubernetes.io/backend-protocol: https
-    caddy.ingress.kubernetes.io/insecure-skip-verify: "true"
+    traefik.ingress.kubernetes.io/service.serverstransport: insecure-transport@kubernetescrd
 spec:
+  ingressClassName: traefik
   tls:
   - hosts:
     - unifi.stevearnett.com

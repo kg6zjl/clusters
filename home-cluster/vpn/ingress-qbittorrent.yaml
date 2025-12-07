@@ -4,7 +4,7 @@ metadata:
   name: qbittorrent
   namespace: vpn
   annotations:
-    kubernetes.io/ingress.class: caddy
+    kubernetes.io/ingress.class: traefik
     external-dns.alpha.kubernetes.io/hostname: qb.kube.stevearnett.com
     external-dns.alpha.kubernetes.io/target: kube.stevearnett.com
 spec:

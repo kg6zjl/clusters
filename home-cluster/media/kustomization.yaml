@@ -11,3 +11,4 @@ resources:
   - sonarr.yaml
   - flaresolverr.yaml
   - lidarr.yaml
+  - ingress-jellyfin.yaml

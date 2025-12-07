@@ -1,9 +1,15 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
+
+namespace: renovate
+
 resources:
   - namespace.yaml
-  - local-services.yaml
-  - ingress-local-devices.yaml
-  - ingress-unifi.yaml
+
+secretGenerator:
+  - name: renovate-github-token
+    envs:
+      - .env
+
 generatorOptions:
   disableNameSuffixHash: true

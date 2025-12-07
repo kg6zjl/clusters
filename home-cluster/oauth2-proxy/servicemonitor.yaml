@@ -1,0 +1,16 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: oauth2-proxy
+  namespace: auth
+  labels:
+    app: oauth2-proxy
+    release: kube-prometheus-stack
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: oauth2-proxy
+  endpoints:
+  - port: metrics
+    path: /metrics
+    interval: 30s

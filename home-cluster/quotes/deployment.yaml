@@ -1,0 +1,52 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: quotes-app
+  namespace: quotes
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: quotes-app
+  template:
+    metadata:
+      labels:
+        app: quotes-app
+    spec:
+      imagePullSecrets:
+        - name: quotes-registry-auth
+      containers:
+      - name: quotes-app
+        image: registry.kube.stevearnett.com/quotes:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8000
+        env:
+        - name: DATABASE_URL
+          value: "sqlite:////data/quotes.db"
+        volumeMounts:
+        - name: db-storage
+          mountPath: /data
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 5
+          periodSeconds: 5
+      volumes:
+      - name: db-storage
+        persistentVolumeClaim:
+          claimName: quotes-db-pvc
