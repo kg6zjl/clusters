@@ -49,7 +49,7 @@ releases:
   - name: reloader
     namespace: kube-system
     chart: stakater/reloader
-    version: 1.0.72
+    version: 2.2.7
   - name: oauth2-proxy
     namespace: auth
     chart: oauth2-proxy/oauth2-proxy
