@@ -43,7 +43,7 @@ releases:
   - name: reflector
     namespace: clustersecret
     chart: emberstack/reflector
-    version: 9.0.322
+    version: 10.0.16
     values:
       - updateOnChange: true
   - name: reloader
