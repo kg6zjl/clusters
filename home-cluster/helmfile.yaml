@@ -556,7 +556,7 @@ releases:
   - name: gpu-operator
     namespace: gpu-operator
     chart: nvidia/gpu-operator
-    version: v24.9.2
+    version: v25.10.1
     values:
       - operator:
           defaultRuntime: containerd
