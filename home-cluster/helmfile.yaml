@@ -52,7 +52,7 @@ releases:
   - name: reloader
     namespace: kube-system
     chart: stakater/reloader
-    version: 1.0.72
+    version: 2.2.9
   - name: metrics-server
     namespace: kube-system
     chart: metrics-server/metrics-server
