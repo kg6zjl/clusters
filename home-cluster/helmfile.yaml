@@ -376,7 +376,7 @@ releases:
   - name: jellyfin
     namespace: media
     chart: jellyfin/jellyfin
-    version: 2.6.0
+    version: 2.7.0
     values:
       - service:
           type: ClusterIP
