@@ -20,8 +20,8 @@ secretGenerator:
 commonAnnotations:
   reflector.v1.k8s.emberstack.com/reflection-allowed: "true"
   reflector.v1.k8s.emberstack.com/reflection-auto-enabled: "true"
-  reflector.v1.k8s.emberstack.com/reflection-allowed-namespaces: "quotes"
-  reflector.v1.k8s.emberstack.com/reflection-auto-namespaces: "quotes"
+  reflector.v1.k8s.emberstack.com/reflection-allowed-namespaces: "quotes,local-services,headlamp"
+  reflector.v1.k8s.emberstack.com/reflection-auto-namespaces: "quotes,local-services,headlamp"
 
 generatorOptions:
   disableNameSuffixHash: true

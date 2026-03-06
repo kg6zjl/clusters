@@ -3,8 +3,10 @@ kind: Deployment
 metadata:
   name: quotes-app
   namespace: quotes
+  labels:
+    alert-on-down: "true"
 spec:
-  replicas: 1
+  replicas: 0
   selector:
     matchLabels:
       app: quotes-app

@@ -10,4 +10,15 @@ resources:
   - service.yaml
   - networkpolicy.yaml
   - pvc.yaml
+
+secretGenerator:
+  - name: quotes-registry-auth
+    type: kubernetes.io/dockerconfigjson
+    literals:
+      - .dockerconfigjson={"auths":{"registry.kube.stevearnett.com":{"username":"$(registry_username)","password":"$(registry_password)"}}}
+    envs:
+      - .env
+
+generatorOptions:
+  disableNameSuffixHash: true
   

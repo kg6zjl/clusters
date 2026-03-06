@@ -12,6 +12,6 @@ data:
     no-autoupdate: true
 
     ingress:
-      - hostname: quotes.stevearnett.com
-        service: http://oauth2-proxy-quotes.quotes.svc.cluster.local:4180
+      # - hostname: quotes.stevearnett.com
+      #   service: http://oauth2-proxy-quotes.quotes.svc.cluster.local:4180
       - service: http_status:404

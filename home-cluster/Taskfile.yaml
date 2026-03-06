@@ -8,5 +8,36 @@ tasks:
   apply:
     cmds:
       - helm repo update
+      - rm -rf ~/.kube/cache
       - export $(grep -v '^#' .env | xargs) && helmfile sync
       - kubectl apply -k .
+
+  rotate-cert:
+    desc: "Manually copy wildcard TLS cert from cert-manager to all namespaces (use when reflector fails)"
+    cmds:
+      - rm -rf ~/.kube/cache
+      - echo "Checking cert-manager certificate validity..."
+      - kubectl get secret wildcard-stevearnett-com-tls -n cert-manager -o jsonpath='{.data.tls\.crt}' | base64 -d | openssl x509 -noout -dates
+      - echo "Discovering namespaces that use wildcard-stevearnett-com-tls..."
+      - |
+        NAMESPACES=$(kubectl get ingress,ingressroute -A -o json 2>/dev/null | \
+          grep -o '"secretName":\s*"wildcard-stevearnett-com-tls"' -B 20 | \
+          grep '"namespace"' | sed 's/.*"namespace":\s*"\([^"]*\)".*/\1/' | sort -u | grep -v cert-manager || \
+          kubectl get ns -o jsonpath='{.items[*].metadata.name}' | tr ' ' '\n' | grep -v 'cert-manager\|default\|kube-node-lease\|kube-public')
+        
+        # Also include traefik namespace always
+        NAMESPACES="$NAMESPACES traefik"
+        NAMESPACES=$(echo $NAMESPACES | tr ' ' '\n' | sort -u | tr '\n' ' ')
+        
+        echo "Target namespaces: $NAMESPACES"
+        echo "Copying certificate to all namespaces..."
+        for ns in $NAMESPACES; do
+          if kubectl get namespace "$ns" >/dev/null 2>&1; then
+            kubectl get secret wildcard-stevearnett-com-tls -n cert-manager -o yaml | \
+              sed "s/namespace: cert-manager/namespace: $ns/" | \
+              kubectl apply -f - 2>/dev/null && echo "  ✓ $ns" || echo "  ✗ $ns (failed)"
+          fi
+        done
+      - echo "Restarting Traefik to pick up new certificates..."
+      - kubectl rollout restart deployment traefik -n traefik
+      - 'echo "Done! Test with: curl -I https://grafana.kube.stevearnett.com"'

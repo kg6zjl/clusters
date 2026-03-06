@@ -8,14 +8,20 @@ resources:
   - dashboard
   - monitoring
   - home-assistant
+  - ai-services
+  - gpu-operator
   - plex
   - media
   - vpn
   - cloudflared
   - speedtest
   - local-services
-  - quotes
   - registry
+  # - netalertx
+  # - quotes
+  - headlamp
+  - frigate
+  - meshtastic
+  - pihole
   - kube-system/coredns-configmap-patch.yaml
   - renovate
-

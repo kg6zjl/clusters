@@ -1,0 +1,77 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: wyoming-whisper
+  namespace: ai-services
+  labels:
+    alert-on-down: "true"
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: wyoming-whisper
+  template:
+    metadata:
+      labels:
+        app: wyoming-whisper
+    spec:
+      containers:
+      - name: wyoming-whisper
+        image: rhasspy/wyoming-whisper:latest
+        ports:
+        - containerPort: 10300
+          name: wyoming
+        env:
+        - name: TZ
+          value: America/Los_Angeles
+        args:
+          - --model
+          - base-int8
+          - --language
+          - en
+          - --beam-size
+          - "1"
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "500m"
+          limits:
+            memory: "2Gi"
+            cpu: "2000m"
+        volumeMounts:
+        - name: dev-dri
+          mountPath: /dev/dri
+        - name: data
+          mountPath: /data
+      # AMD GPU hardware transcoding support (same as jellyfin)
+      volumes:
+      - name: dev-dri
+        hostPath:
+          path: /dev/dri
+      - name: data
+        emptyDir: {}
+      securityContext:
+        supplementalGroups:
+          - 44   # video group
+          - 993  # render group
+      # Allow access to GPU devices
+      # Note: privileged might be needed depending on your setup
+      # You can try without first and add if needed
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: wyoming-whisper
+  namespace: ai-services
+spec:
+  selector:
+    app: wyoming-whisper
+  ports:
+  - port: 10300
+    targetPort: 10300
+    protocol: TCP
+    name: wyoming
+  type: ClusterIP

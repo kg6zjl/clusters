@@ -1,0 +1,51 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: ai-services
+
+resources:
+  - namespace.yaml
+  - wyoming-whisper.yaml
+  # Ollama and Open WebUI
+  - ollama.yaml
+  - ollama-amd.yaml
+  - open-webui.yaml
+  - ingressroute.yaml
+  - dnsendpoint.yaml
+  # ComfyUI
+  - service-comfy.yaml
+  - deployment-comfy.yaml
+  - ingressroute-comfy.yaml
+  - dnsendpoint-comfy.yaml
+  # Pigallery2 (ComfyUI output gallery)
+  - pigallery2.yaml
+  - ingressroute-pigallery2.yaml
+  - dnsendpoint-pigallery2.yaml
+
+secretGenerator:
+- name: open-webui-secret
+  envs:
+  - .env
+- name: pigallery2-secret
+  envs:
+  - .env-pigallery2
+
+patches:
+  - target:
+      group: externaldns.k8s.io
+      version: v1alpha1
+      kind: DNSEndpoint
+      name: chat
+    patch: |-
+      - op: replace
+        path: /metadata/namespace
+        value: kube-system
+  - target:
+      group: externaldns.k8s.io
+      version: v1alpha1
+      kind: DNSEndpoint
+      name: pigallery2
+    patch: |-
+      - op: replace
+        path: /metadata/namespace
+        value: kube-system

@@ -1,0 +1,80 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: netalertx
+  namespace: netalertx
+spec:
+  strategy:
+    type: Recreate
+  replicas: 1
+  selector:
+    matchLabels:
+      app: netalertx
+  template:
+    metadata:
+      labels:
+        app: netalertx
+    spec:
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      securityContext:
+        runAsUser: 20211
+        runAsGroup: 20211
+        fsGroup: 20211
+      initContainers:
+      - name: init-data
+        image: alpine
+        command:
+        - sh
+        - -c
+        - mkdir -p /data/db /data/config
+        volumeMounts:
+        - name: data
+          mountPath: /data
+      containers:
+      - name: netalertx
+        image: ghcr.io/jokob-sk/netalertx:latest
+        ports:
+        - containerPort: 20211
+        env:
+        - name: PORT
+          value: "20211"
+        securityContext:
+          capabilities:
+            add:
+            - NET_ADMIN
+            - NET_BIND_SERVICE
+            - NET_RAW
+        volumeMounts:
+        - name: data
+          mountPath: /data
+        - name: localtime
+          mountPath: /etc/localtime
+          readOnly: true
+        - name: tmp-run
+          mountPath: /tmp/run
+        - name: tmp-api
+          mountPath: /tmp/api
+        - name: tmp-log
+          mountPath: /tmp/log
+        - name: tmp-nginx
+          mountPath: /tmp/nginx/active-config
+      volumes:
+      - name: data
+        persistentVolumeClaim:
+          claimName: netalertx-data
+      - name: localtime
+        hostPath:
+          path: /etc/localtime
+      - name: tmp-run
+        emptyDir:
+          medium: Memory
+      - name: tmp-api
+        emptyDir:
+          medium: Memory
+      - name: tmp-log
+        emptyDir:
+          medium: Memory
+      - name: tmp-nginx
+        emptyDir:
+          medium: Memory

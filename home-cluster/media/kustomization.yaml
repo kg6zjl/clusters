@@ -12,3 +12,4 @@ resources:
   - flaresolverr.yaml
   - lidarr.yaml
   - ingress-jellyfin.yaml
+  - jellyfin-cache-pvc.yaml
