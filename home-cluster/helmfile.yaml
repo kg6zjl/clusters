@@ -456,7 +456,7 @@ releases:
   - name: promtail
     namespace: monitoring
     chart: grafana/promtail
-    version: 6.16.6
+    version: 6.17.1
     values:
       - config:
           clients:
