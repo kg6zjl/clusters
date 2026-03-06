@@ -1,0 +1,9 @@
+---
+# ServersTransport for HTTPS backends with self-signed certs
+apiVersion: traefik.io/v1alpha1
+kind: ServersTransport
+metadata:
+  name: insecure-transport
+  namespace: local-services
+spec:
+  insecureSkipVerify: true

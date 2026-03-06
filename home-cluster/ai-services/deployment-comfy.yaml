@@ -1,0 +1,60 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: comfyui
+  namespace: ai-services
+  labels:
+    app: comfyui
+spec:
+  replicas: 0
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: comfyui
+  template:
+    metadata:
+      labels:
+        app: comfyui
+    spec:
+      nodeSelector:
+        kubernetes.io/hostname: beast
+      containers:
+      - name: comfyui
+        image: zeroclue/comfyui:slim-py3.13-cu128
+        ports:
+        - containerPort: 3000
+          name: webui
+        env:
+        - name: TZ
+          value: America/Los_Angeles
+        resources:
+          requests:
+            memory: "4Gi"
+            cpu: "1000m"
+            nvidia.com/gpu: 1
+          limits:
+            memory: "18Gi"
+            cpu: "4000m"
+            nvidia.com/gpu: 1
+        volumeMounts:
+        - name: models
+          mountPath: /ComfyUI/models
+        - name: outputs
+          mountPath: /ComfyUI/output
+        - name: user-config
+          mountPath: /ComfyUI/user
+      volumes:
+      - name: models
+        hostPath:
+          path: /home/steve/comfy/ComfyUI/models
+          type: Directory
+      - name: outputs
+        hostPath:
+          path: /home/steve/comfy/ComfyUI/output
+          type: DirectoryOrCreate
+      - name: user-config
+        hostPath:
+          path: /home/steve/comfy/ComfyUI/user
+          type: Directory

@@ -12,8 +12,6 @@ data:
     no-autoupdate: true
 
     ingress:
-      - hostname: quotes.stevearnett.com
-        service: http://nginx-dummy.cloudflared.svc.cluster.local
-        originRequest:
-          noTLSVerify: true
+      # - hostname: quotes.stevearnett.com
+      #   service: http://oauth2-proxy-quotes.quotes.svc.cluster.local:4180
       - service: http_status:404

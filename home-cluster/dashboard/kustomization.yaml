@@ -11,4 +11,3 @@ resources:
   - clusterrolebinding.yaml
   - configmap.yaml
   - dnsendpoint.yaml
-  - ingress.yaml

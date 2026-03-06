@@ -24,6 +24,7 @@ metadata:
   namespace: vpn
   labels:
     app: gluetun
+    alert-on-down: "true"
 spec:
   replicas: 1
   revisionHistoryLimit: 3
@@ -153,7 +154,6 @@ data:
     [Preferences]
     WebUI\Address=*
     WebUI\Port=8080
-    WebUI\Username=admin
     [BitTorrent]
     Session\DefaultSavePath=/downloads
     Session\TempPath=/downloads/temp

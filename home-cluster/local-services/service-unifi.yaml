@@ -1,0 +1,28 @@
+---
+# Service for Unifi Controller (with Endpoints pointing to external IP)
+apiVersion: v1
+kind: Service
+metadata:
+  name: unifi-local
+  namespace: local-services
+  annotations:
+    traefik.ingress.kubernetes.io/service.sticky.cookie: "true"
+spec:
+  ports:
+  - port: 443
+    targetPort: 443
+    protocol: TCP
+    name: https
+---
+apiVersion: v1
+kind: Endpoints
+metadata:
+  name: unifi-local
+  namespace: local-services
+subsets:
+- addresses:
+  - ip: 192.168.1.1
+  ports:
+  - name: https
+    port: 443
+    protocol: TCP

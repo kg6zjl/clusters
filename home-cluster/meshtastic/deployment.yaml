@@ -1,0 +1,49 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: meshmonitor
+  namespace: meshtastic
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: meshmonitor
+  template:
+    metadata:
+      labels:
+        app: meshmonitor
+    spec:
+      containers:
+      - name: meshmonitor
+        image: ghcr.io/yeraze/meshmonitor:latest #3.0.0-rc3
+
+        ports:
+        - containerPort: 3001
+        - containerPort: 4404
+        env:
+        - name: TZ
+          value: America/Los_Angeles
+        - name: MESHTASTIC_NODE_IP
+          value: "192.168.1.43"
+        - name: ALLOWED_ORIGINS
+          value: "*"
+        - name: ADMIN_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: meshtastic-admin
+              key: ADMIN_USERNAME
+        - name: COOKIE_SECURE
+          value: "true"
+        - name: ENABLE_VIRTUAL_NODE
+          value: "true"
+        - name: ENABLE_AUTO_TRACEROUTE
+          value: "true"
+        - name: VIRTUAL_NODE_ALLOW_ADMIN_COMMANDS
+          value: "true"
+        volumeMounts:
+        - name: meshmonitor-data
+          mountPath: /data
+      volumes:
+      - name: meshmonitor-data
+        persistentVolumeClaim:
+          claimName: meshmonitor-data

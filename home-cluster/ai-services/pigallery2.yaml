@@ -1,0 +1,107 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pigallery2
+  namespace: ai-services
+  labels:
+    app: pigallery2
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: pigallery2
+  template:
+    metadata:
+      labels:
+        app: pigallery2
+    spec:
+      nodeSelector:
+        kubernetes.io/hostname: beast
+      containers:
+      - name: pigallery2
+        image: bpatrik/pigallery2:latest
+        ports:
+        - containerPort: 80
+          name: http
+        envFrom:
+        - secretRef:
+            name: pigallery2-secret
+        env:
+        - name: TZ
+          value: America/Los_Angeles
+        - name: NODE_ENV
+          value: production
+        - name: Database-type
+          value: "sqlite"
+        - name: Database-dbFolder
+          value: "/app/data/db"
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+        volumeMounts:
+        - name: comfy-output
+          mountPath: /app/data/images
+          readOnly: true
+        - name: config
+          mountPath: /app/data/config
+        - name: db
+          mountPath: /app/data/db
+        - name: tmp
+          mountPath: /app/data/tmp
+      volumes:
+      - name: comfy-output
+        hostPath:
+          path: /home/steve/comfy/ComfyUI/output
+          type: Directory
+      - name: config
+        persistentVolumeClaim:
+          claimName: pigallery2-config-pvc
+      - name: db
+        persistentVolumeClaim:
+          claimName: pigallery2-db-pvc
+      - name: tmp
+        emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: pigallery2
+  namespace: ai-services
+spec:
+  selector:
+    app: pigallery2
+  ports:
+  - port: 80
+    targetPort: 80
+    protocol: TCP
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pigallery2-db-pvc
+  namespace: ai-services
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pigallery2-config-pvc
+  namespace: ai-services
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 100Mi
