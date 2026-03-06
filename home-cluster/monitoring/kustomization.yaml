@@ -2,3 +2,16 @@ resources:
 - namespace.yaml
 - ingress-grafana.yaml
 - ingress-prometheus.yaml
+- ingress-alertmanager.yaml
+- prometheus-rules.yaml
+- dashboard-ugreen-nas.yaml
+
+secretGenerator:
+  - name: grafana-admin-secret
+    envs:
+      - .env
+
+configMapGenerator:
+
+generatorOptions:
+  disableNameSuffixHash: true

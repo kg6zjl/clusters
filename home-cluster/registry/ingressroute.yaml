@@ -1,0 +1,19 @@
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: registry
+  namespace: registry
+  annotations:
+    external-dns.alpha.kubernetes.io/hostname: registry.kube.stevearnett.com
+    external-dns.alpha.kubernetes.io/target: kube.stevearnett.com
+spec:
+  entryPoints:
+    - websecure
+  routes:
+  - match: Host(`registry.kube.stevearnett.com`)
+    kind: Rule
+    services:
+    - name: registry
+      port: 5000
+  tls:
+    secretName: wildcard-stevearnett-com-tls

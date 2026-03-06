@@ -1,0 +1,140 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: frigate-config
+  namespace: frigate
+data:
+  config.yaml: |
+    mqtt:
+      enabled: true
+      host: home-assistant.default.svc.cluster.local
+      port: 1883
+      topic_prefix: frigate
+      client_id: frigate
+    
+    objects:
+      track:
+        - person
+        - car
+        - dog
+        - cat
+        - bicycle
+        - motorcycle
+    
+    detect:
+      enabled: true
+    
+    cameras:
+      driveway:
+        enabled: true
+        ffmpeg:
+          inputs:
+            - path: rtsp://${FRIGATE_RTSP_USERNAME}:${FRIGATE_RTSP_PASSWORD}@192.168.1.213:554/Preview_01_main
+              roles:
+                - detect
+                - record
+        live:
+          streams:
+            Stream 1: driveway
+        zones:
+          driveway_gate:
+            coordinates: 0,0.458,0,0.398,0.2,0.165,0.236,0.306,0.377,0.313,0.306,0.627,0.265,1,0.091,1,0.006,0.602
+            loitering_time: 0
+            friendly_name: Driveway Gate
+            inertia: 3
+          front_door:
+            coordinates: 0.414,0.278,0.632,0.324,0.715,0.349,0.814,0.391,0.835,0.444,0.864,0.461,0.943,0.62,0.952,0.641,0.888,0.996,0.337,0.989
+            loitering_time: 0
+            friendly_name: Front Door
+            inertia: 3
+          drivewaymotion:
+            coordinates: 0.227,0.289,0.384,0.268,0.634,0.32,0.784,0.993,0.084,0.986,0.049,0.75,0.09,0.511,0.186,0.257
+            loitering_time: 0
+            friendly_name: Driveway
+          mailbox:
+            coordinates: 0.647,0.218,0.725,0.225,0.752,0.239,0.785,0.275,0.796,0.342,0.727,0.324,0.691,0.327
+            loitering_time: 0
+            friendly_name: Mailbox
+        motion:
+          mask: 0.403,0,0.403,0.053,0.583,0.06,0.582,0
+        record:
+          enabled: true
+          motion:
+            days: 15
+          alerts:
+            pre_capture: 5
+            post_capture: 5
+            retain:
+              days: 15
+    
+      play_yard:
+        enabled: true
+        friendly_name: Play Yard
+        ffmpeg:
+          inputs:
+            - path: rtsp://${FRIGATE_RTSP_USERNAME}:${FRIGATE_RTSP_PASSWORD}@192.168.1.150:554/Preview_01_main
+              roles:
+                - detect
+                - record
+        live:
+          streams:
+            Stream 1: play_yard
+        zones:
+          gate_and_door:
+            coordinates: 0.096,0.225,0.171,0.137,0.21,0.275,0.592,0.761,0.586,0.989,0.01,0.982,0.006,0.063
+            loitering_time: 0
+            friendly_name: Gate and Door
+        motion:
+          mask: 0.408,0,0.408,0.06,0.588,0.06,0.588,0
+        record:
+          enabled: true
+          motion:
+            days: 15
+          alerts:
+            pre_capture: 5
+            post_capture: 5
+            retain:
+              days: 15
+    
+      dining_room:
+        enabled: true
+        friendly_name: Dining Room
+        ffmpeg:
+          inputs:
+            - path: rtsp://${FRIGATE_RTSP_USERNAME}:${FRIGATE_RTSP_PASSWORD}@192.168.1.184:554/Preview_01_main
+              roles:
+                - detect
+                - record
+        live:
+          streams:
+            Stream 1: dining_room
+        motion:
+          mask: 0.281,0.008,0.28,0.07,0.704,0.072,0.708,0
+        record:
+          enabled: true
+          motion:
+            days: 15
+    
+    version: 0.17-0
+
+    semantic_search:
+      enabled: true
+
+    face_recognition:
+      enabled: true
+
+    lpr:
+      enabled: true
+
+    classification:
+      bird:
+        enabled: true
+
+    go2rtc:
+      streams:
+        driveway:
+          - rtsp://${FRIGATE_RTSP_USERNAME}:${FRIGATE_RTSP_PASSWORD}@192.168.1.213:554/Preview_01_main
+        play_yard:
+          - rtsp://${FRIGATE_RTSP_USERNAME}:${FRIGATE_RTSP_PASSWORD}@192.168.1.150:554/Preview_01_main
+        dining_room:
+          - rtsp://${FRIGATE_RTSP_USERNAME}:${FRIGATE_RTSP_PASSWORD}@192.168.1.184:554/Preview_01_main

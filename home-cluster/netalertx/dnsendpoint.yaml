@@ -1,0 +1,11 @@
+apiVersion: externaldns.k8s.io/v1alpha1
+kind: DNSEndpoint
+metadata:
+  name: netalertx
+  namespace: kube-system
+spec:
+  endpoints:
+  - dnsName: netalertx.kube.stevearnett.com
+    recordType: CNAME
+    targets:
+    - kube.stevearnett.com

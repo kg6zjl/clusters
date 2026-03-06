@@ -3,6 +3,8 @@ kind: Deployment
 metadata:
   name: home-assistant
   namespace: home-assistant
+  labels:
+    alert-on-down: "true"
 spec:
   strategy:
     type: Recreate
@@ -15,61 +17,104 @@ spec:
     metadata:
       labels:
         app: home-assistant
+      annotations:
+        container.apparmor.security.beta.kubernetes.io/matter-server: unconfined
+        container.apparmor.security.beta.kubernetes.io/home-assistant: unconfined
     spec:
+      imagePullSecrets:
+        - name: docker-registry-auth
       initContainers:
-      - name: init-config
-        image: alpine
-        command:
-          - sh
-          - -c
-          - |
-            apk add --no-cache unzip curl &&
-            rm -f /config/configuration.yaml &&
-            cp /tmp/config/configuration.yaml /config/configuration.yaml &&
-            mkdir -p /config/custom_components/hacs &&
-            cd /config/custom_components/hacs &&
-            curl -L https://github.com/hacs/integration/releases/latest/download/hacs.zip -o hacs.zip &&
-            unzip -o hacs.zip &&
-            rm hacs.zip &&
-            # only create stub files if they don't exist
-            [ ! -f /config/automations.yaml ] && echo '[]' > /config/automations.yaml || true &&
-            [ ! -f /config/scripts.yaml ] && echo '[]' > /config/scripts.yaml || true &&
-            [ ! -f /config/scenes.yaml ] && echo '[]' > /config/scenes.yaml || true
-        volumeMounts:
-        - name: config
-          mountPath: /config
         - name: init-config
-          mountPath: /tmp/config
-      hostNetwork: 
+          image: alpine
+          command:
+            - sh
+            - -c
+            - |
+              apk add --no-cache unzip curl &&
+              rm -f /config/configuration.yaml &&
+              cp /tmp/config/configuration.yaml /config/configuration.yaml &&
+              mkdir -p /config/custom_components/hacs &&
+              cd /config/custom_components/hacs &&
+              curl -L https://github.com/hacs/integration/releases/latest/download/hacs.zip -o hacs.zip &&
+              unzip -o hacs.zip &&
+              rm hacs.zip &&
+              [ ! -f /config/automations.yaml ] && echo '[]' > /config/automations.yaml || true &&
+              [ ! -f /config/scripts.yaml ] && echo '[]' > /config/scripts.yaml || true &&
+              [ ! -f /config/scenes.yaml ] && echo '[]' > /config/scenes.yaml || true
+          volumeMounts:
+            - name: config
+              mountPath: /config
+            - name: init-config
+              mountPath: /tmp/config
+      hostNetwork: true
       dnsPolicy: ClusterFirstWithHostNet
       containers:
-      - name: home-assistant
-        image: homeassistant/home-assistant:2025.11
-        ports:
-        - containerPort: 8123
-        volumeMounts:
-        - name: config
-          mountPath: /config
-      - name: matter-server
-        image: ghcr.io/home-assistant-libs/python-matter-server:8.1.0
-        ports:
-        - containerPort: 5580
-        volumeMounts:
-        - name: matter-data
-          mountPath: /data
-        env:
-        - name: MATTER_SERVER_PORT
-          value: "5580"
-        securityContext:
-          capabilities:
-            add: ["NET_ADMIN", "NET_RAW"]
+        - name: home-assistant
+          image: homeassistant/home-assistant:2025.11
+          ports:
+            - containerPort: 8123
+          volumeMounts:
+            - name: config
+              mountPath: /config
+            - name: dbus
+              mountPath: /run/dbus
+            - name: bluetooth
+              mountPath: /sys/class/bluetooth
+            - name: dev
+              mountPath: /dev
+          env:
+            - name: DBUS_SYSTEM_BUS_ADDRESS
+              value: "unix:path=/run/dbus/system_bus_socket"
+          securityContext:
+            privileged: true
+            allowPrivilegeEscalation: true
+            capabilities:
+              add:
+                - CAP_NET_ADMIN
+                - CAP_NET_RAW
+        - name: matter-server
+          image: ghcr.io/home-assistant-libs/python-matter-server:stable
+          ports:
+            - containerPort: 5580
+          command: ["python", "-m", "matter_server.server", "--log-level", "debug", "--bluetooth-adapter", "1", "--primary-interface", "enp2s0"]
+          volumeMounts:
+            - name: matter-data
+              mountPath: /data
+            - name: dbus
+              mountPath: /run/dbus
+            - name: bluetooth
+              mountPath: /sys/class/bluetooth
+            - name: dev
+              mountPath: /dev
+          env:
+            - name: MATTER_SERVER_PORT
+              value: "5580"
+            - name: DBUS_SYSTEM_BUS_ADDRESS
+              value: "unix:path=/run/dbus/system_bus_socket"
+          securityContext:
+            privileged: true
+            allowPrivilegeEscalation: true
+            capabilities:
+              add:
+                - CAP_NET_ADMIN
+                - CAP_NET_RAW
+                - CAP_SYS_ADMIN
       volumes:
-      - name: config
-        persistentVolumeClaim:
-          claimName: home-assistant-pvc
-      - name: init-config
-        configMap:
-          name: home-assistant-config
-      - name: matter-data
-        persistentVolumeClaim:
-          claimName: matter-server-pvc
+        - name: config
+          persistentVolumeClaim:
+            claimName: home-assistant-pvc
+        - name: init-config
+          configMap:
+            name: home-assistant-config
+        - name: matter-data
+          persistentVolumeClaim:
+            claimName: matter-server-pvc
+        - name: dbus
+          hostPath:
+            path: /run/dbus
+        - name: bluetooth
+          hostPath:
+            path: /sys/class/bluetooth
+        - name: dev
+          hostPath:
+            path: /dev
