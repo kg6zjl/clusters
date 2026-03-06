@@ -10,4 +10,5 @@ resources:
   - pvc.yaml
   - configmap.yaml
   - ingress.yaml
+  - servicemonitor.yaml
   

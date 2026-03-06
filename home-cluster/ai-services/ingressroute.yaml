@@ -1,0 +1,19 @@
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: open-webui
+  namespace: ai-services
+  annotations:
+    external-dns.alpha.kubernetes.io/hostname: chat.kube.stevearnett.com
+    external-dns.alpha.kubernetes.io/target: kube.stevearnett.com
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - match: Host(`chat.kube.stevearnett.com`)
+      kind: Rule
+      services:
+        - name: open-webui
+          port: 8080
+  tls:
+    secretName: wildcard-stevearnett-com-tls

@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: frigate
+  namespace: frigate
+spec:
+  selector:
+    app: frigate
+  ports:
+    - name: http
+      port: 5000
+      targetPort: 5000
+    - name: rtsp
+      port: 8554
+      targetPort: 8554

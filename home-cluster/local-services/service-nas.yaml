@@ -1,0 +1,24 @@
+---
+# Service for NAS (with Endpoints pointing to external IP)
+apiVersion: v1
+kind: Service
+metadata:
+  name: nas-local
+  namespace: local-services
+spec:
+  ports:
+  - port: 9999
+    targetPort: 9999
+    protocol: TCP
+---
+apiVersion: v1
+kind: Endpoints
+metadata:
+  name: nas-local
+  namespace: local-services
+subsets:
+- addresses:
+  - ip: 192.168.1.176
+  ports:
+  - port: 9999
+    protocol: TCP

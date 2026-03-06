@@ -1,0 +1,21 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: nginx-quotes-access
+  namespace: quotes
+spec:
+  podSelector:
+    matchLabels:
+      app: nginx-quotes
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/name: oauth2-proxy
+    ports:
+    - protocol: TCP
+      port: 8000
+  egress: []

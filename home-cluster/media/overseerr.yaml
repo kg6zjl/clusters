@@ -5,7 +5,7 @@ metadata:
   name: overseerr
   namespace: media
   annotations:
-    kubernetes.io/ingress.class: caddy
+    kubernetes.io/ingress.class: traefik
     external-dns.alpha.kubernetes.io/hostname: overseerr.kube.stevearnett.com
     external-dns.alpha.kubernetes.io/target: kube.stevearnett.com
 spec:

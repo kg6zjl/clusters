@@ -1,0 +1,20 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: custom-alerts
+  namespace: monitoring
+  labels:
+    prometheus: kube-prometheus-stack-prometheus
+    app: kube-prometheus-stack-prometheus
+spec:
+  groups:
+  - name: service-down
+    rules:
+    - alert: ServiceDown
+      expr: kube_deployment_status_replicas_available{alert_on_down="true"} == 0
+      for: 10m
+      labels:
+        severity: warning
+      annotations:
+        summary: "Service {{ $labels.deployment }} in {{ $labels.namespace }} is down"
+        description: "Deployment {{ $labels.deployment }} has no available replicas"
