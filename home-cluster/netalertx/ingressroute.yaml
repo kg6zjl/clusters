@@ -1,0 +1,19 @@
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: netalertx
+  namespace: netalertx
+  annotations:
+    external-dns.alpha.kubernetes.io/hostname: netalertx.kube.stevearnett.com
+    external-dns.alpha.kubernetes.io/target: kube.stevearnett.com
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - match: Host(`netalertx.kube.stevearnett.com`)
+      kind: Rule
+      services:
+        - name: netalertx
+          port: 20211
+  tls:
+    secretName: wildcard-stevearnett-com-tls

@@ -1,0 +1,84 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: open-webui
+  namespace: ai-services
+  labels:
+    app: open-webui
+    alert-on-down: "true"
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: open-webui
+  template:
+    metadata:
+      labels:
+        app: open-webui
+    spec:
+      nodeSelector:
+        kubernetes.io/hostname: kube-nuc
+      containers:
+      - name: open-webui
+        image: ghcr.io/open-webui/open-webui:main
+        ports:
+        - containerPort: 8080
+          name: http
+        env:
+        - name: OLLAMA_BASE_URLS
+          value: "http://ollama.ai-services.svc.cluster.local:11434;http://ollama.ai-services.svc.cluster.local:11434;http://ollama-amd-01.ai-services.svc.cluster.local:11434;http://ollama-amd-02.ai-services.svc.cluster.local:11434"
+        - name: WEBUI_AUTH
+          value: "True"
+        - name: ENABLE_SIGNUP
+          value: "True"
+        - name: DEFAULT_USER_ROLE
+          value: "admin"
+        envFrom:
+        - secretRef:
+            name: open-webui-secret
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "500m"
+          limits:
+            memory: "2Gi"
+            cpu: "2"
+        volumeMounts:
+        - name: webui-data
+          mountPath: /app/backend/data
+      volumes:
+      - name: webui-data
+        persistentVolumeClaim:
+          claimName: open-webui-data
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: open-webui-data
+  namespace: ai-services
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 2Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: open-webui
+  namespace: ai-services
+  labels:
+    app: open-webui
+spec:
+  type: ClusterIP
+  ports:
+  - port: 8080
+    targetPort: 8080
+    protocol: TCP
+    name: http
+  selector:
+    app: open-webui

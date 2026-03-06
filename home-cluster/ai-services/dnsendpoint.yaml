@@ -1,0 +1,11 @@
+apiVersion: externaldns.k8s.io/v1alpha1
+kind: DNSEndpoint
+metadata:
+  name: chat
+  namespace: kube-system
+spec:
+  endpoints:
+    - dnsName: chat.kube.stevearnett.com
+      recordType: CNAME
+      targets:
+        - kube.stevearnett.com

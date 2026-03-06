@@ -1,0 +1,24 @@
+---
+# Service pointing to ComfyUI running directly on beast host
+apiVersion: v1
+kind: Service
+metadata:
+  name: comfy-local
+  namespace: ai-services
+spec:
+  ports:
+  - port: 8080
+    targetPort: 8080
+    protocol: TCP
+---
+apiVersion: v1
+kind: Endpoints
+metadata:
+  name: comfy-local
+  namespace: ai-services
+subsets:
+- addresses:
+  - ip: 192.168.1.161
+  ports:
+  - port: 8080
+    protocol: TCP

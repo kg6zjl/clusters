@@ -1,0 +1,54 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: headlamp
+  namespace: headlamp
+  labels:
+    app: headlamp
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: headlamp
+  template:
+    metadata:
+      labels:
+        app: headlamp
+    spec:
+      serviceAccountName: headlamp
+      containers:
+      - name: headlamp
+        image: ghcr.io/headlamp-k8s/headlamp:latest
+        args:
+        - -kubeconfig=/etc/kubeconfig/config
+        - -plugins-dir=/headlamp/plugins
+        ports:
+        - containerPort: 4466
+          name: http
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: "1"
+            memory: 512Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          runAsNonRoot: true
+          runAsUser: 100
+          runAsGroup: 101
+        volumeMounts:
+        - name: plugins
+          mountPath: /headlamp/plugins
+        - name: kubeconfig
+          mountPath: /etc/kubeconfig
+          readOnly: true
+      volumes:
+      - name: plugins
+        emptyDir: {}
+      - name: kubeconfig
+        secret:
+          secretName: headlamp-kubeconfig
