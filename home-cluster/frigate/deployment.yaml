@@ -1,0 +1,74 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frigate
+  namespace: frigate
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: frigate
+  template:
+    metadata:
+      labels:
+        app: frigate
+    spec:
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: kubernetes.io/hostname
+                    operator: In
+                    values:
+                      - thinkcentre01
+                      - thinkcentre02
+                      - kube-nuc
+      containers:
+        - name: frigate
+          image: ghcr.io/blakeblackshear/frigate:stable
+          envFrom:
+            - secretRef:
+                name: frigate-credentials
+          env:
+            - name: LIBVA_DRIVER_NAME
+              value: "radeonsi"
+            - name: TZ
+              value: "America/Los_Angeles"
+          securityContext:
+            privileged: true
+          volumeMounts:
+            - name: config
+              mountPath: /config/config.yaml
+              subPath: config.yaml
+            - name: media
+              mountPath: /media/frigate
+            - name: cache
+              mountPath: /tmp/cache
+            - name: dri
+              mountPath: /dev/dri
+            - name: shm
+              mountPath: /dev/shm
+          ports:
+            - containerPort: 5000
+              name: http
+            - containerPort: 8554
+              name: rtsp
+      volumes:
+        - name: config
+          configMap:
+            name: frigate-config
+        - name: media
+          persistentVolumeClaim:
+            claimName: frigate-media-pvc
+        - name: cache
+          emptyDir:
+            medium: Memory
+            sizeLimit: 1Gi
+        - name: dri
+          hostPath:
+            path: /dev/dri
+        - name: shm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 1Gi

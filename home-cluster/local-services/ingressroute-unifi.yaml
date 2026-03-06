@@ -1,0 +1,23 @@
+---
+# IngressRoute for Unifi with more control
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: unifi
+  namespace: local-services
+  annotations:
+    external-dns.alpha.kubernetes.io/hostname: unifi.stevearnett.com
+    external-dns.alpha.kubernetes.io/target: kube.stevearnett.com
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - match: Host(`unifi.stevearnett.com`)
+      kind: Rule
+      services:
+        - name: unifi-local
+          port: 443
+          scheme: https
+          serversTransport: insecure-transport
+  tls:
+    secretName: wildcard-stevearnett-com-tls

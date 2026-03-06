@@ -1,0 +1,27 @@
+---
+# Ingress for NAS
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: nas
+  namespace: local-services
+  annotations:
+    external-dns.alpha.kubernetes.io/hostname: nas.stevearnett.com
+    external-dns.alpha.kubernetes.io/target: kube.stevearnett.com
+spec:
+  ingressClassName: traefik
+  tls:
+  - hosts:
+    - nas.stevearnett.com
+    secretName: wildcard-stevearnett-com-tls
+  rules:
+  - host: nas.stevearnett.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: nas-local
+            port:
+              number: 9999

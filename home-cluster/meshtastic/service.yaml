@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: meshmonitor
+  namespace: meshtastic
+spec:
+  selector:
+    app: meshmonitor
+  ports:
+  - name: web
+    port: 3001
+    targetPort: 3001
+  - name: virtual-node
+    port: 4404
+    targetPort: 4404
+    nodePort: 31404
+  type: NodePort

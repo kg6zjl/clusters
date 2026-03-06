@@ -4,7 +4,7 @@ metadata:
   name: home-assistant
   namespace: home-assistant
   annotations:
-    kubernetes.io/ingress.class: caddy
+    kubernetes.io/ingress.class: traefik
     external-dns.alpha.kubernetes.io/hostname: ha.kube.stevearnett.com
     external-dns.alpha.kubernetes.io/target: kube.stevearnett.com
 spec:

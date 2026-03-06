@@ -1,0 +1,16 @@
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: headlamp
+  namespace: headlamp
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - match: Host(`headlamp.kube.stevearnett.com`)
+      kind: Rule
+      services:
+        - name: headlamp
+          port: 4466
+  tls:
+    secretName: wildcard-stevearnett-com-tls
