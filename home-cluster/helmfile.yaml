@@ -464,7 +464,7 @@ releases:
   - name: pihole
     namespace: pihole
     chart: pihole-v6/pihole
-    version: 1.1.0
+    version: 1.2.1
     values:
       - timezone: "America/Los_Angeles"
         replicas: 1
