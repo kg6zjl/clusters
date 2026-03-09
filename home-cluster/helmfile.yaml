@@ -349,7 +349,7 @@ releases:
   - name: traefik
     namespace: traefik
     chart: traefik/traefik
-    version: 39.0.4
+    version: 39.0.5
     values:
       - ports:
           web:
