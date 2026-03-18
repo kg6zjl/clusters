@@ -6,6 +6,10 @@ on:
       - main
     paths:
       - 'home-cluster/**'
+      - 'renovate.json'
+      - '.github/workflows/**'
+      - '.gitleaks.toml'
+      - '.pre-commit-config.yaml'
 
 jobs:
   lint:
