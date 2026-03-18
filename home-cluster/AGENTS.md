@@ -203,6 +203,8 @@ All secrets are stored in the 1Password `home-cluster` vault and synced to Kuber
 - Create `.env` files for secrets
 - Use `secretGenerator` with `envs:` in kustomization.yaml
 
+**Exception: `.dockerconfigjson`** - This file is gitignored and must be generated at runtime. The GitHub Actions workflow includes a step to generate it from K8s secrets.
+
 The `.env` files that exist are for local development only (e.g., `github-runners/.env` for helmfile templates) and are gitignored.
 
 ### GitIgnore Pattern
