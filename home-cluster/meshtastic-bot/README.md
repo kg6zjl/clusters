@@ -1,3 +1,5 @@
+[![Build and Deploy](https://github.com/kg6zjl/clusters/actions/workflows/meshtastic-bot.yaml/badge.svg)](https://github.com/kg6zjl/clusters/actions/workflows/meshtastic-bot.yaml)
+---
 # Meshtastic Bot
 
 A Python bot that responds to Meshtastic messages via MQTT.
