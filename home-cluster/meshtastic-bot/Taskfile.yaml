@@ -1,0 +1,53 @@
+version: "3"
+
+tasks:
+  login:
+    desc: "Login to local registry"
+    cmds:
+      - podman login registry.kube.stevearnett.com -u registry-user -p 7mdmjpMo5xAoub3r+kt2KK1kNBE=
+
+  build:
+    desc: "Build Docker image (runs tests first)"
+    cmds:
+      - task: test
+      - podman machine start 2>/dev/null || true
+      - podman build -t meshtastic-bot:latest .
+
+  test:
+    desc: "Run unit tests"
+    cmds:
+      - pip install -q paho-mqtt requests meshtastic pytest
+      - python -m pytest src/test_bot.py -v
+
+  push:
+    desc: "Push to local registry"
+    cmds:
+      - podman machine start 2>/dev/null || true
+      - task: login
+      - podman tag meshtastic-bot:latest registry.kube.stevearnett.com/meshtastic-bot:latest
+      - podman push registry.kube.stevearnett.com/meshtastic-bot:latest
+
+  deploy:
+    desc: "Deploy to Kubernetes"
+    cmds:
+      - kubectl apply -k .
+
+  restart:
+    desc: "Restart bot pod"
+    cmds:
+      - kubectl rollout restart deployment meshtastic-bot -n meshtastic
+
+  logs:
+    desc: "View bot logs"
+    cmds:
+      - kubectl logs -n meshtastic -l app=meshtastic-bot -f
+
+  all: 
+    desc: "Build, push, and deploy (restarts if running)"
+    cmds:
+      - task: test
+      - task: build
+      - task: push
+      - task: deploy
+      - task: restart
+
