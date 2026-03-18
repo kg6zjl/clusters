@@ -13,3 +13,4 @@ resources:
   - lidarr.yaml
   - ingress-jellyfin.yaml
   - jellyfin-cache-pvc.yaml
+  - external-secrets.yaml

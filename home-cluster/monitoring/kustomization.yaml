@@ -5,11 +5,7 @@ resources:
 - ingress-alertmanager.yaml
 - prometheus-rules.yaml
 - dashboard-ugreen-nas.yaml
-
-secretGenerator:
-  - name: grafana-admin-secret
-    envs:
-      - .env
+- external-secrets.yaml
 
 configMapGenerator:
 

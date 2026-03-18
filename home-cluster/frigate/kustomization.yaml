@@ -9,11 +9,7 @@ resources:
   - deployment.yaml
   - service.yaml
   - ingress.yaml
-
-secretGenerator:
-  - name: frigate-credentials
-    envs:
-      - .env
+  - external-secrets.yaml
 
 generatorOptions:
   disableNameSuffixHash: true

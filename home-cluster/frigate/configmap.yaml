@@ -59,14 +59,15 @@ data:
           mask: 0.403,0,0.403,0.053,0.583,0.06,0.582,0
         record:
           enabled: true
+          retain:
+            days: 7
+            mode: motion
+          max_keep_days: 7
           motion:
-            days: 15
-          alerts:
+            days: 7
             pre_capture: 5
             post_capture: 5
-            retain:
-              days: 15
-    
+      
       play_yard:
         enabled: true
         friendly_name: Play Yard
@@ -88,14 +89,15 @@ data:
           mask: 0.408,0,0.408,0.06,0.588,0.06,0.588,0
         record:
           enabled: true
+          retain:
+            days: 7
+            mode: motion
+          max_keep_days: 7
           motion:
-            days: 15
-          alerts:
+            days: 7
             pre_capture: 5
             post_capture: 5
-            retain:
-              days: 15
-    
+
       dining_room:
         enabled: true
         friendly_name: Dining Room
@@ -112,23 +114,27 @@ data:
           mask: 0.281,0.008,0.28,0.07,0.704,0.072,0.708,0
         record:
           enabled: true
+          retain:
+            days: 7
+            mode: motion
+          max_keep_days: 7
           motion:
-            days: 15
-    
+            days: 7
+
     version: 0.17-0
 
     semantic_search:
-      enabled: true
+      enabled: false
 
     face_recognition:
-      enabled: true
+      enabled: false
 
     lpr:
-      enabled: true
+      enabled: false
 
     classification:
       bird:
-        enabled: true
+        enabled: false
 
     go2rtc:
       streams:

@@ -1,0 +1,17 @@
+name: Apply to Cluster
+
+on:
+  push:
+    branches:
+      - main
+      - master
+
+jobs:
+  apply:
+    runs-on: self-hosted
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Apply changes
+        run: task apply

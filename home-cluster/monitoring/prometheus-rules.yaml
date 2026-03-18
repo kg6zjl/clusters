@@ -18,3 +18,29 @@ spec:
       annotations:
         summary: "Service {{ $labels.deployment }} in {{ $labels.namespace }} is down"
         description: "Deployment {{ $labels.deployment }} has no available replicas"
+  - name: disk-space
+    rules:
+    - alert: DiskSpaceWarning
+      expr: (node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"}) < 0.15
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: "Disk space warning on {{ $labels.instance }}"
+        description: "Disk space is below 15% on {{ $labels.instance }}"
+    - alert: DiskSpaceCritical
+      expr: (node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"}) < 0.1
+      for: 2m
+      labels:
+        severity: critical
+      annotations:
+        summary: "Disk space critical on {{ $labels.instance }}"
+        description: "Disk space is below 10% on {{ $labels.instance }} - imminent failure risk"
+    - alert: Pod CrashLooping
+      expr: rate(kube_pod_container_status_restarts_total[5m]) > 0.1
+      for: 2m
+      labels:
+        severity: warning
+      annotations:
+        summary: "Pod {{ $labels.pod }} in {{ $labels.namespace }} is crash looping"
+        description: "Container {{ $labels.container }} has restarted multiple times in the last 5 minutes"

@@ -5,11 +5,7 @@ resources:
 - namespace.yaml
 - dnsendpoint.yaml
 - ingress.yaml
-
-secretGenerator:
-  - name: plex-claim-secret
-    envs:
-      - .env
+- external-secrets.yaml
 
 generatorOptions:
   disableNameSuffixHash: true
