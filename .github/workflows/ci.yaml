@@ -1,0 +1,66 @@
+name: CI Lint
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'home-cluster/**'
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: self-hosted
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install lint tools
+        run: |
+          pip install yamllint
+
+      - name: Lint YAML files
+        run: |
+          yamllint -c home-cluster/yamllint.yaml home-cluster/
+
+  validate:
+    name: Validate
+    runs-on: self-hosted
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install task
+        run: |
+          curl -sL https://taskfile.dev/install.sh | sh
+          echo "$(pwd)/bin" >> $GITHUB_PATH
+
+      - name: Validate Kustomize
+        run: |
+          cd home-cluster
+          kubectl kustomize . 2>&1 > /dev/null && echo "Kustomize: OK" || { echo "Kustomize: FAILED"; exit 1; }
+
+      - name: Helmfile lint
+        run: |
+          cd home-cluster
+          helmfile deps 2>&1 || true
+          helmfile template --quiet 2>&1 > /dev/null && echo "Helmfile: OK" || { echo "Helmfile: FAILED"; exit 1; }
+
+  secrets:
+    name: Secret Scan
+    runs-on: self-hosted
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Run Gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        with:
+          config-path: .gitleaks.toml
