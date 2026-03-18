@@ -57,7 +57,7 @@ jobs:
         run: podman login ${{ env.REGISTRY }} -u registry-user -p $(kubectl get secret registry-secrets -n registry -o jsonpath='{.data.registry_password}' | base64 -d)
 
       - name: Build and push
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v7
         with:
           context: home-cluster/meshtastic-bot
           push: true
