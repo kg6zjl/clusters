@@ -28,17 +28,17 @@ spec:
         - name: MESHMONITOR_TOKEN
           valueFrom:
             secretKeyRef:
-              name: meshtastic-bot-config
+              name: meshtastic-bot-secrets
               key: MESHMONITOR_TOKEN
         - name: BOT_NODE_NUM
           valueFrom:
             secretKeyRef:
-              name: meshtastic-bot-config
+              name: meshtastic-bot-secrets
               key: BOT_NODE_NUM
         - name: BOT_ALIAS
           valueFrom:
             secretKeyRef:
-              name: meshtastic-bot-config
+              name: meshtastic-bot-secrets
               key: BOT_ALIAS
         - name: MQTT_ADDRESS
           value: "mosquitto.mqtt.svc.cluster.local"

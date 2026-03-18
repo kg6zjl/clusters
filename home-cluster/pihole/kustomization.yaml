@@ -5,11 +5,7 @@ resources:
   - namespace.yaml
   - ingressroute.yaml
   - dnsendpoint.yaml
-
-secretGenerator:
-  - name: pihole-web-password
-    envs:
-      - .env
+  - external-secrets.yaml
 
 generatorOptions:
   disableNameSuffixHash: true

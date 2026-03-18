@@ -5,11 +5,9 @@ namespace: clustersecret
 
 resources:
   - namespace.yaml
+  - external-secrets.yaml
 
 secretGenerator:
-  - name: cloudflare-api-creds-root
-    envs:
-      - .env
   - name: docker-registry-auth
     type: kubernetes.io/dockerconfigjson
     files:

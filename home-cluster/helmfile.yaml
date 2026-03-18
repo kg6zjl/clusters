@@ -29,10 +29,12 @@ repositories:
     url: https://grafana.github.io/helm-charts
   - name: vmware-tanzu
     url: https://vmware-tanzu.github.io/helm-charts
-  - name: pihole-v6
-    url: https://nunoferna.github.io/pihole-helm/
-  - name: nvidia
-    url: https://nvidia.github.io/gpu-operator
+  - name: actions-runner-controller
+    url: https://actions-runner-controller.github.io/actions-runner-controller
+  - name: external-secrets
+    url: https://charts.external-secrets.io
+  - name: 1password
+    url: https://1password.github.io/connect-helm-charts
 ---
 helmDefaults:
   historyMax: 3
@@ -70,7 +72,7 @@ releases:
         extraArgs:
           provider: google
           authenticated-emails-file: "/etc/oauth2-proxy/.env.authenticated-emails"
-          upstream: "http://kubernetes-dashboard.kube-system.svc.cluster.local:80"
+          upstream: "http://headlamp.headlamp.svc.cluster.local:4466"
           cookie-secure: "true"
           redirect-url: "https://dashboard.kube.stevearnett.com/oauth2/callback"
           http-address: "0.0.0.0:4180"
@@ -271,14 +273,34 @@ releases:
         alertmanager:
           enabled: true
           config:
-            global: {}
+            global:
+              resolve_timeout: 5m
             route:
-              receiver: 'null'
+              receiver: 'default'
               group_by: [alertname]
-              group_wait: 10s
-              group_interval: 10s
-              repeat_interval: 1h
+              group_wait: 30s
+              group_interval: 5m
+              repeat_interval: 4h
+              routes:
+              - match:
+                  severity: critical
+                receiver: 'critical-alerts'
+                continue: true
             receivers:
+            - name: 'default'
+              email_configs:
+              - to: '{{ env "ALERT_MANAGER_TO_EMAIL" }}'
+                from: '{{ env "ALERT_MANAGER_FROM_EMAIL" }}'
+                smarthost: smtp.gmail.com:587
+                auth_username: '{{ env "ALERT_MANAGER_SMTP_USERNAME" }}'
+                auth_password: '{{ env "ALERT_MANAGER_SMTP_PASSWORD" }}'
+              webhook_configs:
+              - url: '{{ env "NTFY_URL" }}'
+                send_resolved: true
+            - name: 'critical-alerts'
+              webhook_configs:
+              - url: '{{ env "NTFY_URL" }}'
+                send_resolved: true
             - name: 'null'
   - name: csi-driver-smb
     namespace: kube-system
@@ -454,6 +476,9 @@ releases:
           enabled: false
         resultsCache:
           enabled: false
+        sidecar:
+          enabled: false
+          skipTlsVerify: true
   - name: promtail
     namespace: monitoring
     chart: grafana/promtail
@@ -470,11 +495,13 @@ releases:
       - timezone: "America/Los_Angeles"
         replicas: 1
         hostNetwork: false
+        labels:
+          alert-on-down: "true"
         pihole:
           # Web password
           web:
             existingSecret: pihole-web-password
-            passwordKey: PIHOLE_WEB_PASSWORD
+            passwordSecretKey: PIHOLE_WEB_PASSWORD
             service:
               enabled: true
               type: ClusterIP
@@ -595,3 +622,38 @@ releases:
             - https://quay.io
           additionalMirrorTargets:
             - https://registry.kube.stevearnett.com
+  - name: actions-runner-controller
+    namespace: github-runners
+    chart: actions-runner-controller/actions-runner-controller
+    version: 0.23.7
+    values:
+      - authSecret:
+          enabled: true
+          create: false
+          name: github-runner-secret
+        image:
+          repository: summerwind/actions-runner-controller
+        resources:
+          limits:
+            memory: 1Gi
+  - name: external-secrets
+    namespace: external-secrets
+    chart: external-secrets/external-secrets
+    version: 2.1.0
+    values:
+      - installCRDs: true
+        serviceAccount:
+          annotations:
+            eks.amazonaws.com/role-arn: ""
+  - name: onepassword-connect
+    namespace: external-secrets
+    chart: 1password/connect
+    version: 2.4.0
+    values:
+      - connect:
+          create: true
+          replicas: 1
+        operator:
+          create: true
+        service:
+          type: ClusterIP

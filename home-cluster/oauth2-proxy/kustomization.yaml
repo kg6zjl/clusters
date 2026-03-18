@@ -8,14 +8,7 @@ resources:
   - ingress-auth.yaml
   - ingress-dashboard.yaml
   - servicemonitor.yaml
-
-secretGenerator:
-  - name: oauth2-proxy-secret
-    envs:
-      - .env
-  - name: oauth2-proxy-emails
-    files:
-      - .env.authenticated-emails
+  - external-secrets.yaml
 
 commonAnnotations:
   reflector.v1.k8s.emberstack.com/reflection-allowed: "true"

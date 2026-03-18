@@ -9,11 +9,7 @@ resources:
   - ingressroute.yaml
   - deployment.yaml
   - service.yaml
-
-secretGenerator:
-  - name: registry-auth
-    envs:
-      - .env
+  - external-secrets.yaml
 
 generatorOptions:
   disableNameSuffixHash: true

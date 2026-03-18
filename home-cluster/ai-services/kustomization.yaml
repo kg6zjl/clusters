@@ -6,30 +6,21 @@ namespace: ai-services
 resources:
   - namespace.yaml
   - wyoming-whisper.yaml
-  # Ollama and Open WebUI
   - ollama.yaml
   - ollama-amd.yaml
   - open-webui.yaml
   - ingressroute.yaml
   - dnsendpoint.yaml
-  # ComfyUI
   - service-comfy.yaml
   - deployment-comfy.yaml
   - middleware-comfy.yaml
   - ingressroute-comfy.yaml
   - dnsendpoint-comfy.yaml
-  # Pigallery2 (ComfyUI output gallery)
   - pigallery2.yaml
   - ingressroute-pigallery2.yaml
   - dnsendpoint-pigallery2.yaml
-
-secretGenerator:
-- name: open-webui-secret
-  envs:
-  - .env
-- name: pigallery2-secret
-  envs:
-  - .env-pigallery2
+  - external-secrets.yaml
+  - external-secrets-pigallery2.yaml
 
 patches:
   - target:

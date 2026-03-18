@@ -23,7 +23,7 @@ task apply
 
 # Or manually:
 helm repo update
-export $(grep -v '^#' .env | xargs) && helmfile sync
+helmfile sync
 kubectl apply -k .
 ```
 
@@ -71,7 +71,7 @@ Each service directory **must** contain:
 - `namespace.yaml`
 - `kustomization.yaml`
 - Resource manifests: `deployment.yaml`, `service.yaml`, `ingress.yaml` or `ingressroute.yaml`
-- `.env` file for secrets (gitignored)
+- `external-secrets.yaml` (if the service requires secrets)
 
 ### Manifest Formatting
 
@@ -105,31 +105,50 @@ spec:
 
 ### Secrets Management (CRITICAL)
 
-- **NEVER** hardcode secrets in YAML files - this includes any passwords, usernames, API keys, tokens, or credentials
-- Store secrets in `.env` files (already gitignored via `.gitignore`)
-- Use Kustomize `secretGenerator` to create secrets from `.env` files
-- Reference secrets via `secretKeyRef`, not inline values
-- **ALWAYS run the secret check below before committing changes**
+Secrets are managed via **1Password + External Secrets Operator (ESO)**:
+- **1Password** is the source of truth for all secrets
+- **ESO** syncs secrets from 1Password to Kubernetes automatically
+- **NEVER hardcode secrets** in YAML files or `.env` files
+
+**Adding secrets for a new service:**
+
+1. Add the secret to 1Password `home-cluster` vault with the item name matching your ExternalSecret `key`
+2. Create an `external-secrets.yaml` in the service directory
+3. Reference the ExternalSecret in `kustomization.yaml`
 
 ```yaml
-# WRONG - never do this:
-env:
-  - name: PASSWORD
-    value: "my-secret-password"
+# external-secrets.yaml - syncs from 1Password
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: my-service-secret
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    name: onepassword
+    kind: ClusterSecretStore
+  target:
+    name: my-service-secret
+  data:
+    - secretKey: MY_API_KEY
+      remoteRef:
+        key: my-service-api-key  # 1Password item name
+        property: password        # field name in 1Password
+```
 
-# CORRECT - reference from secret:
+Then reference in deployment:
+```yaml
 env:
-  - name: PASSWORD
+  - name: MY_API_KEY
     valueFrom:
       secretKeyRef:
-        name: my-secret
-        key: password
-
-# CORRECT - use envFrom with secret:
-envFrom:
-  - secretRef:
-      name: my-secret
+        name: my-service-secret
+        key: MY_API_KEY
 ```
+
+**1Password Item Requirements:**
+- Item must be in `home-cluster` vault
+- Secret value must be in the `password` field (or custom field if specified in ExternalSecret)
 
 ### Before Every Commit - Check for Secrets
 
@@ -163,7 +182,7 @@ data:
 # Ensure the deployment mounts the secret as env vars:
 envFrom:
   - secretRef:
-      name: frigate-credentials
+      name: frigate-secrets
 ```
 
 ### Helmfile Conventions
@@ -177,14 +196,16 @@ envFrom:
 
 ## Security Guidelines
 
-### Never Commit Secrets
+### Secrets are in 1Password
 
-The following are considered secrets and must be in `.env` files:
-- Passwords, tokens, API keys
-- Private keys and certificates
-- Usernames for authentication
-- SMTP credentials
-- Cloud provider credentials (Cloudflare, AWS, etc.)
+All secrets are stored in the 1Password `home-cluster` vault and synced to Kubernetes via ESO. Do NOT:
+- Commit secrets to git
+- Create `.env` files for secrets
+- Use `secretGenerator` with `envs:` in kustomization.yaml
+
+**Exception: `.dockerconfigjson`** - This file is gitignored and must be generated at runtime. The GitHub Actions workflow includes a step to generate it from K8s secrets.
+
+The `.env` files that exist are for local development only (e.g., `github-runners/.env` for helmfile templates) and are gitignored.
 
 ### GitIgnore Pattern
 
@@ -206,7 +227,7 @@ grep -E "ghp_|eyJ|CLOUDFLARE_|RENOVATE_|password:\s*['\"][^$]" --include="*.yaml
 
 1. Create directory at repository root
 2. Add `namespace.yaml`, `kustomization.yaml`, and resource manifests
-3. Add `.env` file with any required secrets
+3. Add `external-secrets.yaml` if the service requires secrets (add secrets to 1Password first!)
 4. Reference directory from root `kustomization.yaml`
 5. Run `task apply`
 

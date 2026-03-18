@@ -4,13 +4,8 @@ kind: Kustomization
 namespace: meshtastic
 
 resources:
-  - namespace.yaml
   - deployment.yaml
-
-secretGenerator:
-  - name: meshtastic-bot-config
-    envs:
-      - .env
+  - external-secrets.yaml
 
 generatorOptions:
   disableNameSuffixHash: true

@@ -5,11 +5,7 @@ namespace: renovate
 
 resources:
   - namespace.yaml
-
-secretGenerator:
-  - name: renovate-github-token
-    envs:
-      - .env
+  - external-secrets.yaml
 
 generatorOptions:
   disableNameSuffixHash: true

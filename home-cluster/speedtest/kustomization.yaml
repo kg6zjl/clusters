@@ -6,10 +6,4 @@ resources:
   - deployment.yaml
   - service.yaml
   - ingress.yaml
-configMapGenerator:
-  - name: speedtest-env
-    namespace: speedtest
-    options:
-      disableNameSuffixHash: true
-    files:
-      - .env
+  - external-secrets.yaml

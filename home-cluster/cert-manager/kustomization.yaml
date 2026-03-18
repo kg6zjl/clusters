@@ -4,8 +4,6 @@ namespace: cert-manager
 
 secretGenerator:
 - name: nas-smb-credentials
-  envs:
-    - .env
   options:
     disableNameSuffixHash: true
     annotations:
@@ -13,7 +11,7 @@ secretGenerator:
       reflector.v1.k8s.emberstack.com/reflection-allowed-namespaces: "backup"
 
 resources:
-  # - namespace.yaml # created via microk8s command
+  - external-secrets.yaml
   - clusterissuer.yaml
   - certificate.yaml
   - sync-cert-cronjob.yaml

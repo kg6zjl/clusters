@@ -9,7 +9,7 @@ tasks:
     cmds:
       - helm repo update
       - rm -rf ~/.kube/cache
-      - export $(grep -v '^#' .env | xargs) && helmfile sync
+      - helmfile sync
       - kubectl apply -k .
 
   rotate-cert:

@@ -11,7 +11,7 @@ tasks:
     cmds:
       - task: test
       - podman machine start 2>/dev/null || true
-      - podman build -t meshtastic-bot:latest .
+      - podman build --platform linux/amd64 -t meshtastic-bot:latest .
 
   test:
     desc: "Run unit tests"

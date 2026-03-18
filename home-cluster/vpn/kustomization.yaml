@@ -3,18 +3,10 @@ kind: Kustomization
 
 namespace: vpn
 
-secretGenerator:
-- name: vpn-secret
-  envs:
-  - .env
-  options:
-    disableNameSuffixHash: true
-- name: qbittorrent-secret
-  envs:
-  - .env.qb
-  options:
-    disableNameSuffixHash: true
-
 resources:
   - vpn-qbittorent.yaml
   - ingress-qbittorrent.yaml
+  - external-secrets.yaml
+
+generatorOptions:
+  disableNameSuffixHash: true

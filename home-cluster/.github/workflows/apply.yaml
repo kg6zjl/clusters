@@ -1,0 +1,26 @@
+name: Apply to Cluster
+
+on:
+  push:
+    branches:
+      - main
+      - master
+
+jobs:
+  apply:
+    runs-on: self-hosted
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Generate dockerconfigjson
+        run: |
+          # Generate .dockerconfigjson for private registry auth
+          REGISTRY_USER=$(kubectl get secret registry-secrets -n registry -o jsonpath='{.data.registry_username}' | base64 -d)
+          REGISTRY_PASS=$(kubectl get secret registry-secrets -n registry -o jsonpath='{.data.registry_password}' | base64 -d)
+          AUTH=$(echo -n "$REGISTRY_USER:$REGISTRY_PASS" | base64)
+          mkdir -p cluster-secrets
+          echo "{\"auths\":{\"registry.kube.stevearnett.com\":{\"username\":\"$REGISTRY_USER\",\"password\":\"$REGISTRY_PASS\",\"auth\":\"$AUTH\"}}}" > cluster-secrets/.dockerconfigjson
+
+      - name: Apply changes
+        run: task apply

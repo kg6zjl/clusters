@@ -1,0 +1,62 @@
+apiVersion: actions.summerwind.dev/v1alpha1
+kind: RunnerDeployment
+metadata:
+  name: github-runner
+  namespace: github-runners
+spec:
+  replicas: 1
+  template:
+    spec:
+      repository: kg6zjl/clusters
+      labels:
+        - self-hosted
+        - kubernetes
+      serviceAccountName: github-runner
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app.kubernetes.io/name: actions-runner-controller
+                topologyKey: kubernetes.io/hostname
+      initContainers:
+        - name: installer
+          image: alpine:3.19
+          command:
+            - sh
+            - -c
+            - |
+              set -e
+              apk add --no-cache curl wget tar
+            
+              # Install kubectl
+              curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+              chmod +x kubectl && mv kubectl /opt/tools/
+            
+              # Install helm
+              curl -fsSL https://get.helm.sh/helm-v3.16.4-linux-amd64.tar.gz | tar -zxf - -C /tmp && mv /tmp/linux-amd64/helm /opt/tools/ && rm -rf /tmp/linux-amd64
+            
+              # Install helmfile
+              curl -fsSL https://github.com/helmfile/helmfile/releases/download/v0.168.0/helmfile_0.168.0_linux_amd64.tar.gz | tar -zxf - -C /opt/tools/ && chmod +x /opt/tools/helmfile
+            
+              # Install task (direct binary download)
+              curl -fsSL https://github.com/go-task/task/releases/download/v3.49.1/task_linux_amd64.tar.gz | tar -zxf - -C /opt/tools/ && chmod +x /opt/tools/task
+              
+              # Verify
+              ls -la /opt/tools/
+          securityContext:
+            runAsUser: 0
+          volumeMounts:
+            - name: tools
+              mountPath: /opt/tools
+      volumes:
+        - name: tools
+          emptyDir: {}
+      volumeMounts:
+        - name: tools
+          mountPath: /opt/tools
+      env:
+        - name: PATH
+          value: /opt/tools:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
