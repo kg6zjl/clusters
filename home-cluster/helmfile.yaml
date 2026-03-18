@@ -35,6 +35,12 @@ repositories:
     url: https://charts.external-secrets.io
   - name: 1password
     url: https://1password.github.io/connect-helm-charts
+  - name: nvidia
+    url: https://nvidia.github.io/gpu-operator
+  - name: prometheus-community
+    url: https://prometheus-community.github.io/helm-charts
+  - name: pihole-v6
+    url: https://nunoferna.github.io/pihole-helm/
 ---
 helmDefaults:
   historyMax: 3
