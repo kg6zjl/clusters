@@ -62,11 +62,8 @@ data:
           retain:
             days: 7
             mode: motion
-          max_keep_days: 7
-          motion:
-            days: 7
-            pre_capture: 5
-            post_capture: 5
+          pre_capture: 5
+          post_capture: 5
       
       play_yard:
         enabled: true
@@ -92,11 +89,8 @@ data:
           retain:
             days: 7
             mode: motion
-          max_keep_days: 7
-          motion:
-            days: 7
-            pre_capture: 5
-            post_capture: 5
+          pre_capture: 5
+          post_capture: 5
 
       dining_room:
         enabled: true
@@ -117,9 +111,6 @@ data:
           retain:
             days: 7
             mode: motion
-          max_keep_days: 7
-          motion:
-            days: 7
 
     version: 0.17-0
 

@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
       - name: meshmonitor
-        image: ghcr.io/yeraze/meshmonitor:latest #3.0.0-rc3
+        image: ghcr.io/yeraze/meshmonitor:latest  # 3.0.0-rc3
 
         ports:
         - containerPort: 3001

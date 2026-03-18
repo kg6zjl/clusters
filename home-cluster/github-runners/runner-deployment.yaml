@@ -4,7 +4,7 @@ metadata:
   name: github-runner
   namespace: github-runners
 spec:
-  replicas: 1
+  replicas: 2
   template:
     spec:
       repository: kg6zjl/clusters
@@ -29,22 +29,28 @@ spec:
             - -c
             - |
               set -e
-              apk add --no-cache curl wget tar
-            
+              apk add --no-cache curl wget tar bash python3 py3-pip
+
               # Install kubectl
               curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
               chmod +x kubectl && mv kubectl /opt/tools/
-            
+
               # Install helm
               curl -fsSL https://get.helm.sh/helm-v3.16.4-linux-amd64.tar.gz | tar -zxf - -C /tmp && mv /tmp/linux-amd64/helm /opt/tools/ && rm -rf /tmp/linux-amd64
-            
+
               # Install helmfile
               curl -fsSL https://github.com/helmfile/helmfile/releases/download/v0.168.0/helmfile_0.168.0_linux_amd64.tar.gz | tar -zxf - -C /opt/tools/ && chmod +x /opt/tools/helmfile
-            
-              # Install task (direct binary download)
+
+              # Install task
               curl -fsSL https://github.com/go-task/task/releases/download/v3.49.1/task_linux_amd64.tar.gz | tar -zxf - -C /opt/tools/ && chmod +x /opt/tools/task
-              
-              # Verify
+
+              # Install yamllint
+              pip3 install --no-cache-dir yamllint -t /opt/tools/bin/ --break-system-packages
+              chmod +x /opt/tools/bin/yamllint /opt/tools/bin/_yaml/*.py /opt/tools/bin/yaml/*.py 2>/dev/null || true
+
+              # Install gitleaks
+              curl -fsSL https://github.com/gitleaks/gitleaks/releases/download/v8.30.0/gitleaks_8.30.0_linux_x64.tar.gz | tar -xzf - -C /opt/tools/ && chmod +x /opt/tools/gitleaks
+
               ls -la /opt/tools/
           securityContext:
             runAsUser: 0
@@ -59,4 +65,6 @@ spec:
           mountPath: /opt/tools
       env:
         - name: PATH
-          value: /opt/tools:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+          value: /opt/tools/bin:/opt/tools:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+        - name: PYTHONPATH
+          value: /opt/tools/bin

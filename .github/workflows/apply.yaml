@@ -7,12 +7,7 @@ on:
       - master
     paths:
       - 'home-cluster/**'
-  pull_request:
-    branches:
-      - main
-      - master
-    paths:
-      - 'home-cluster/**'
+      - '.github/workflows/apply.yaml'
 
 jobs:
   apply:
@@ -23,19 +18,15 @@ jobs:
 
       - name: Generate dockerconfigjson
         run: |
-          # Generate .dockerconfigjson for private registry auth
           REGISTRY_USER=$(kubectl get secret registry-secrets -n registry -o jsonpath='{.data.registry_username}' | base64 -d)
           REGISTRY_PASS=$(kubectl get secret registry-secrets -n registry -o jsonpath='{.data.registry_password}' | base64 -d)
           AUTH=$(echo -n "$REGISTRY_USER:$REGISTRY_PASS" | base64)
           mkdir -p home-cluster/cluster-secrets
           echo "{\"auths\":{\"registry.kube.stevearnett.com\":{\"username\":\"$REGISTRY_USER\",\"password\":\"$REGISTRY_PASS\",\"auth\":\"$AUTH\"}}}" > home-cluster/cluster-secrets/.dockerconfigjson
 
-      - name: Install task
-        run: |
-          curl -sL https://taskfile.dev/install.sh | sh
-          echo "$(pwd)/bin" >> $GITHUB_PATH
-
       - name: Apply changes
         run: |
           cd home-cluster
-          task apply
+          helm repo update
+          helmfile sync
+          kubectl apply -k .

@@ -41,3 +41,20 @@ tasks:
       - echo "Restarting Traefik to pick up new certificates..."
       - kubectl rollout restart deployment traefik -n traefik
       - 'echo "Done! Test with: curl -I https://grafana.kube.stevearnett.com"'
+
+  lint:
+    desc: "Lint YAML files"
+    cmds:
+      - python3 -m yamllint -c yamllint.yaml .
+
+  validate:
+    desc: "Validate Kustomize and Helmfile"
+    cmds:
+      - cmd: |
+          kubectl kustomize . 2>&1 > /dev/null && echo "Kustomize: OK" || { echo "Kustomize: FAILED"; exit 1; }
+
+  ci:
+    desc: "Run all CI checks (lint, validate)"
+    cmds:
+      - task: lint
+      - task: validate

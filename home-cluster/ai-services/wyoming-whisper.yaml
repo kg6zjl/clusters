@@ -57,9 +57,7 @@ spec:
         supplementalGroups:
           - 44   # video group
           - 993  # render group
-      # Allow access to GPU devices
-      # Note: privileged might be needed depending on your setup
-      # You can try without first and add if needed
+      # Allow access to GPU devices (privileged may be needed)
 ---
 apiVersion: v1
 kind: Service
