@@ -150,6 +150,20 @@ env:
 - Item must be in `home-cluster` vault
 - Secret value must be in the `password` field (or custom field if specified in ExternalSecret)
 
+---
+
+## Git Workflow (IMPORTANT)
+
+### NEVER push directly to main/master
+
+**All changes must go through a branch and Pull Request workflow:**
+1. Create a new branch for any changes
+2. Commit changes to the branch
+3. Push the branch to origin
+4. Open a Pull Request
+5. Wait for CI checks to pass
+6. Merge via PR (do NOT force-push or bypass PR requirements)
+
 ### Before Every Commit - Check for Secrets
 
 Run this command to ensure no secrets have been accidentally committed:
