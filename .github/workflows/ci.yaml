@@ -18,15 +18,13 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: '3.14'
 
-      - name: Install lint tools
-        run: |
-          pip install yamllint
+      - name: Install yamllint
+        run: pip install yamllint
 
       - name: Lint YAML files
-        run: |
-          yamllint -c home-cluster/yamllint.yaml home-cluster/
+        run: python3 -m yamllint -c home-cluster/yamllint.yaml home-cluster/
 
   validate:
     name: Validate
@@ -34,11 +32,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
-
-      - name: Install task
-        run: |
-          curl -sL https://taskfile.dev/install.sh | sh
-          echo "$(pwd)/bin" >> $GITHUB_PATH
 
       - name: Validate Kustomize
         run: |
@@ -48,7 +41,6 @@ jobs:
       - name: Helmfile lint
         run: |
           cd home-cluster
-          helmfile deps 2>&1 || true
           helmfile template --quiet 2>&1 > /dev/null && echo "Helmfile: OK" || { echo "Helmfile: FAILED"; exit 1; }
 
   secrets:
@@ -61,6 +53,6 @@ jobs:
           fetch-depth: 0
 
       - name: Run Gitleaks
-        uses: gitleaks/gitleaks-action@v2
-        with:
-          config-path: .gitleaks.toml
+        run: |
+          export PYTHONPATH=/opt/tools/bin
+          /opt/tools/gitleaks protect --source . --exit-code 1
