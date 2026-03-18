@@ -4,9 +4,13 @@ on:
   push:
     branches:
       - main
+    paths:
+      - 'home-cluster/meshtastic-bot/**'
   pull_request:
     branches:
       - main
+    paths:
+      - 'home-cluster/meshtastic-bot/**'
   workflow_dispatch:
     inputs:
       sha:
@@ -35,7 +39,7 @@ jobs:
         run: pip install -q paho-mqtt requests meshtastic pytest
 
       - name: Run tests
-        run: python -m pytest src/test_bot.py -v
+        run: python -m pytest home-cluster/meshtastic-bot/src/test_bot.py -v
 
   build-push:
     name: Build and Push
@@ -55,7 +59,7 @@ jobs:
       - name: Build and push
         uses: docker/build-push-action@v5
         with:
-          context: meshtastic-bot
+          context: home-cluster/meshtastic-bot
           push: true
           tags: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
