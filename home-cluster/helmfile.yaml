@@ -416,7 +416,7 @@ releases:
   - name: loki
     namespace: monitoring
     chart: grafana/loki
-    version: 6.53.0
+    version: 6.55.0
     values:
       - deploymentMode: SingleBinary
         loki:
