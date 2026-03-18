@@ -4,5 +4,6 @@
     "config:recommended"
   ],
   "dependencyDashboard": true,
-  "prConcurrentLimit": 1
+  "prConcurrentLimit": 1,
+  "updateArtifacts": false
 }
