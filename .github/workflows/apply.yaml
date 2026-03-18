@@ -8,13 +8,6 @@ on:
     paths:
       - 'home-cluster/**'
       - '.github/workflows/apply.yaml'
-  pull_request:
-    branches:
-      - main
-      - master
-    paths:
-      - 'home-cluster/**'
-      - '.github/workflows/apply.yaml'
 
 jobs:
   apply:
