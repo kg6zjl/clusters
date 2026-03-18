@@ -14,6 +14,8 @@ spec:
   routes:
     - match: Host(`comfy.kube.stevearnett.com`)
       kind: Rule
+      middlewares:
+        - name: basic-auth-comfy
       services:
         - name: comfy-local
           port: 8080

@@ -15,6 +15,7 @@ resources:
   # ComfyUI
   - service-comfy.yaml
   - deployment-comfy.yaml
+  - middleware-comfy.yaml
   - ingressroute-comfy.yaml
   - dnsendpoint-comfy.yaml
   # Pigallery2 (ComfyUI output gallery)

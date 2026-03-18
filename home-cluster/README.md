@@ -29,3 +29,12 @@ newgrp microk8s
 ---
 
 Added Cloudflared for routing to a silly little web app running in my homelab cluster
+
+---
+
+## Network Ranges
+
+- **Kubernetes nodes**: `192.168.1.49`, `192.168.1.96`, `192.168.1.121`, `192.168.1.161`
+- **MetalLB pool**: `192.168.1.240-192.168.1.250`
+
+Used in Home Assistant `trusted_proxies` config.

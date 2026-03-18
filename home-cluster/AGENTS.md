@@ -105,10 +105,11 @@ spec:
 
 ### Secrets Management (CRITICAL)
 
-- **NEVER** hardcode secrets in YAML files
+- **NEVER** hardcode secrets in YAML files - this includes any passwords, usernames, API keys, tokens, or credentials
 - Store secrets in `.env` files (already gitignored via `.gitignore`)
 - Use Kustomize `secretGenerator` to create secrets from `.env` files
 - Reference secrets via `secretKeyRef`, not inline values
+- **ALWAYS run the secret check below before committing changes**
 
 ```yaml
 # WRONG - never do this:
@@ -128,6 +129,21 @@ env:
 envFrom:
   - secretRef:
       name: my-secret
+```
+
+### Before Every Commit - Check for Secrets
+
+Run this command to ensure no secrets have been accidentally committed:
+```bash
+# Check for potential secrets in YAML
+grep -rE "password|secret|token|key|auth|credential" --include="*.yaml" . | grep -v "secretKeyRef" | grep -v "^#"
+```
+
+If this check fails, fix it immediately before committing.
+
+Manual backup can be triggered with:
+```bash
+kubectl create job -n backup --from=cronjob/pvc-backup pvc-backup-manual
 ```
 
 ### Environment Variables in ConfigMaps
@@ -227,6 +243,14 @@ Include `servicemonitor.yaml` for services exposing metrics. Reference existing 
 - Verify pod status after apply: `kubectl get pods -A`
 - Check pod logs if issues arise: `kubectl logs -n <ns> <pod>`
 - For CRD issues, ensure the CRD is installed before applying custom resources
+
+### Home Assistant Trusted Proxies
+
+If you see errors like `Received X-Forwarded-For header from an untrusted proxy`, update the `trusted_proxies` in `home-assistant/configmap.yaml`. The cluster uses:
+- **Kubernetes nodes**: `192.168.1.49`, `192.168.1.96`, `192.168.1.121`, `192.168.1.161`
+- **MetalLB pool**: `192.168.1.240-192.168.1.250`
+
+Use `192.168.1.0/24` to cover all ranges.
 
 ---
 

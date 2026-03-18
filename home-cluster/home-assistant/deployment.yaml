@@ -37,10 +37,7 @@ spec:
               cd /config/custom_components/hacs &&
               curl -L https://github.com/hacs/integration/releases/latest/download/hacs.zip -o hacs.zip &&
               unzip -o hacs.zip &&
-              rm hacs.zip &&
-              [ ! -f /config/automations.yaml ] && echo '[]' > /config/automations.yaml || true &&
-              [ ! -f /config/scripts.yaml ] && echo '[]' > /config/scripts.yaml || true &&
-              [ ! -f /config/scenes.yaml ] && echo '[]' > /config/scenes.yaml || true
+              rm hacs.zip
           volumeMounts:
             - name: config
               mountPath: /config

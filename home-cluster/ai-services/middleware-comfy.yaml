@@ -1,0 +1,19 @@
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: basic-auth-comfy
+  namespace: ai-services
+type: Opaque
+stringData:
+  users: |
+    admin:$2y$10$YF6UUgmL/pPj7xPSSTFzVel53JqXxsHb7o/qrlhSgNdrukhU0recG
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: basic-auth-comfy
+  namespace: ai-services
+spec:
+  basicAuth:
+    secret: basic-auth-comfy

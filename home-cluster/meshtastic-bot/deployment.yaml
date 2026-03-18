@@ -1,0 +1,52 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: meshtastic-bot
+  namespace: meshtastic
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: meshtastic-bot
+  template:
+    metadata:
+      labels:
+        app: meshtastic-bot
+    spec:
+      imagePullSecrets:
+        - name: docker-registry-auth
+      containers:
+      - name: meshtastic-bot
+        image: registry.kube.stevearnett.com/meshtastic-bot:latest
+        env:
+        - name: MESHMONITOR_HOST
+          value: "meshmonitor.meshtastic.svc.cluster.local"
+        - name: MESHMONITOR_PORT
+          value: "4404"
+        - name: MESHMONITOR_URL
+          value: "http://meshmonitor.meshtastic.svc.cluster.local:3001"
+        - name: MESHMONITOR_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: meshtastic-bot-config
+              key: MESHMONITOR_TOKEN
+        - name: BOT_NODE_NUM
+          valueFrom:
+            secretKeyRef:
+              name: meshtastic-bot-config
+              key: BOT_NODE_NUM
+        - name: BOT_ALIAS
+          valueFrom:
+            secretKeyRef:
+              name: meshtastic-bot-config
+              key: BOT_ALIAS
+        - name: MQTT_ADDRESS
+          value: "mosquitto.mqtt.svc.cluster.local"
+        - name: MQTT_PORT
+          value: "1883"
+        - name: MQTT_TOPIC_PREFIX
+          value: "msh/US/bayarea"
+        - name: TEST_CHANNELS
+          value: "MeshChat,MediumFast"
+        - name: HOP_LIMIT
+          value: "7"

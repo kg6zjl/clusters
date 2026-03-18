@@ -7,7 +7,7 @@ data:
   config.yaml: |
     mqtt:
       enabled: true
-      host: home-assistant.default.svc.cluster.local
+      host: mosquitto.mqtt.svc.cluster.local
       port: 1883
       topic_prefix: frigate
       client_id: frigate
@@ -29,7 +29,7 @@ data:
         enabled: true
         ffmpeg:
           inputs:
-            - path: rtsp://${FRIGATE_RTSP_USERNAME}:${FRIGATE_RTSP_PASSWORD}@192.168.1.213:554/Preview_01_main
+            - path: rtsp://{FRIGATE_RTSP_USERNAME}:{FRIGATE_RTSP_PASSWORD}@192.168.1.213:554/Preview_01_main
               roles:
                 - detect
                 - record
@@ -72,7 +72,7 @@ data:
         friendly_name: Play Yard
         ffmpeg:
           inputs:
-            - path: rtsp://${FRIGATE_RTSP_USERNAME}:${FRIGATE_RTSP_PASSWORD}@192.168.1.150:554/Preview_01_main
+            - path: rtsp://{FRIGATE_RTSP_USERNAME}:{FRIGATE_RTSP_PASSWORD}@192.168.1.150:554/Preview_01_main
               roles:
                 - detect
                 - record
@@ -101,7 +101,7 @@ data:
         friendly_name: Dining Room
         ffmpeg:
           inputs:
-            - path: rtsp://${FRIGATE_RTSP_USERNAME}:${FRIGATE_RTSP_PASSWORD}@192.168.1.184:554/Preview_01_main
+            - path: rtsp://{FRIGATE_RTSP_USERNAME}:{FRIGATE_RTSP_PASSWORD}@192.168.1.184:554/Preview_01_main
               roles:
                 - detect
                 - record
@@ -133,8 +133,8 @@ data:
     go2rtc:
       streams:
         driveway:
-          - rtsp://${FRIGATE_RTSP_USERNAME}:${FRIGATE_RTSP_PASSWORD}@192.168.1.213:554/Preview_01_main
+          - rtsp://{FRIGATE_RTSP_USERNAME}:{FRIGATE_RTSP_PASSWORD}@192.168.1.213:554/Preview_01_main
         play_yard:
-          - rtsp://${FRIGATE_RTSP_USERNAME}:${FRIGATE_RTSP_PASSWORD}@192.168.1.150:554/Preview_01_main
+          - rtsp://{FRIGATE_RTSP_USERNAME}:{FRIGATE_RTSP_PASSWORD}@192.168.1.150:554/Preview_01_main
         dining_room:
-          - rtsp://${FRIGATE_RTSP_USERNAME}:${FRIGATE_RTSP_PASSWORD}@192.168.1.184:554/Preview_01_main
+          - rtsp://{FRIGATE_RTSP_USERNAME}:{FRIGATE_RTSP_PASSWORD}@192.168.1.184:554/Preview_01_main
