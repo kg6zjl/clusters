@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: mosquitto
+  namespace: mqtt
+  annotations:
+    metallb.universe.tf/address-pool: default-addresspool
+spec:
+  selector:
+    app: mosquitto
+  ports:
+    - name: mqtt
+      port: 1883
+      targetPort: 1883
+  type: LoadBalancer

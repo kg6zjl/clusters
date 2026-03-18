@@ -40,6 +40,20 @@ spec:
           value: "true"
         - name: VIRTUAL_NODE_ALLOW_ADMIN_COMMANDS
           value: "true"
+        - name: MQTT_ENABLED
+          value: "true"
+        - name: MQTT_JSON_ENABLED
+          value: "true"
+        - name: MQTT_ADDRESS
+          value: "mosquitto.mqtt.svc.cluster.local"
+        - name: MQTT_PORT
+          value: "1883"
+        - name: MQTT_USERNAME
+          value: ""
+        - name: MQTT_PASSWORD
+          value: ""
+        - name: MQTT_TOPIC_PREFIX
+          value: "msh/US/bayarea"
         volumeMounts:
         - name: meshmonitor-data
           mountPath: /data

@@ -333,6 +333,7 @@ releases:
           config: |
             {
               "platform": "github",
+              "gitAuthor": "Renovate Bot <kg6zjl@users.noreply.github.com>",
               "repositories": ["kg6zjl/clusters"],
               "baseBranches": ["main"],
               "onboarding": false,
