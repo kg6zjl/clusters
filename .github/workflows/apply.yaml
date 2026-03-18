@@ -30,6 +30,11 @@ jobs:
           mkdir -p home-cluster/cluster-secrets
           echo "{\"auths\":{\"registry.kube.stevearnett.com\":{\"username\":\"$REGISTRY_USER\",\"password\":\"$REGISTRY_PASS\",\"auth\":\"$AUTH\"}}}" > home-cluster/cluster-secrets/.dockerconfigjson
 
+      - name: Install task
+        run: |
+          curl -sL https://taskfile.dev/install.sh | sh
+          echo "$(pwd)/bin" >> $GITHUB_PATH
+
       - name: Apply changes
         run: |
           cd home-cluster
