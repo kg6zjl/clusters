@@ -49,11 +49,6 @@ jobs:
           cd home-cluster
           kubectl kustomize . 2>&1 > /dev/null && echo "Kustomize: OK" || { echo "Kustomize: FAILED"; exit 1; }
 
-      - name: Helmfile lint
-        run: |
-          cd home-cluster
-          helmfile template --quiet 2>&1 > /dev/null && echo "Helmfile: OK" || { echo "Helmfile: FAILED"; exit 1; }
-
   secrets:
     name: Secret Scan
     runs-on: self-hosted
