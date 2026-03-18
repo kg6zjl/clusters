@@ -30,6 +30,6 @@ jobs:
       - name: Apply changes
         run: |
           cd home-cluster
-          helm repo update
+          helmfile deps
           helmfile sync
           kubectl apply -k .
