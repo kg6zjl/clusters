@@ -296,3 +296,22 @@ Use `192.168.1.0/24` to cover all ranges.
 - Optimize for clarity and debuggability
 - Default to the simplest solution consistent with current patterns
 - If unsure, ask the user before making assumptions
+
+---
+
+## CI/CD Notes
+
+### Image Building
+
+- **Kaniko**: The kaniko binary is deprecated (repo archived Jun 2025, binaries removed). Use `chainguard-dev/kaniko-action` in GitHub Actions workflows instead.
+- Image registry: `registry.kube.stevearnett.com`
+- Registry credentials fetched from K8s secret `registry-secrets` in `registry` namespace
+
+### Runner Tools
+
+The self-hosted runner has these tools installed via init container:
+- kubectl, helm, helmfile, task
+- yamllint (Python module, run with `python3 -m yamllint`)
+- gitleaks (Go binary)
+
+Do NOT install docker/podman or kaniko binary in the runner. Use GitHub Actions containers for image building.
