@@ -77,6 +77,7 @@ jobs:
           context: home-cluster/meshtastic-bot
           file: home-cluster/meshtastic-bot/Dockerfile
           cache: true
+          kaniko-args: --registry-username=${{ env.REGISTRY_USER }} --registry-password=${{ env.REGISTRY_PASS }}
 
   deploy:
     name: Deploy
