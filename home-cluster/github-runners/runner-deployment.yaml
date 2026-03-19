@@ -51,8 +51,7 @@ spec:
               # Install gitleaks
               curl -fsSL https://github.com/gitleaks/gitleaks/releases/download/v8.30.0/gitleaks_8.30.0_linux_x64.tar.gz | tar -xzf - -C /opt/tools/ && chmod +x /opt/tools/gitleaks
 
-              # Install kaniko (for building images in cluster)
-              curl -fsSL https://github.com/GoogleContainerTools/kaniko/releases/download/v1.19.2/executor-Linux-amd64 > /opt/tools/kaniko && chmod +x /opt/tools/kaniko
+
 
               ls -la /opt/tools/
           securityContext:

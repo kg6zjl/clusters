@@ -1,0 +1,83 @@
+name: Build and Deploy
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'home-cluster/meshtastic-bot/**'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'home-cluster/meshtastic-bot/**'
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: 'Git SHA to deploy (leave empty for latest)'
+        required: false
+        type: string
+
+env:
+  REGISTRY: registry.kube.stevearnett.com
+  IMAGE_NAME: meshtastic-bot
+
+jobs:
+  test:
+    name: Test
+    runs-on: self-hosted
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+
+      - name: Install dependencies
+        run: pip install -q paho-mqtt requests meshtastic pytest
+
+      - name: Run tests
+        run: python -m pytest home-cluster/meshtastic-bot/src/test_bot.py -v
+
+  build-push:
+    name: Build and Push
+    needs: test
+    runs-on: self-hosted
+    if: github.ref == 'refs/heads/main'
+    env:
+      PATH: /opt/tools/bin:/opt/tools:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Get registry credentials
+        run: |
+          REGISTRY_USER=$(kubectl get secret registry-secrets -n registry -o jsonpath='{.data.registry_username}' | base64 -d)
+          REGISTRY_PASS=$(kubectl get secret registry-secrets -n registry -o jsonpath='{.data.registry_password}' | base64 -d)
+          echo "REGISTRY_USER=$REGISTRY_USER" >> $GITHUB_ENV
+          echo "REGISTRY_PASS=$REGISTRY_PASS" >> $GITHUB_ENV
+
+      - name: Build and push with Kaniko
+        uses: chainguard-dev/kaniko-action@main
+        with:
+          image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: latest,${{ github.sha }}
+          context: home-cluster/meshtastic-bot
+          registry: ${{ env.REGISTRY }}
+          username: ${{ env.REGISTRY_USER }}
+          password: ${{ env.REGISTRY_PASS }}
+
+  deploy:
+    name: Deploy
+    needs: build-push
+    runs-on: self-hosted
+    env:
+      PATH: /opt/tools/bin:/opt/tools:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+    steps:
+      - name: Restart deployment
+        run: kubectl rollout restart deployment meshtastic-bot -n meshtastic
+
+      - name: Watch rollout
+        run: kubectl rollout status deployment meshtastic-bot -n meshtastic --timeout=60s
