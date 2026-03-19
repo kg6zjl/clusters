@@ -54,8 +54,9 @@ jobs:
 
       - name: Get registry credentials
         run: |
-          REGISTRY_USER=$(kubectl get secret registry-secrets -n registry -o jsonpath='{.data.registry_username}' | base64 -d)
-          REGISTRY_PASS=$(kubectl get secret registry-secrets -n registry -o jsonpath='{.data.registry_password}' | base64 -d)
+          REGISTRY_HTPASSWD=$(kubectl get secret registry-auth -n registry -o jsonpath='{.data.htpasswd}' | base64 -d)
+          REGISTRY_USER=$(echo "$REGISTRY_HTPASSWD" | cut -d: -f1)
+          REGISTRY_PASS=$(kubectl get secret registry-auth -n registry -o jsonpath='{.data.REGISTRY_PASSWORD}' | base64 -d)
           echo "REGISTRY_USER=$REGISTRY_USER" >> $GITHUB_ENV
           echo "REGISTRY_PASS=$REGISTRY_PASS" >> $GITHUB_ENV
           mkdir -p ~/.docker
