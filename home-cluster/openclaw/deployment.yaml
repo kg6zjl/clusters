@@ -28,32 +28,41 @@ spec:
         env:
         - name: OLLAMA_BASE_URL
           value: "http://ollama.ai-services.svc.cluster.local:11434"
-        - name: OPENCLAW_GATEWAY_TOKEN
-          valueFrom:
-            secretKeyRef:
-              name: openclaw-secrets
-              key: GITHUB_TOKEN
         - name: GITHUB_TOKEN
           valueFrom:
             secretKeyRef:
               name: openclaw-secrets
               key: GITHUB_TOKEN
-        - name: OPENCLAW_EXEC_ALLOWLIST
-          value: "cat,ls,find,grep,echo,pwd,which,git"
-        - name: SANDBOX_MODE
-          value: "docker"
+        - name: OPENCLAW_GATEWAY_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: openclaw-secrets
+              key: GITHUB_TOKEN
         command:
         - sh
         - -c
         - |
-          openclaw config set agents.defaults.model.primary ollama/llama3.2:3b
-          openclaw config set agents.defaults.model.secondary ollama/qwen2.5-coder:14b
-          openclaw config set agents.sandbox.enabled true
-          openclaw config set agents.sandbox.mode docker
-          openclaw config set agents.github.enabled true
-          openclaw config set agents.github.defaultRepo "kg6zjl/clusters"
-          openclaw channels enable whatsapp
-          openclaw gateway --port 18789
+          cat > /home/node/.openclaw/openclaw.json << 'EOF'
+          {
+            "gateway": {
+              "mode": "local",
+              "controlUi": {
+                "dangerouslyAllowHostHeaderOriginFallback": true
+              }
+            },
+            "agents": {
+              "defaults": {
+                "model": {
+                  "primary": "ollama/llama3.2:3b"
+                }
+              }
+            },
+            "channels": {
+              "whatsapp": {}
+            }
+          }
+          EOF
+          openclaw gateway --port 18789 --bind lan
         resources:
           requests:
             memory: "512Mi"
