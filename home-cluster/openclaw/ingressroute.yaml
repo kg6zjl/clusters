@@ -1,0 +1,16 @@
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: openclaw
+  namespace: openclaw
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - match: Host(`claw.kube.stevearnett.com`)
+      kind: Rule
+      services:
+        - name: openclaw
+          port: 18789
+  tls:
+    secretName: wildcard-stevearnett-com-tls

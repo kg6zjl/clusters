@@ -1,0 +1,105 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: openclaw
+  namespace: openclaw
+  labels:
+    app: openclaw
+    alert-on-down: "true"
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: openclaw
+  template:
+    metadata:
+      labels:
+        app: openclaw
+    spec:
+      serviceAccountName: openclaw
+      containers:
+      - name: openclaw
+        image: ghcr.io/openclaw/openclaw:2026.3.13-1
+        ports:
+        - containerPort: 18789
+          name: gateway
+        env:
+        - name: OLLAMA_BASE_URL
+          value: "http://ollama.ai-services.svc.cluster.local:11434"
+        - name: GITHUB_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: openclaw-secrets
+              key: GITHUB_TOKEN
+        - name: OPENCLAW_GATEWAY_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: openclaw-secrets
+              key: GITHUB_TOKEN
+        command:
+        - sh
+        - -c
+        - |
+          cat > /home/node/.openclaw/openclaw.json << 'EOF'
+          {
+            "gateway": {
+              "mode": "local",
+              "controlUi": {
+                "dangerouslyAllowHostHeaderOriginFallback": true
+              }
+            },
+            "agents": {
+              "defaults": {
+                "model": {
+                  "primary": "ollama/llama3.2:3b"
+                }
+              }
+            },
+            "channels": {
+              "whatsapp": {}
+            }
+          }
+          EOF
+          openclaw gateway --port 18789 --bind lan
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "2Gi"
+            cpu: "2"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 18789
+          initialDelaySeconds: 60
+          periodSeconds: 30
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 18789
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        volumeMounts:
+        - name: openclaw-data
+          mountPath: /home/node/.openclaw
+      volumes:
+      - name: openclaw-data
+        emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: openclaw
+  namespace: openclaw
+spec:
+  type: ClusterIP
+  ports:
+  - port: 18789
+    targetPort: 18789
+    protocol: TCP
+    name: gateway
+  selector:
+    app: openclaw

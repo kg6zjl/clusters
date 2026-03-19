@@ -24,12 +24,28 @@ spec:
                       - thinkcentre01
                       - thinkcentre02
                       - kube-nuc
+      initContainers:
+      - name: copy-config
+        image: ghcr.io/blakeblackshear/frigate:stable
+        command:
+        - sh
+        - -c
+        - |
+          cp /config-src/config.yaml /config-dest/config.yaml
+          chmod 666 /config-dest/config.yaml
+        volumeMounts:
+        - name: config
+          mountPath: /config-dest
+        - name: config-src
+          mountPath: /config-src
       containers:
         - name: frigate
           image: ghcr.io/blakeblackshear/frigate:stable
           envFrom:
             - secretRef:
                 name: frigate-credentials
+            - secretRef:
+                name: frigate-secrets
           env:
             - name: LIBVA_DRIVER_NAME
               value: "radeonsi"
@@ -39,8 +55,7 @@ spec:
             privileged: true
           volumeMounts:
             - name: config
-              mountPath: /config/config.yaml
-              subPath: config.yaml
+              mountPath: /config
             - name: media
               mountPath: /media/frigate
             - name: cache
@@ -56,6 +71,8 @@ spec:
               name: rtsp
       volumes:
         - name: config
+          emptyDir: {}
+        - name: config-src
           configMap:
             name: frigate-config
         - name: media
