@@ -647,6 +647,13 @@ releases:
         resources:
           limits:
             memory: 1Gi
+        env:
+          - name: REGISTRY_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: registry-secrets
+                key: REGISTRY_PASSWORD
+                optional: true
   - name: external-secrets
     namespace: external-secrets
     chart: external-secrets/external-secrets
