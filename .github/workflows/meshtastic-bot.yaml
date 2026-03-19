@@ -57,8 +57,9 @@ jobs:
           REGISTRY_HTPASSWD=$(kubectl get secret registry-auth -n registry -o jsonpath='{.data.htpasswd}' | base64 -d)
           REGISTRY_USER=$(echo "$REGISTRY_HTPASSWD" | cut -d: -f1)
           REGISTRY_PASS=$(kubectl get secret registry-auth -n registry -o jsonpath='{.data.REGISTRY_PASSWORD}' | base64 -d)
-          mkdir -p ~/.docker
-          echo '{"auths":{"${{ env.REGISTRY }}":{"username":"'"$REGISTRY_USER"'","password":"'"$REGISTRY_PASS"'"}}}' > ~/.docker/config.json
+          echo "REGISTRY_USER=$REGISTRY_USER" >> $GITHUB_ENV
+          echo "REGISTRY_PASS=$REGISTRY_PASS" >> $GITHUB_ENV
+          docker login ${{ env.REGISTRY }} -u "$REGISTRY_USER" -p "$REGISTRY_PASS"
 
       - name: Build and push with Kaniko
         uses: int128/kaniko-action@v1
