@@ -65,7 +65,9 @@ jobs:
         uses: int128/kaniko-action@v1
         with:
           push: true
-          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest,${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
           context: home-cluster/meshtastic-bot
           file: home-cluster/meshtastic-bot/Dockerfile
           cache: true
