@@ -43,7 +43,7 @@ spec:
               "mode": "local",
               "trustedProxies": ["10.0.0.0/8", "192.168.0.0/16"],
               "controlUi": {
-                "dangerouslyAllowHostHeaderOriginFallback": true
+                "dangerouslyDisableDeviceAuth": true
               }
             },
             "channels": {
@@ -71,7 +71,7 @@ spec:
             }
           }
           EOF
-          openclaw gateway --port 18789 --bind lan
+          openclaw gateway --port 18789 --bind lan --tls-key /etc/tls/tls.key --tls-cert /etc/tls/tls.crt
         resources:
           requests:
             memory: "512Mi"
@@ -94,9 +94,15 @@ spec:
         volumeMounts:
         - name: openclaw-data
           mountPath: /home/node/.openclaw
+        - name: tls-cert
+          mountPath: /etc/tls
+          readOnly: true
       volumes:
       - name: openclaw-data
         emptyDir: {}
+      - name: tls-cert
+        secret:
+          secretName: wildcard-stevearnett-com-tls
 ---
 apiVersion: v1
 kind: Service
