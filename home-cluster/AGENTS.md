@@ -17,11 +17,15 @@ This is a **single-node Kubernetes home lab cluster** running on an AMD-based Ac
 
 ### Apply Changes to Cluster
 
-```bash
-# Full apply - updates Helm repos and applies Kustomize manifests
-task apply
+Changes are applied via GitHub Actions workflow. DO NOT run `task apply` locally.
 
-# Or manually:
+1. Create a branch and PR for changes
+2. CI runs lint/validate checks
+3. Merge PR to trigger "Apply to Cluster" workflow
+4. Workflow syncs helmfile and applies kustomize manifests
+
+**Local commands (for testing only):**
+```bash
 helm repo update
 helmfile sync
 kubectl apply -k .
