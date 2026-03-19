@@ -49,7 +49,8 @@ spec:
             "channels": {
               "whatsapp": {
                 "dmPolicy": "open",
-                "groupPolicy": "open"
+                "groupPolicy": "open",
+                "allowFrom": ["*"]
               }
             },
             "plugins": {
