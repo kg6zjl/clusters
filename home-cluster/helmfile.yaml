@@ -371,6 +371,9 @@ releases:
               "enabledManagers": ["helmfile", "kubernetes", "helm-values"],
               "helmfile": {
                 "fileMatch": ["helmfile\\.yaml$"]
+              },
+              "constraints": {
+                "helm": "^3.15.0"
               }
             }
         existingSecret: renovate-github-token
