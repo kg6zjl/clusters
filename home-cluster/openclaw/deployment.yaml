@@ -47,7 +47,10 @@ spec:
               }
             },
             "channels": {
-              "whatsapp": {}
+              "whatsapp": {
+                "dmPolicy": "open",
+                "groupPolicy": "open"
+              }
             },
             "plugins": {
               "entries": {
@@ -64,9 +67,6 @@ spec:
                   "primary": "ollama/llama3.2:3b"
                 }
               }
-            },
-            "channels": {
-              "whatsapp": {}
             }
           }
           EOF
