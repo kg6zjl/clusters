@@ -56,17 +56,20 @@ jobs:
         run: |
           REGISTRY_USER=$(kubectl get secret registry-secrets -n registry -o jsonpath='{.data.registry_username}' | base64 -d)
           REGISTRY_PASS=$(kubectl get secret registry-secrets -n registry -o jsonpath='{.data.registry_password}' | base64 -d)
-          echo "username=$REGISTRY_USER" >> $GITHUB_ENV
-          echo "password=$REGISTRY_PASS" >> $GITHUB_ENV
+          echo "REGISTRY_USER=$REGISTRY_USER" >> $GITHUB_ENV
+          echo "REGISTRY_PASS=$REGISTRY_PASS" >> $GITHUB_ENV
 
       - name: Build and push with Kaniko
-        run: |
-          /opt/tools/kaniko executor \
-            --context home-cluster/meshtastic-bot \
-            --destination ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest \
-            --destination ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }} \
-            --registry-username ${{ env.username }} \
-            --registry-password ${{ env.password }}
+        uses: vdo/kaniko-action@master
+        with:
+          image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            latest
+            ${{ github.sha }}
+          context: home-cluster/meshtastic-bot
+          registry: ${{ env.REGISTRY }}
+          registry-username: ${{ env.REGISTRY_USER }}
+          registry-password: ${{ env.REGISTRY_PASS }}
 
   deploy:
     name: Deploy
