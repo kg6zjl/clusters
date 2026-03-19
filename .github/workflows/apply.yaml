@@ -30,7 +30,26 @@ jobs:
       - name: Apply changes
         run: |
           cd home-cluster
-          helmfile repos
-          helmfile deps
-          helmfile sync
-          kubectl apply -k .
+          
+          retry() {
+            local n=1
+            local max=3
+            local delay=10
+            while true; do
+              "$@" && break || {
+                if [[ $n -lt $max ]]; then
+                  ((n++))
+                  echo "Command failed. Attempt $n/$max. Retrying in ${delay}s..."
+                  sleep $delay
+                else
+                  echo "Command failed after $n attempts."
+                  return 1
+                fi
+              }
+            done
+          }
+          
+          retry helmfile repos
+          retry helmfile deps
+          retry helmfile sync
+          retry kubectl apply -k .
