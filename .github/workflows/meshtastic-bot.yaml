@@ -58,7 +58,7 @@ jobs:
           REGISTRY_USER=$(echo "$REGISTRY_HTPASSWD" | cut -d: -f1)
           REGISTRY_PASS=$(kubectl get secret registry-auth -n registry -o jsonpath='{.data.REGISTRY_PASSWORD}' | base64 -d)
           mkdir -p ~/.docker
-          echo "{\"auths\":{\"${{ env.REGISTRY }}\":{\"auth\":\"$(echo -n "$REGISTRY_USER:$REGISTRY_PASS" | base64)\"}}}" > ~/.docker/config.json
+          echo '{"auths":{"${{ env.REGISTRY }}":{"username":"'"$REGISTRY_USER"'","password":"'"$REGISTRY_PASS"'"}}}' > ~/.docker/config.json
 
       - name: Build and push with Kaniko
         uses: int128/kaniko-action@v1
