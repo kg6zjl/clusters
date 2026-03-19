@@ -41,8 +41,21 @@ spec:
           {
             "gateway": {
               "mode": "local",
+              "trustedProxies": ["10.0.0.0/8", "192.168.0.0/16"],
               "controlUi": {
                 "dangerouslyAllowHostHeaderOriginFallback": true
+              }
+            },
+            "channels": {
+              "whatsapp": {}
+            },
+            "plugins": {
+              "entries": {
+                "device-pair": {
+                  "config": {
+                    "publicUrl": "https://claw.kube.stevearnett.com"
+                  }
+                }
               }
             },
             "agents": {
