@@ -58,15 +58,16 @@ jobs:
           REGISTRY_PASS=$(kubectl get secret registry-secrets -n registry -o jsonpath='{.data.registry_password}' | base64 -d)
           echo "REGISTRY_USER=$REGISTRY_USER" >> $GITHUB_ENV
           echo "REGISTRY_PASS=$REGISTRY_PASS" >> $GITHUB_ENV
+          mkdir -p ~/.docker
+          echo "{\"auths\":{\"${{ env.REGISTRY }}\":{\"username\":\"$REGISTRY_USER\",\"password\":\"$REGISTRY_PASS\"}}}" > ~/.docker/config.json
 
       - name: Build and push with Kaniko
         uses: int128/kaniko-action@v1
         with:
           push: true
-          tags: latest,${{ github.sha }}
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest,${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
           context: home-cluster/meshtastic-bot
-          dockerfile: home-cluster/meshtastic-bot/Dockerfile
-          destination: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          file: home-cluster/meshtastic-bot/Dockerfile
           cache: true
 
   deploy:
