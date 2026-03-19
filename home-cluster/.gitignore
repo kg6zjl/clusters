@@ -6,3 +6,4 @@ NOTES.md
 .pytest_cache
 __pycache__
 .zip
+onepassword.env
