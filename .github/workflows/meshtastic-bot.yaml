@@ -63,13 +63,11 @@ jobs:
         uses: chainguard-dev/kaniko-action@main
         with:
           image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-          tags: |
-            latest
-            ${{ github.sha }}
+          tags: latest,${{ github.sha }}
           context: home-cluster/meshtastic-bot
           registry: ${{ env.REGISTRY }}
-          registry-username: ${{ env.REGISTRY_USER }}
-          registry-password: ${{ env.REGISTRY_PASS }}
+          username: ${{ env.REGISTRY_USER }}
+          password: ${{ env.REGISTRY_PASS }}
 
   deploy:
     name: Deploy
