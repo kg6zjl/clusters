@@ -1,0 +1,68 @@
+name: CI Lint
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'home-cluster/**'
+      - 'renovate.json'
+      - '.github/workflows/**'
+      - '.gitleaks.toml'
+      - '.pre-commit-config.yaml'
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: self-hosted
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.14'
+
+      - name: Install yamllint
+        run: pip install yamllint
+
+      - name: Lint YAML files
+        run: python3 -m yamllint -c home-cluster/yamllint.yaml home-cluster/
+
+  validate:
+    name: Validate
+    runs-on: self-hosted
+    env:
+      PATH: /opt/tools/bin:/opt/tools:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+      PYTHONPATH: /opt/tools/bin
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Generate dockerconfigjson
+        run: |
+          REGISTRY_USER=$(kubectl get secret registry-secrets -n registry -o jsonpath='{.data.registry_username}' | base64 -d)
+          REGISTRY_PASS=$(kubectl get secret registry-secrets -n registry -o jsonpath='{.data.registry_password}' | base64 -d)
+          AUTH=$(echo -n "$REGISTRY_USER:$REGISTRY_PASS" | base64)
+          mkdir -p home-cluster/cluster-secrets
+          echo "{\"auths\":{\"registry.kube.stevearnett.com\":{\"username\":\"$REGISTRY_USER\",\"password\":\"$REGISTRY_PASS\",\"auth\":\"$AUTH\"}}}" > home-cluster/cluster-secrets/.dockerconfigjson
+
+      - name: Validate Kustomize
+        run: |
+          cd home-cluster
+          kubectl kustomize . 2>&1 > /dev/null && echo "Kustomize: OK" || { echo "Kustomize: FAILED"; exit 1; }
+
+  secrets:
+    name: Secret Scan
+    runs-on: self-hosted
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Run Gitleaks
+        run: |
+          export PYTHONPATH=/opt/tools/bin
+          /opt/tools/gitleaks protect --source . --exit-code 1
