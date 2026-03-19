@@ -15,9 +15,15 @@ dependencies:
 - name: external-secrets
   repository: https://charts.external-secrets.io
   version: 2.1.0
+- name: gpu-operator
+  repository: https://nvidia.github.io/gpu-operator
+  version: v25.10.1
 - name: jellyfin
   repository: https://jellyfin.github.io/jellyfin-helm
   version: 2.7.0
+- name: kube-prometheus-stack
+  repository: https://prometheus-community.github.io/helm-charts
+  version: 82.12.0
 - name: loki
   repository: https://grafana.github.io/helm-charts
   version: 6.55.0
@@ -27,6 +33,9 @@ dependencies:
 - name: oauth2-proxy
   repository: https://oauth2-proxy.github.io/manifests
   version: 10.1.4
+- name: pihole
+  repository: https://nunoferna.github.io/pihole-helm/
+  version: 1.2.1
 - name: plex-media-server
   repository: https://plexinc.github.io/pms-docker/
   version: 1.5.0
@@ -41,9 +50,9 @@ dependencies:
   version: 2.2.9
 - name: renovate
   repository: https://docs.renovatebot.com/helm-charts
-  version: 46.72.6
+  version: 46.77.0
 - name: traefik
   repository: https://traefik.github.io/charts
   version: 39.0.5
-digest: sha256:1b0c57658665f5a7b8d2b23443dd280083b5ec904bac02c3ce458ab26ebe1d18
-generated: "2026-03-18T15:39:19.551011-07:00"
+digest: sha256:ccae5ace5b84cfb69343d9d0b4b3f76bd2ea7c0d1dd3204dcb3ec9070b5e1ded
+generated: "2026-03-19T12:11:58.259768-07:00"
