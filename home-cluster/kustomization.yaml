@@ -27,3 +27,4 @@ resources:
   - kube-system/coredns-configmap-patch.yaml
   - renovate
   - github-runners
+  - openclaw
