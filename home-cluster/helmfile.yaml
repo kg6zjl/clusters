@@ -220,6 +220,8 @@ releases:
                 key: CLOUDFLARE_API_TOKEN
         extraArgs:
           - --source=crd
+          - --crd-source-apiversion=externaldns.k8s.io/v1alpha1
+          - --crd-source-kind=DNSEndpoint
           - --source=ingress
         rbac:
           additionalPermissions:
