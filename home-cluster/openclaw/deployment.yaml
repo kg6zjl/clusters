@@ -53,7 +53,7 @@ spec:
               "entries": {
                 "device-pair": {
                   "config": {
-                    "groupPolicy": "open"
+                    "publicUrl": "https://claw.kube.stevearnett.com"
                   }
                 }
               }
