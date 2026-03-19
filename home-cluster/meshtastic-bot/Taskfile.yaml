@@ -4,7 +4,7 @@ tasks:
   login:
     desc: "Login to local registry"
     cmds:
-      - podman login registry.kube.stevearnett.com -u registry-user -p 7mdmjpMo5xAoub3r+kt2KK1kNBE=
+      - podman login registry.kube.stevearnett.com -u registry-user --password-stdin <<< "${REGISTRY_PASSWORD}"
 
   build:
     desc: "Build Docker image (runs tests first)"
