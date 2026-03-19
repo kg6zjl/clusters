@@ -4,5 +4,8 @@
     "config:recommended"
   ],
   "dependencyDashboard": true,
-  "prConcurrentLimit": 1
+  "prConcurrentLimit": 1,
+  "constraints": {
+    "helm": "^3.15.0"
+  }
 }
