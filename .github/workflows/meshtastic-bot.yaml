@@ -60,14 +60,14 @@ jobs:
           echo "REGISTRY_PASS=$REGISTRY_PASS" >> $GITHUB_ENV
 
       - name: Build and push with Kaniko
-        uses: chainguard-dev/kaniko-action@main
+        uses: int128/kaniko-action@v1
         with:
-          image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          push: true
           tags: latest,${{ github.sha }}
           context: home-cluster/meshtastic-bot
-          registry: ${{ env.REGISTRY }}
-          username: ${{ env.REGISTRY_USER }}
-          password: ${{ env.REGISTRY_PASS }}
+          dockerfile: home-cluster/meshtastic-bot/Dockerfile
+          destination: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          cache: true
 
   deploy:
     name: Deploy
