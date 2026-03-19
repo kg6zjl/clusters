@@ -28,16 +28,11 @@ spec:
         env:
         - name: OLLAMA_BASE_URL
           value: "http://ollama.ai-services.svc.cluster.local:11434"
-        - name: GITHUB_TOKEN
-          valueFrom:
-            secretKeyRef:
-              name: openclaw-secrets
-              key: GITHUB_TOKEN
         - name: OPENCLAW_GATEWAY_TOKEN
           valueFrom:
             secretKeyRef:
               name: openclaw-secrets
-              key: GITHUB_TOKEN
+              key: GATEWAY_TOKEN
         command:
         - sh
         - -c
