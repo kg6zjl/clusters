@@ -178,6 +178,8 @@ grep -rE "password|secret|token|key|auth|credential" --include="*.yaml" . | grep
 
 If this check fails, fix it immediately before committing.
 
+**TODO**: Add `trufflehog` or `detect-secrets` for intelligent key-value pair detection in addition to gitleaks.
+
 Manual backup can be triggered with:
 ```bash
 kubectl create job -n backup --from=cronjob/pvc-backup pvc-backup-manual
