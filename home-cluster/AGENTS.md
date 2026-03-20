@@ -305,6 +305,70 @@ Use `192.168.1.0/24` to cover all ranges.
 
 ---
 
+## Verifying Changes (CRITICAL)
+
+**ALWAYS verify your work after making changes.** Rushing leads to mistakes.
+
+### After kubectl commands:
+```bash
+# Always verify the result
+kubectl get <resource> -n <namespace>
+kubectl describe <resource> -n <namespace>
+kubectl logs -n <namespace> <pod> --tail=50
+
+# Check pod status - look for CrashLoopBackOff, ImagePullBackOff, etc.
+kubectl get pods -n <namespace>
+```
+
+### After deleting resources:
+```bash
+# Verify it's gone
+kubectl get <resource> -n <namespace>
+
+# If it recreated, the deployment is managing it - check the deployment
+kubectl describe deployment <name> -n <namespace>
+```
+
+### After applying manifests:
+```bash
+# Validate the manifest first
+kubectl apply -f <file>.yaml --dry-run=client
+
+# Verify the resource exists after apply
+kubectl get <resource> -n <namespace>
+```
+
+### Common Mistakes to Avoid:
+- **Deleting the wrong pod** - Deployment will recreate it. Check deployment first.
+- **Checking the wrong namespace** - Always verify namespace exists (`kubectl get namespace`)
+- **Assuming success** - Always run `kubectl get` to confirm the expected state
+- **Not checking logs** - `kubectl logs` reveals why things fail
+
+---
+
+## Quick Reference
+
+### Check if a service is running:
+```bash
+kubectl get pods -n <namespace> | grep <service-name>
+```
+
+### Check pod status (look for issues):
+```bash
+kubectl get pods -n <namespace>
+# CrashLoopBackOff = container keeps restarting
+# ImagePullBackOff = can't pull the image
+# Pending = waiting for resources/scheduling
+# ContainerCreating = pod is starting
+```
+
+### Check namespace exists:
+```bash
+kubectl get namespace | grep <name>
+```
+
+---
+
 ## CI/CD Notes
 
 ### Image Building
