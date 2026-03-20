@@ -46,6 +46,7 @@ helmDefaults:
   historyMax: 3
   atomic: true
   cleanupOnFail: true
+  timeout: 15m
 ---
 environments:
   default:
