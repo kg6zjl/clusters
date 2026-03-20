@@ -12,5 +12,7 @@ spec:
       services:
         - name: openclaw
           port: 18789
+          scheme: http
+          serversTransport: openclaw-http11
   tls:
     secretName: wildcard-stevearnett-com-tls

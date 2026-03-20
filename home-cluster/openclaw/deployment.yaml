@@ -26,26 +26,33 @@ spec:
         - containerPort: 18789
           name: gateway
         env:
-        - name: OLLAMA_BASE_URL
-          value: "http://ollama-amd-02.ai-services.svc.cluster.local:11434"
-        - name: OLLAMA_API_KEY
+        - name: OPENROUTER_API_KEY
           valueFrom:
             secretKeyRef:
               name: openclaw-secrets
-              key: OLLAMA_API_KEY
+              key: OPENROUTER_API_KEY
         - name: OPENCLAW_GATEWAY_TOKEN
           valueFrom:
             secretKeyRef:
               name: openclaw-secrets
               key: GATEWAY_TOKEN
+        - name: GITHUB_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: openclaw-secrets
+              key: GITHUB_TOKEN
         command:
         - sh
         - -c
         - |
-          cat > /home/node/.openclaw/openclaw.json << 'EOF'
+          cat > /home/node/.openclaw/openclaw.json << EOF
           {
             "gateway": {
               "mode": "local",
+              "auth": {
+                "mode": "token",
+                "token": "${OPENCLAW_GATEWAY_TOKEN}"
+              },
               "trustedProxies": ["10.0.0.0/8", "192.168.0.0/16"],
               "controlUi": {
                 "allowInsecureAuth": true,
@@ -71,8 +78,9 @@ spec:
             },
             "models": {
               "providers": {
-                "ollama": {
-                  "baseUrl": "http://ollama-amd-02.ai-services.svc.cluster.local:11434",
+                "openrouter": {
+                  "baseUrl": "https://openrouter.ai/api/v1",
+                  "apiKey": "${OPENROUTER_API_KEY}",
                   "models": []
                 }
               }
@@ -80,7 +88,7 @@ spec:
             "agents": {
               "defaults": {
                 "model": {
-                  "primary": "llama3.2:1b"
+                  "primary": "openrouter/google/gemini-3-flash-preview"
                 }
               }
             }
@@ -109,17 +117,39 @@ spec:
         volumeMounts:
         - name: openclaw-data
           mountPath: /home/node/.openclaw
+        - name: user-files
+          mountPath: /home/node/.openclaw/workspace/USER.md
+          subPath: USER.md
       volumes:
       - name: openclaw-data
-        emptyDir: {}
+        persistentVolumeClaim:
+          claimName: openclaw-data
+      - name: user-files
+        configMap:
+          name: openclaw-user-files
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: openclaw-data
+  namespace: openclaw
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+  storageClassName: microk8s-hostpath
 ---
 apiVersion: v1
 kind: Service
 metadata:
   name: openclaw
   namespace: openclaw
+  annotations:
+    metallb.universe.tf/address-pool: default-addresspool
 spec:
-  type: ClusterIP
+  type: LoadBalancer
   ports:
   - port: 18789
     targetPort: 18789
