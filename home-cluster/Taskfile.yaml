@@ -7,6 +7,12 @@ tasks:
 
   apply:
     cmds:
+      - |
+        REGISTRY_USER=$(kubectl get secret registry-secrets -n registry -o jsonpath='{.data.registry_username}' | base64 -d)
+        REGISTRY_PASS=$(kubectl get secret registry-secrets -n registry -o jsonpath='{.data.registry_password}' | base64 -d)
+        AUTH=$(echo -n "$REGISTRY_USER:$REGISTRY_PASS" | base64)
+        mkdir -p cluster-secrets
+        echo "{\"auths\":{\"registry.kube.stevearnett.com\":{\"username\":\"$REGISTRY_USER\",\"password\":\"$REGISTRY_PASS\",\"auth\":\"$AUTH\"}}}" > cluster-secrets/.dockerconfigjson
       - helm repo update
       - rm -rf ~/.kube/cache
       - helmfile apply
