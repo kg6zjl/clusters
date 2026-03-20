@@ -355,7 +355,7 @@ releases:
   - name: renovate
     namespace: renovate
     chart: renovate/renovate
-    version: 46.78.0
+    version: 46.78.1
     values:
       - cronjob:
           schedule: "0 * * * *"  # Run every hour
