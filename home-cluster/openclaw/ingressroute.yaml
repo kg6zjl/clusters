@@ -13,4 +13,4 @@ spec:
         - name: openclaw
           port: 18789
   tls:
-    passthrough: true
+    secretName: wildcard-stevearnett-com-tls

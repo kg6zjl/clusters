@@ -27,7 +27,12 @@ spec:
           name: gateway
         env:
         - name: OLLAMA_BASE_URL
-          value: "http://ollama.ai-services.svc.cluster.local:11434"
+          value: "http://ollama-amd-02.ai-services.svc.cluster.local:11434"
+        - name: OLLAMA_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: openclaw-secrets
+              key: OLLAMA_API_KEY
         - name: OPENCLAW_GATEWAY_TOKEN
           valueFrom:
             secretKeyRef:
@@ -43,7 +48,9 @@ spec:
               "mode": "local",
               "trustedProxies": ["10.0.0.0/8", "192.168.0.0/16"],
               "controlUi": {
-                "dangerouslyDisableDeviceAuth": true
+                "allowInsecureAuth": true,
+                "dangerouslyDisableDeviceAuth": true,
+                "dangerouslyAllowHostHeaderOriginFallback": true
               }
             },
             "channels": {
@@ -62,16 +69,24 @@ spec:
                 }
               }
             },
+            "models": {
+              "providers": {
+                "ollama": {
+                  "baseUrl": "http://ollama-amd-02.ai-services.svc.cluster.local:11434",
+                  "models": []
+                }
+              }
+            },
             "agents": {
               "defaults": {
                 "model": {
-                  "primary": "ollama/llama3.2:3b"
+                  "primary": "llama3.2:1b"
                 }
               }
             }
           }
           EOF
-          openclaw gateway --port 18789 --bind lan --tls-key /etc/tls/tls.key --tls-cert /etc/tls/tls.crt
+          openclaw gateway --port 18789 --bind lan --auth trusted-proxy
         resources:
           requests:
             memory: "512Mi"
@@ -94,15 +109,9 @@ spec:
         volumeMounts:
         - name: openclaw-data
           mountPath: /home/node/.openclaw
-        - name: tls-cert
-          mountPath: /etc/tls
-          readOnly: true
       volumes:
       - name: openclaw-data
         emptyDir: {}
-      - name: tls-cert
-        secret:
-          secretName: wildcard-stevearnett-com-tls
 ---
 apiVersion: v1
 kind: Service
