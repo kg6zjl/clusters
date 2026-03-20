@@ -168,6 +168,25 @@ env:
 5. Wait for CI checks to pass
 6. Merge via PR (do NOT force-push or bypass PR requirements)
 
+### Before Pushing - Check Branch/PR Status
+
+**Always verify the target branch/PR status before pushing:**
+```bash
+# Check if PR already merged
+gh pr view <pr-number> --json state
+
+# Check current branch status
+git status
+
+# If branch/PR was merged/deleted, create new branch
+git fetch origin
+git checkout main
+git pull origin main
+git checkout -b new-branch-name
+```
+
+**Never push to a branch that has already been merged and deleted.** This creates orphaned commits and confusion.
+
 ### Before Every Commit - Check for Secrets
 
 Run this command to ensure no secrets have been accidentally committed:
