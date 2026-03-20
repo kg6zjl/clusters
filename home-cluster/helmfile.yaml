@@ -243,7 +243,7 @@ releases:
   - name: kube-prometheus-stack
     namespace: monitoring
     chart: prometheus-community/kube-prometheus-stack
-    version: 82.12.0
+    version: 82.13.0
     values:
       - crds:
           enabled: true
