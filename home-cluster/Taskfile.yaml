@@ -9,7 +9,7 @@ tasks:
     cmds:
       - helm repo update
       - rm -rf ~/.kube/cache
-      - helmfile sync
+      - helmfile apply
       - kubectl apply -k .
 
   rotate-cert:

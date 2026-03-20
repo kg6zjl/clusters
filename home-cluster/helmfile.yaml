@@ -44,6 +44,8 @@ repositories:
 ---
 helmDefaults:
   historyMax: 3
+  atomic: true
+  cleanupOnFail: true
 ---
 environments:
   default:
