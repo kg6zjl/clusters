@@ -1,0 +1,35 @@
+name: Renovate Artifact Helper
+
+on:
+  pull_request:
+    branches:
+      - main
+    types: [opened, synchronize]
+  push:
+    branches:
+      - main
+    paths:
+      - 'home-cluster/helmfile.yaml'
+
+jobs:
+  update-helmfile-artifacts:
+    name: Update Helmfile Lock & Artifacts
+    if: github.actor == 'renovate[bot]' || contains(github.head_ref, 'renovate/') || github.event_name == 'push'
+    runs-on: self-hosted
+    env:
+      PATH: /opt/tools/bin:/opt/tools:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+      PYTHONPATH: /opt/tools/bin
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Update Helmfile Deps & Lock
+        run: |
+          cd home-cluster
+          helmfile deps
+
+      - name: Commit Updated Artifacts
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "chore: update helmfile artifacts"
+          file_pattern: 'home-cluster/helmfile.lock'
