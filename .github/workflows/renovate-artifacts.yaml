@@ -16,11 +16,22 @@ jobs:
     name: Update Helmfile Lock & Artifacts
     if: github.actor == 'renovate[bot]' || contains(github.head_ref, 'renovate/') || github.event_name == 'push'
     runs-on: self-hosted
+    permissions:
+      contents: write
+      pull-requests: write
     env:
       PATH: /opt/tools/bin:/opt/tools:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
       PYTHONPATH: /opt/tools/bin
     steps:
       - name: Checkout
+        if: github.event_name == 'pull_request'
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Checkout (main)
+        if: github.event_name == 'push'
         uses: actions/checkout@v4
 
       - name: Update Helmfile Deps & Lock
