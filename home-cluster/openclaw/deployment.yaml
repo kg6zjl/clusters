@@ -86,7 +86,7 @@ spec:
             }
           }
           EOF
-          openclaw gateway --port 18789 --bind lan --auth trusted-proxy
+          openclaw gateway --port 18789 --bind lan
         resources:
           requests:
             memory: "512Mi"
