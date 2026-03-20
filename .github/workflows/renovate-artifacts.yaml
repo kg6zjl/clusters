@@ -5,16 +5,11 @@ on:
     branches:
       - main
     types: [opened, synchronize]
-  push:
-    branches:
-      - main
-    paths:
-      - 'home-cluster/helmfile.yaml'
 
 jobs:
   update-helmfile-artifacts:
     name: Update Helmfile Lock & Artifacts
-    if: github.actor == 'renovate[bot]' || contains(github.head_ref, 'renovate/') || github.event_name == 'push'
+    if: github.actor == 'renovate[bot]' || contains(github.head_ref, 'renovate/')
     runs-on: self-hosted
     permissions:
       contents: write
@@ -24,15 +19,10 @@ jobs:
       PYTHONPATH: /opt/tools/bin
     steps:
       - name: Checkout
-        if: github.event_name == 'pull_request'
         uses: actions/checkout@v4
         with:
           ref: ${{ github.head_ref }}
           token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Checkout (main)
-        if: github.event_name == 'push'
-        uses: actions/checkout@v4
 
       - name: Update Helmfile Deps & Lock
         run: |
