@@ -44,6 +44,8 @@ repositories:
 ---
 helmDefaults:
   historyMax: 3
+  atomic: true
+  cleanupOnFail: true
 ---
 environments:
   default:
@@ -241,7 +243,7 @@ releases:
   - name: kube-prometheus-stack
     namespace: monitoring
     chart: prometheus-community/kube-prometheus-stack
-    version: 82.12.0
+    version: 82.13.0
     values:
       - crds:
           enabled: true
@@ -355,7 +357,7 @@ releases:
   - name: renovate
     namespace: renovate
     chart: renovate/renovate
-    version: 46.78.0
+    version: 46.79.0
     values:
       - cronjob:
           schedule: "0 * * * *"  # Run every hour
@@ -383,7 +385,7 @@ releases:
   - name: traefik
     namespace: traefik
     chart: traefik/traefik
-    version: 39.0.5
+    version: 39.0.6
     values:
       - ports:
           web:
@@ -657,7 +659,7 @@ releases:
   - name: external-secrets
     namespace: external-secrets
     chart: external-secrets/external-secrets
-    version: 2.1.0
+    version: 2.2.0
     values:
       - installCRDs: true
         serviceAccount:
