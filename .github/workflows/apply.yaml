@@ -27,6 +27,14 @@ jobs:
           mkdir -p home-cluster/cluster-secrets
           echo "{\"auths\":{\"registry.kube.stevearnett.com\":{\"username\":\"$REGISTRY_USER\",\"password\":\"$REGISTRY_PASS\",\"auth\":\"$AUTH\"}}}" > home-cluster/cluster-secrets/.dockerconfigjson
 
+      - name: Rollback pending releases
+        run: |
+          for release in $(helm list -A --pending -q 2>/dev/null); do
+            namespace=$(helm list -A | grep "^$release " | awk '{print $2}')
+            echo "Rolling back: $release ($namespace)"
+            helm rollback "$release" -n "$namespace" 2>/dev/null || echo "Rollback failed for $release"
+          done
+
       - name: Apply changes
         run: |
           cd home-cluster
