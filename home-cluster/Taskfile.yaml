@@ -15,7 +15,7 @@ tasks:
         echo "{\"auths\":{\"registry.kube.stevearnett.com\":{\"username\":\"$REGISTRY_USER\",\"password\":\"$REGISTRY_PASS\",\"auth\":\"$AUTH\"}}}" > cluster-secrets/.dockerconfigjson
       - helm repo update
       - rm -rf ~/.kube/cache
-      - helmfile apply --timeout 300
+      - helmfile sync
       - kubectl apply -k .
 
   generate-registry-secret:
