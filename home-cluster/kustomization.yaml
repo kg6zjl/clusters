@@ -25,6 +25,7 @@ resources:
   - meshtastic-bot
   - pihole
   - kube-system/coredns-configmap-patch.yaml
+  - kube-system/dnsendpoint-openclaw.yaml
   - renovate
   - github-runners
   - openclaw
