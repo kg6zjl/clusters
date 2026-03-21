@@ -7,7 +7,7 @@ spec:
   entryPoints:
     - websecure
   routes:
-    - match: Host(`claw.kube.stevearnett.com`)
+    - match: Host(`claw.stevearnett.com`)
       kind: Rule
       services:
         - name: openclaw
@@ -16,3 +16,31 @@ spec:
           serversTransport: openclaw-http11
   tls:
     secretName: wildcard-stevearnett-com-tls
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: openclaw-http
+  namespace: openclaw
+spec:
+  entryPoints:
+    - web
+  routes:
+    - match: Host(`claw.stevearnett.com`)
+      kind: Rule
+      services:
+        - name: openclaw
+          port: 18789
+          scheme: http
+          serversTransport: openclaw-http11
+      middlewares:
+        - name: redirect-to-https
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: redirect-to-https
+  namespace: openclaw
+spec:
+  redirectScheme:
+    scheme: https

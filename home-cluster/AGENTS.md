@@ -168,6 +168,25 @@ env:
 5. Wait for CI checks to pass
 6. Merge via PR (do NOT force-push or bypass PR requirements)
 
+### Before Pushing - Check Branch/PR Status
+
+**Always verify the target branch/PR status before pushing:**
+```bash
+# Check if PR already merged
+gh pr view <pr-number> --json state
+
+# Check current branch status
+git status
+
+# If branch/PR was merged/deleted, create new branch
+git fetch origin
+git checkout main
+git pull origin main
+git checkout -b new-branch-name
+```
+
+**Never push to a branch that has already been merged and deleted.** This creates orphaned commits and confusion.
+
 ### Before Every Commit - Check for Secrets
 
 Run this command to ensure no secrets have been accidentally committed:
@@ -177,6 +196,8 @@ grep -rE "password|secret|token|key|auth|credential" --include="*.yaml" . | grep
 ```
 
 If this check fails, fix it immediately before committing.
+
+**TODO**: Add `trufflehog` or `detect-secrets` for intelligent key-value pair detection in addition to gitleaks.
 
 Manual backup can be triggered with:
 ```bash
@@ -300,6 +321,70 @@ Use `192.168.1.0/24` to cover all ranges.
 - Optimize for clarity and debuggability
 - Default to the simplest solution consistent with current patterns
 - If unsure, ask the user before making assumptions
+
+---
+
+## Verifying Changes (CRITICAL)
+
+**ALWAYS verify your work after making changes.** Rushing leads to mistakes.
+
+### After kubectl commands:
+```bash
+# Always verify the result
+kubectl get <resource> -n <namespace>
+kubectl describe <resource> -n <namespace>
+kubectl logs -n <namespace> <pod> --tail=50
+
+# Check pod status - look for CrashLoopBackOff, ImagePullBackOff, etc.
+kubectl get pods -n <namespace>
+```
+
+### After deleting resources:
+```bash
+# Verify it's gone
+kubectl get <resource> -n <namespace>
+
+# If it recreated, the deployment is managing it - check the deployment
+kubectl describe deployment <name> -n <namespace>
+```
+
+### After applying manifests:
+```bash
+# Validate the manifest first
+kubectl apply -f <file>.yaml --dry-run=client
+
+# Verify the resource exists after apply
+kubectl get <resource> -n <namespace>
+```
+
+### Common Mistakes to Avoid:
+- **Deleting the wrong pod** - Deployment will recreate it. Check deployment first.
+- **Checking the wrong namespace** - Always verify namespace exists (`kubectl get namespace`)
+- **Assuming success** - Always run `kubectl get` to confirm the expected state
+- **Not checking logs** - `kubectl logs` reveals why things fail
+
+---
+
+## Quick Reference
+
+### Check if a service is running:
+```bash
+kubectl get pods -n <namespace> | grep <service-name>
+```
+
+### Check pod status (look for issues):
+```bash
+kubectl get pods -n <namespace>
+# CrashLoopBackOff = container keeps restarting
+# ImagePullBackOff = can't pull the image
+# Pending = waiting for resources/scheduling
+# ContainerCreating = pod is starting
+```
+
+### Check namespace exists:
+```bash
+kubectl get namespace | grep <name>
+```
 
 ---
 

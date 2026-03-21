@@ -7,10 +7,27 @@ tasks:
 
   apply:
     cmds:
+      - |
+        REGISTRY_PASS=$(kubectl get secret registry-secrets -n registry -o jsonpath='{.data.REGISTRY_PASSWORD}' | base64 -d)
+        REGISTRY_USER=$(kubectl get secret registry-secrets -n registry -o jsonpath='{.data.htpasswd}' | base64 -d | cut -d: -f1)
+        AUTH=$(echo -n "$REGISTRY_USER:$REGISTRY_PASS" | base64)
+        mkdir -p cluster-secrets
+        echo "{\"auths\":{\"registry.kube.stevearnett.com\":{\"username\":\"$REGISTRY_USER\",\"password\":\"$REGISTRY_PASS\",\"auth\":\"$AUTH\"}}}" > cluster-secrets/.dockerconfigjson
       - helm repo update
       - rm -rf ~/.kube/cache
       - helmfile sync
       - kubectl apply -k .
+
+  generate-registry-secret:
+    desc: "Generate .dockerconfigjson for registry auth"
+    cmds:
+      - |
+        REGISTRY_PASS=$(kubectl get secret registry-secrets -n registry -o jsonpath='{.data.REGISTRY_PASSWORD}' | base64 -d)
+        REGISTRY_USER=$(kubectl get secret registry-secrets -n registry -o jsonpath='{.data.htpasswd}' | base64 -d | cut -d: -f1)
+        AUTH=$(echo -n "$REGISTRY_USER:$REGISTRY_PASS" | base64)
+        mkdir -p cluster-secrets
+        echo "{\"auths\":{\"registry.kube.stevearnett.com\":{\"username\":\"$REGISTRY_USER\",\"password\":\"$REGISTRY_PASS\",\"auth\":\"$AUTH\"}}}" > cluster-secrets/.dockerconfigjson
+        echo "Generated cluster-secrets/.dockerconfigjson"
 
   rotate-cert:
     desc: "Manually copy wildcard TLS cert from cert-manager to all namespaces (use when reflector fails)"

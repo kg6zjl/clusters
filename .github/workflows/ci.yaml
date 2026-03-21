@@ -10,6 +10,9 @@ on:
       - '.github/workflows/**'
       - '.gitleaks.toml'
       - '.pre-commit-config.yaml'
+  workflow_run:
+    workflows: ['Renovate Artifact Helper']
+    types: [completed]
 
 jobs:
   lint:
@@ -42,8 +45,8 @@ jobs:
 
       - name: Generate dockerconfigjson
         run: |
-          REGISTRY_USER=$(kubectl get secret registry-secrets -n registry -o jsonpath='{.data.registry_username}' | base64 -d)
-          REGISTRY_PASS=$(kubectl get secret registry-secrets -n registry -o jsonpath='{.data.registry_password}' | base64 -d)
+          REGISTRY_PASS=$(kubectl get secret registry-secrets -n registry -o jsonpath='{.data.REGISTRY_PASSWORD}' | base64 -d)
+          REGISTRY_USER=$(kubectl get secret registry-secrets -n registry -o jsonpath='{.data.htpasswd}' | base64 -d | cut -d: -f1)
           AUTH=$(echo -n "$REGISTRY_USER:$REGISTRY_PASS" | base64)
           mkdir -p home-cluster/cluster-secrets
           echo "{\"auths\":{\"registry.kube.stevearnett.com\":{\"username\":\"$REGISTRY_USER\",\"password\":\"$REGISTRY_PASS\",\"auth\":\"$AUTH\"}}}" > home-cluster/cluster-secrets/.dockerconfigjson

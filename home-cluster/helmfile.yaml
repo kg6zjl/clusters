@@ -46,6 +46,7 @@ helmDefaults:
   historyMax: 3
   atomic: true
   cleanupOnFail: true
+  timeout: 900
 ---
 environments:
   default:
@@ -243,7 +244,7 @@ releases:
   - name: kube-prometheus-stack
     namespace: monitoring
     chart: prometheus-community/kube-prometheus-stack
-    version: 82.12.0
+    version: 82.13.0
     values:
       - crds:
           enabled: true
@@ -357,7 +358,7 @@ releases:
   - name: renovate
     namespace: renovate
     chart: renovate/renovate
-    version: 46.78.1
+    version: 46.79.0
     values:
       - cronjob:
           schedule: "0 * * * *"  # Run every hour
@@ -597,7 +598,7 @@ releases:
   - name: gpu-operator
     namespace: gpu-operator
     chart: nvidia/gpu-operator
-    version: v25.10.1
+    version: v26.3.0
     values:
       - operator:
           defaultRuntime: containerd
