@@ -19,6 +19,7 @@ spec:
         app: openclaw
     spec:
       serviceAccountName: openclaw
+      automountServiceAccountToken: true
       containers:
       - name: openclaw
         image: ghcr.io/openclaw/openclaw:2026.3.13-1
