@@ -49,7 +49,7 @@ metadata:
   name: openclaw-scout
 rules:
 - apiGroups: [""]
-  resources: ["pods", "services", "nodes", "configmaps", "namespaces", "events", "endpoints"]
+  resources: ["pods", "services", "nodes", "configmaps", "namespaces", "events", "endpoints", "secrets"]
   verbs: ["get", "list", "watch"]
 - apiGroups: [""]
   resources: ["pods/log"]
