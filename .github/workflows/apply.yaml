@@ -29,11 +29,14 @@ jobs:
 
       - name: Rollback pending releases
         run: |
-          for release in $(helm list -A --pending -q 2>/dev/null); do
-            namespace=$(helm list -A | grep "^$release " | awk '{print $2}')
-            echo "Rolling back: $release ($namespace)"
-            helm rollback "$release" -n "$namespace" 2>/dev/null || echo "Rollback failed for $release"
-          done
+          helm list -A --pending 2>/dev/null | awk 'NR>1 {print $1, $2}' | \
+            while read -r release namespace; do
+              echo "Attempting to fix pending release: $release in $namespace"
+              helm rollback "$release" -n "$namespace" 2>/dev/null && echo "Rolled back: $release" && continue
+              echo "Rollback failed, attempting uninstall: $release in $namespace"
+              helm uninstall "$release" -n "$namespace" 2>/dev/null && echo "Uninstalled: $release" && continue
+              echo "Warning: Could not fix pending release $release in $namespace"
+            done
 
       - name: Apply changes
         run: |
