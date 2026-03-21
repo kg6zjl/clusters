@@ -44,7 +44,6 @@ repositories:
 ---
 helmDefaults:
   historyMax: 3
-  atomic: true
   cleanupOnFail: true
   timeout: 900
 ---
