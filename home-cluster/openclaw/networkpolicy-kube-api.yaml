@@ -9,6 +9,13 @@ spec:
   - Egress
   egress:
   - to:
+    - namespaceSelector: {}
+    ports:
+    - protocol: TCP
+      port: 53
+    - protocol: UDP
+      port: 53
+  - to:
     - ipBlock:
         cidr: 0.0.0.0/0  # Broad for now to ensure API reachability
     ports:
