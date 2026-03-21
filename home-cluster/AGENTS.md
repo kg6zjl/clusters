@@ -168,6 +168,17 @@ env:
 5. Wait for CI checks to pass
 6. Merge via PR (do NOT force-push or bypass PR requirements)
 
+### NO EXPLOITS OR BACKDOORS
+
+- **NEVER attempt or actually exploit vulnerabilities** or "backdoor" paths (e.g. host socket mounts, hostNetwork leaks) unless explicitly and specifically told to by the Lead Chef.
+- If you find a security risk, **report it immediately** instead of trying to use it to "fix" something.
+
+### STICK TO THE PROCESS
+
+- All cluster state changes must follow the defined pipeline: **PR -> GHA -> Local GH Runner**. 
+- No manual `kubectl` cluster edits or "Inception"-style workarounds.
+- Your local workspace is for drafting and validation only. The cluster source of truth is Git.
+
 ### Before Pushing - Check Branch/PR Status
 
 **Always verify the target branch/PR status before pushing:**
