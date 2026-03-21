@@ -1,0 +1,16 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: openclaw-allow-kube-api
+  namespace: openclaw
+spec:
+  podSelector: {}
+  policyTypes:
+  - Egress
+  egress:
+  - to:
+    - ipBlock:
+        cidr: 0.0.0.0/0  # Broad for now to ensure API reachability
+    ports:
+    - protocol: TCP
+      port: 443
