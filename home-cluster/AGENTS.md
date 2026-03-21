@@ -179,6 +179,10 @@ env:
 - No manual `kubectl` cluster edits or "Inception"-style workarounds.
 - Your local workspace is for drafting and validation only. The cluster source of truth is Git.
 
+### REPO AUTHENTICATION
+
+- You have permissions via the `GITHUB_TOKEN` environment variable. Use it properly for git operations and PR creation.
+
 ### Before Pushing - Check Branch/PR Status
 
 **Always verify the target branch/PR status before pushing:**
