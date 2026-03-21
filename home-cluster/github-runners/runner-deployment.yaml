@@ -51,22 +51,45 @@ spec:
               # Install gitleaks
               curl -fsSL https://github.com/gitleaks/gitleaks/releases/download/v8.30.0/gitleaks_8.30.0_linux_x64.tar.gz | tar -xzf - -C /opt/tools/ && chmod +x /opt/tools/gitleaks
 
-
-
               ls -la /opt/tools/
+          imagePullPolicy: IfNotPresent
           securityContext:
             runAsUser: 0
           volumeMounts:
-            - name: tools
-              mountPath: /opt/tools
+            - mountPath: /opt/tools
+              name: tools
+      containers:
+        - name: runner
+          image: summerwind/actions-runner:latest
+          command: ["/runner/run.sh"]
+          env:
+            - name: DOCKER_HOST
+              value: unix:///run/docker.sock
+          volumeMounts:
+            - mountPath: /run
+              name: docker-sock
+            - mountPath: /opt/tools
+              name: tools
+            - mountPath: /runner/_work
+              name: work
+        - name: docker
+          image: docker:dind
+          securityContext:
+            privileged: true
+          env:
+            - name: DOCKER_TLS_CERTDIR
+              value: ""
+          volumeMounts:
+            - mountPath: /run
+              name: docker-sock
+            - mountPath: /var/lib/docker
+              name: docker-storage
       volumes:
         - name: tools
           emptyDir: {}
-      volumeMounts:
-        - name: tools
-          mountPath: /opt/tools
-      env:
-        - name: PATH
-          value: /opt/tools/bin:/opt/tools:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-        - name: PYTHONPATH
-          value: /opt/tools/bin
+        - name: docker-sock
+          emptyDir: {}
+        - name: docker-storage
+          emptyDir: {}
+        - name: work
+          emptyDir: {}
