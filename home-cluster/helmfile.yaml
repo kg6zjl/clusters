@@ -674,7 +674,12 @@ releases:
       - connect:
           create: true
           replicas: 1
+          credentials: onepassword-credentials.json
+          credentialsName: op-credentials
         operator:
           create: true
+          token:
+            name: onepassword-connect-token
+            key: token
         service:
           type: ClusterIP
