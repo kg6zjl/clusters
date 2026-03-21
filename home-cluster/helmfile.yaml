@@ -674,7 +674,7 @@ releases:
       - connect:
           create: true
           replicas: 1
-          credentialsName: op-credentials
+          credentialsName: op-crednetials
         operator:
           create: true
           token:
