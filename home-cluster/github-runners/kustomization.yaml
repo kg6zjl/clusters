@@ -5,7 +5,6 @@ generatorOptions:
 resources:
   - namespace.yaml
   - rbac.yaml
-  - networkpolicy-kube-api.yaml
   - runner-deployment.yaml
   - hpa.yaml
   - external-secrets-namespace.yaml
