@@ -15,7 +15,7 @@ resources:
   - media
   - vpn
   - cloudflared
-  - speedtest
+  # - speedtest (managed by Flux)
   - local-services
   - registry
   # - netalertx
