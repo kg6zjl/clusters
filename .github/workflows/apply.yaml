@@ -60,4 +60,4 @@ jobs:
           helmfile repos
           helmfile deps
           helmfile sync
-          kubectl apply -k . --server-side
+          kubectl apply -k . --server-side --force-conflicts
