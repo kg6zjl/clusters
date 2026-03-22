@@ -9,3 +9,4 @@ resources:
   - headlamp-kustomization.yaml
   - pihole-kustomization.yaml
   - mqtt-kustomization.yaml
+  - frigate-kustomization.yaml

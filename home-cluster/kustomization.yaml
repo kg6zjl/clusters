@@ -21,7 +21,7 @@ resources:
   # - netalertx
   # - quotes (managed by Flux)
   # - headlamp (managed by Flux)
-  - frigate
+  # - frigate (managed by Flux)
   # - mqtt (managed by Flux)
   - meshtastic
   - meshtastic-bot
