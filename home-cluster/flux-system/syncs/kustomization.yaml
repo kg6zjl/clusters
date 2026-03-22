@@ -16,3 +16,4 @@ resources:
   - cloudflared-kustomization.yaml
   - local-services-kustomization.yaml
   - registry-kustomization.yaml
+  - oauth2-proxy-kustomization.yaml
