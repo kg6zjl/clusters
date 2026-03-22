@@ -20,7 +20,6 @@ spec:
       - name: headlamp
         image: ghcr.io/headlamp-k8s/headlamp:latest
         args:
-        - -kubeconfig=/etc/kubeconfig/config
         - -plugins-dir=/headlamp/plugins
         ports:
         - containerPort: 4466
