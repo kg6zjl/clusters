@@ -32,7 +32,7 @@ repositories:
   - name: actions-runner-controller
     url: https://actions-runner-controller.github.io/actions-runner-controller
   - name: actions-runner-controller-mainline
-    url: https://actions-runner-controller.github.io/actions-runner-controller
+    url: oci://ghcr.io/actions/actions-runner-controller
   - name: external-secrets
     url: https://charts.external-secrets.io
   - name: 1password
