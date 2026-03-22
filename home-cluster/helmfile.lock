@@ -1,4 +1,4 @@
-version: 0.168.0
+version: v0.166.0
 dependencies:
 - name: actions-runner-controller
   repository: https://actions-runner-controller.github.io/actions-runner-controller
@@ -32,13 +32,7 @@ dependencies:
   version: 3.13.0
 - name: oauth2-proxy
   repository: https://oauth2-proxy.github.io/manifests
-  version: 10.1.4
-- name: oauth2-proxy
-  repository: https://oauth2-proxy.github.io/manifests
-  version: 10.1.4
-- name: oauth2-proxy
-  repository: https://oauth2-proxy.github.io/manifests
-  version: 10.1.4
+  version: 10.1.5
 - name: pihole
   repository: https://nunoferna.github.io/pihole-helm/
   version: 1.2.1
@@ -60,5 +54,5 @@ dependencies:
 - name: traefik
   repository: https://traefik.github.io/charts
   version: 39.0.6
-digest: sha256:c1b3bfb4173f80e3e7c751cd76e78fcf826d17804ea734276451937d274f76a6
-generated: "2026-03-21T08:45:15.835607921Z"
+digest: sha256:66b0a5971432c3f3ec300fd3697d3469e965eda069f0430ebddb86d3cf476f64
+generated: "2026-03-21T18:41:40.487035-07:00"
