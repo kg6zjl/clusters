@@ -20,3 +20,4 @@ resources:
   - plex-kustomization.yaml
   - vpn-kustomization.yaml
   - home-assistant-kustomization.yaml
+  - renovate-kustomization.yaml

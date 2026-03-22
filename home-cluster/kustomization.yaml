@@ -29,5 +29,5 @@ resources:
   # - openclaw (managed by Flux)
   - kube-system/coredns-configmap-patch.yaml
   - kube-system/dnsendpoint-openclaw.yaml
-  - renovate
+  # - renovate (managed by Flux)
   - github-runners
