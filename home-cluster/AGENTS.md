@@ -168,6 +168,13 @@ env:
 5. Wait for CI checks to pass
 6. Merge via PR (do NOT force-push or bypass PR requirements)
 
+### NO GUESSING OR HALLUCINATING
+
+- **NEVER guess or assume** the cause of a failure if you cannot find logs or data to back up the claim.
+- If you cannot access logs (e.g., 404, Forbidden, binary missing), **state that clearly** instead of hypothesizing.
+- Always provide the specific log snippet or command output that supports your diagnosis.
+- Accuracy and data-driven troubleshooting are mandatory. Hypotheses must be labeled as such and verified.
+
 ### NO EXPLOITS OR BACKDOORS
 
 - **NEVER attempt or actually exploit vulnerabilities** or "backdoor" paths (e.g. host socket mounts, hostNetwork leaks) unless explicitly and specifically told to by the Lead Chef.
