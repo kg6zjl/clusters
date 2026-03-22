@@ -64,9 +64,9 @@ spec:
           command: ["/runner/run.sh"]
           env:
             - name: DOCKER_HOST
-              value: unix:///run/docker.sock
+              value: unix:///var/run/docker.sock
           volumeMounts:
-            - mountPath: /run
+            - mountPath: /var/run
               name: docker-sock
             - mountPath: /opt/tools
               name: tools
@@ -80,7 +80,7 @@ spec:
             - name: DOCKER_TLS_CERTDIR
               value: ""
           volumeMounts:
-            - mountPath: /run
+            - mountPath: /var/run
               name: docker-sock
             - mountPath: /var/lib/docker
               name: docker-storage

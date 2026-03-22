@@ -69,6 +69,11 @@ apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
   name: openclaw-allow-control-plane
+  namespace: openclaw
+spec:
+  podSelector: {}
+  policyTypes:
+  - Egress
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
