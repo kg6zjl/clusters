@@ -1,0 +1,43 @@
+name: Build Optimized Runner Image
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'home-cluster/github-runners/Dockerfile.optimized'
+  workflow_dispatch:
+
+env:
+  REGISTRY: registry.kube.stevearnett.com
+  IMAGE_NAME: github-runner-optimized
+
+jobs:
+  build-push:
+    name: Build and Push Runner Image
+    runs-on: self-hosted
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Configure Docker auth
+        run: |
+          REGISTRY_HTPASSWD=$(kubectl get secret registry-auth -n registry -o jsonpath='{.data.htpasswd}' | base64 -d)
+          REGISTRY_USER=$(echo "$REGISTRY_HTPASSWD" | cut -d: -f1)
+          REGISTRY_PASS=$(kubectl get secret registry-auth -n registry -o jsonpath='{.data.REGISTRY_PASSWORD}' | base64 -d)
+          echo "$REGISTRY_PASS" | docker login ${{ env.REGISTRY }} -u "$REGISTRY_USER" --password-stdin
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Build and push with Docker
+        uses: docker/build-push-action@v7
+        with:
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+          file: home-cluster/github-runners/Dockerfile.optimized
+          context: home-cluster/github-runners
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
