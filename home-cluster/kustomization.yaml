@@ -23,7 +23,7 @@ resources:
   # - headlamp (managed by Flux)
   # - frigate (managed by Flux)
   # - mqtt (managed by Flux)
-  - meshtastic
+  # - meshtastic (managed by Flux)
   - meshtastic-bot
   # - pihole (managed by Flux)
   - kube-system/coredns-configmap-patch.yaml

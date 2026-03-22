@@ -10,3 +10,4 @@ resources:
   - pihole-kustomization.yaml
   - mqtt-kustomization.yaml
   - frigate-kustomization.yaml
+  - meshtastic-kustomization.yaml
