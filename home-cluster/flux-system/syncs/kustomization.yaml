@@ -4,3 +4,4 @@ namespace: flux-system
 resources:
   - clusters-gitrepository.yaml
   - netalertx-kustomization.yaml
+  - quotes-kustomization.yaml

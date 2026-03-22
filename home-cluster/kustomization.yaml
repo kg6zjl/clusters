@@ -19,7 +19,7 @@ resources:
   - local-services
   - registry
   # - netalertx
-  # - quotes
+  # - quotes (managed by Flux)
   - headlamp
   - frigate
   - mqtt
