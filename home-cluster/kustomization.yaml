@@ -11,7 +11,7 @@ resources:
   - home-assistant
   - ai-services
   - gpu-operator
-  - plex
+  # - plex (managed by Flux)
   - media
   - vpn
   # - cloudflared (managed by Flux)
