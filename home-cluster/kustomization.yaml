@@ -9,10 +9,10 @@ resources:
   - cluster-secrets
   - monitoring
   # - home-assistant (managed by Flux)
-  - ai-services
+  # - ai-services (managed by Flux)
   - gpu-operator
   # - plex (managed by Flux)
-  - media
+  # - media (managed by Flux)
   # - vpn (managed by Flux)
   # - cloudflared (managed by Flux)
   # - speedtest (managed by Flux)
