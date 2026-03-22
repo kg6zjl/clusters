@@ -12,3 +12,4 @@ resources:
   - frigate-kustomization.yaml
   - meshtastic-kustomization.yaml
   - meshtastic-bot-kustomization.yaml
+  - openclaw-kustomization.yaml
