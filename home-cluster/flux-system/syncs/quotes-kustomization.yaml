@@ -12,4 +12,3 @@ spec:
     name: clusters
   targetNamespace: quotes
   timeout: 2m0s
-  wait: true
