@@ -7,3 +7,4 @@ resources:
   - quotes-kustomization.yaml
   - speedtest-kustomization.yaml
   - headlamp-kustomization.yaml
+  - pihole-kustomization.yaml
