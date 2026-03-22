@@ -18,7 +18,7 @@ resources:
   # - speedtest (managed by Flux)
   # - local-services (managed by Flux)
   # - registry (managed by Flux)
-  # - netalertx
+  # - netalertx (managed by Flux)
   # - quotes (managed by Flux)
   # - headlamp (managed by Flux)
   # - frigate (managed by Flux)
