@@ -14,7 +14,7 @@ resources:
   - plex
   - media
   - vpn
-  - cloudflared
+  # - cloudflared (managed by Flux)
   # - speedtest (managed by Flux)
   - local-services
   - registry
