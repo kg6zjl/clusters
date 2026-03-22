@@ -11,3 +11,4 @@ resources:
   - mqtt-kustomization.yaml
   - frigate-kustomization.yaml
   - meshtastic-kustomization.yaml
+  - meshtastic-bot-kustomization.yaml
