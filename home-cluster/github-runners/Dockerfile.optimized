@@ -1,0 +1,58 @@
+# Dockerfile for Optimized Mainline GitHub Runner
+FROM ghcr.io/actions/actions-runner:latest
+
+USER root
+
+# Install dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    wget \
+    tar \
+    bash \
+    python3 \
+    python3-pip \
+    python3-venv \
+    git \
+    jq \
+    unzip \
+    openssl \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create a tools directory
+RUN mkdir -p /opt/tools/bin
+ENV PATH="/opt/tools/bin:${PATH}"
+
+# Install kubectl
+RUN curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl" && \
+    chmod +x kubectl && mv kubectl /opt/tools/bin/
+
+# Install Helm
+RUN curl -fsSL https://get.helm.sh/helm-v3.16.4-linux-amd64.tar.gz | tar -zxf - -C /tmp && \
+    mv /tmp/linux-amd64/helm /opt/tools/bin/ && rm -rf /tmp/linux-amd64
+
+# Install Kustomize
+RUN curl -s "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh" | bash && \
+    mv kustomize /opt/tools/bin/
+
+# Install GitHub CLI (gh)
+RUN curl -fsSL https://github.com/cli/cli/releases/download/v2.47.0/gh_2.47.0_linux_amd64.tar.gz | tar -zxf - -C /tmp && \
+    mv /tmp/gh_2.47.0_linux_amd64/bin/gh /opt/tools/bin/ && rm -rf /tmp/gh*
+
+# Install Gitleaks
+RUN curl -fsSL https://github.com/gitleaks/gitleaks/releases/download/v8.18.2/gitleaks_8.18.2_linux_x64.tar.gz | tar -zxf - -C /opt/tools/bin/ gitleaks
+
+# Install yq
+RUN curl -L "https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64" -o /opt/tools/bin/yq && \
+    chmod +x /opt/tools/bin/yq
+
+# Install Yamllint via pip (system-wide for easier access)
+RUN pip3 install --no-cache-dir --break-system-packages yamllint
+
+# Add Trufflehog (binary install)
+RUN curl -sSfL https://raw.githubusercontent.com/trufflesecurity/trufflehog/main/scripts/install.sh | sh -s -- -b /opt/tools/bin
+
+# Set permissions for the runner user
+RUN chown -R runner:runner /opt/tools
+
+USER runner

@@ -107,6 +107,20 @@ spec:
         volumeMounts: []
 ```
 
+### 🛡️ INFRASTRUCTURE & SECURITY POLICY
+When proposing or implementing architectural changes (e.g., CI/CD, migration to ARC, or new services):
+1. **RBAC Least Privilege**:
+   - Audit and define the minimum necessary ClusterRoles/Roles.
+   - For ServiceAccounts (like GitHub Runners), ensure they only have permissions to the specific namespaces and resources they manage.
+2. **Network Policies (Default Deny)**:
+   - Every new component must have a `networkpolicy.yaml`.
+   - Start with a default-deny policy for the namespace.
+   - Explicitly define Allow-Ingress (from Traefik/Oauth2-Proxy) and Allow-Egress (to Registry, Kube-API, DNS).
+3. **Pre-Push Architecture Validation**:
+   - Before pushing a PR for infrastructure changes, do not just verify the YAML syntax.
+   - Mentally or internally simulate the resource flow (e.g., "Can the Runner pod reach the Private Registry under existing NetPol?").
+   - If a change requires new network paths, include the updated `NetworkPolicy` in the same PR.
+
 ### Secrets Management (CRITICAL)
 
 Secrets are managed via **1Password + External Secrets Operator (ESO)**:
