@@ -20,6 +20,7 @@ jobs:
         uses: actions/checkout@v6
 
       - name: Generate dockerconfigjson
+        timeout-minutes: 1
         run: |
           REGISTRY_PASS=$(kubectl get secret registry-secrets -n registry -o jsonpath='{.data.REGISTRY_PASSWORD}' | base64 -d)
           REGISTRY_USER=$(kubectl get secret registry-secrets -n registry -o jsonpath='{.data.htpasswd}' | base64 -d | cut -d: -f1)
