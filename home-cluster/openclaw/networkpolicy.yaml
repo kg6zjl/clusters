@@ -69,6 +69,23 @@ apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
   name: openclaw-allow-control-plane
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: openclaw-allow-registry
+  namespace: openclaw
+spec:
+  podSelector: {}
+  policyTypes:
+  - Egress
+  egress:
+  - to:
+    - ipBlock:
+        cidr: 10.152.183.235/32
+    ports:
+    - protocol: TCP
+      port: 5000
   namespace: openclaw
 spec:
   podSelector: {}
