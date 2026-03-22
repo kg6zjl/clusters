@@ -42,6 +42,7 @@ jobs:
 
       - name: Delete stale Flux CRDs
         run: |
+          set +e
           for crd in helmcharts helmreleases helmrepositories ocirepositories; do
             echo "Checking flux CRDs with v1beta2 for $crd..."
             STORED=$(kubectl get crd ${crd}.source.toolkit.fluxcd.io -o jsonpath='{.status.storedVersions}' 2>/dev/null)
@@ -50,6 +51,7 @@ jobs:
               kubectl delete crd ${crd}.source.toolkit.fluxcd.io --ignore-not-found
             fi
           done
+          set -e
 
       - name: Apply changes
         run: |
