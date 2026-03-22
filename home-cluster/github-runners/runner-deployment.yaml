@@ -61,7 +61,6 @@ spec:
       containers:
         - name: runner
           image: summerwind/actions-runner:latest
-          command: ["/runner/run.sh"]
           env:
             - name: DOCKER_HOST
               value: unix:///var/run/docker.sock
