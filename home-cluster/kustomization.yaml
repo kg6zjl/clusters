@@ -24,7 +24,7 @@ resources:
   # - frigate (managed by Flux)
   # - mqtt (managed by Flux)
   # - meshtastic (managed by Flux)
-  - meshtastic-bot
+  # - meshtastic-bot (managed by Flux)
   # - pihole (managed by Flux)
   - kube-system/coredns-configmap-patch.yaml
   - kube-system/dnsendpoint-openclaw.yaml
