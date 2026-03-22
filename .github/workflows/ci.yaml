@@ -10,9 +10,6 @@ on:
       - '.github/workflows/**'
       - '.gitleaks.toml'
       - '.pre-commit-config.yaml'
-  workflow_run:
-    workflows: ['Renovate Artifact Helper']
-    types: [completed]
 
 jobs:
   lint:
