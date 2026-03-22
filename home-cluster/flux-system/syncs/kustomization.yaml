@@ -4,7 +4,7 @@ namespace: flux-system
 resources:
   - clusters-gitrepository.yaml
   - netalertx-kustomization.yaml
-  - quotes-kustomization.yaml
+  # - quotes-kustomization.yaml
   - speedtest-kustomization.yaml
   - headlamp-kustomization.yaml
   - pihole-kustomization.yaml
