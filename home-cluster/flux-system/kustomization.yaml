@@ -3,3 +3,4 @@ kind: Kustomization
 namespace: flux-system
 resources:
   - gotk-components.yaml
+  - arc-helmrepository.yaml

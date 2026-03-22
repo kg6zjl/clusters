@@ -23,3 +23,4 @@ resources:
   - renovate-kustomization.yaml
   - ai-services-kustomization.yaml
   - media-kustomization.yaml
+  - arc-kustomization.yaml
