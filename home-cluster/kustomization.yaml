@@ -20,7 +20,7 @@ resources:
   - registry
   # - netalertx
   # - quotes (managed by Flux)
-  - headlamp
+  # - headlamp (managed by Flux)
   - frigate
   - mqtt
   - meshtastic

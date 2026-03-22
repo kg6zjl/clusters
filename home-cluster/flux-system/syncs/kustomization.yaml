@@ -6,3 +6,4 @@ resources:
   - netalertx-kustomization.yaml
   - quotes-kustomization.yaml
   - speedtest-kustomization.yaml
+  - headlamp-kustomization.yaml
