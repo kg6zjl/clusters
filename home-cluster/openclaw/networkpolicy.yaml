@@ -73,6 +73,16 @@ metadata:
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
+  name: openclaw-allow-control-plane
+  namespace: openclaw
+spec:
+  podSelector: {}
+  policyTypes:
+  - Egress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
   name: openclaw-allow-registry
   namespace: openclaw
 spec:
@@ -86,18 +96,12 @@ spec:
     ports:
     - protocol: TCP
       port: 5000
-  namespace: openclaw
-spec:
-  podSelector: {}
-  policyTypes:
-  - Egress
-  egress:
   - to:
-    - ipBlock: # HA Control Plane Nodes
+    - ipBlock:
         cidr: 192.168.1.0/24
     ports:
     - protocol: TCP
-      port: 16443 # MicroK8s Default API Port
+      port: 16443
     - protocol: TCP
       port: 443
 ---
