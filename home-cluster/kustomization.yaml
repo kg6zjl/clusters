@@ -8,7 +8,7 @@ resources:
   # - oauth2-proxy (managed by Flux)
   - cluster-secrets
   - monitoring
-  - home-assistant
+  # - home-assistant (managed by Flux)
   - ai-services
   - gpu-operator
   # - plex (managed by Flux)

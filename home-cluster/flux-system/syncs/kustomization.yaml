@@ -19,3 +19,4 @@ resources:
   - oauth2-proxy-kustomization.yaml
   - plex-kustomization.yaml
   - vpn-kustomization.yaml
+  - home-assistant-kustomization.yaml
