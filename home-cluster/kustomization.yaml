@@ -26,8 +26,8 @@ resources:
   # - meshtastic (managed by Flux)
   # - meshtastic-bot (managed by Flux)
   # - pihole (managed by Flux)
+  # - openclaw (managed by Flux)
   - kube-system/coredns-configmap-patch.yaml
   - kube-system/dnsendpoint-openclaw.yaml
   - renovate
   - github-runners
-  - openclaw
