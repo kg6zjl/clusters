@@ -8,3 +8,4 @@ resources:
   - speedtest-kustomization.yaml
   - headlamp-kustomization.yaml
   - pihole-kustomization.yaml
+  - mqtt-kustomization.yaml

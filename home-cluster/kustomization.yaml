@@ -22,7 +22,7 @@ resources:
   # - quotes (managed by Flux)
   # - headlamp (managed by Flux)
   - frigate
-  - mqtt
+  # - mqtt (managed by Flux)
   - meshtastic
   - meshtastic-bot
   # - pihole (managed by Flux)
