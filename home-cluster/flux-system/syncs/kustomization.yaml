@@ -14,3 +14,4 @@ resources:
   - meshtastic-bot-kustomization.yaml
   - openclaw-kustomization.yaml
   - cloudflared-kustomization.yaml
+  - local-services-kustomization.yaml

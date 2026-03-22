@@ -16,7 +16,7 @@ resources:
   - vpn
   # - cloudflared (managed by Flux)
   # - speedtest (managed by Flux)
-  - local-services
+  # - local-services (managed by Flux)
   - registry
   # - netalertx
   # - quotes (managed by Flux)
