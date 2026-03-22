@@ -17,7 +17,7 @@ resources:
   # - cloudflared (managed by Flux)
   # - speedtest (managed by Flux)
   # - local-services (managed by Flux)
-  - registry
+  # - registry (managed by Flux)
   # - netalertx
   # - quotes (managed by Flux)
   # - headlamp (managed by Flux)

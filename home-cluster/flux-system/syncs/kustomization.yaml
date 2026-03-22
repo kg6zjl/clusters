@@ -15,3 +15,4 @@ resources:
   - openclaw-kustomization.yaml
   - cloudflared-kustomization.yaml
   - local-services-kustomization.yaml
+  - registry-kustomization.yaml
