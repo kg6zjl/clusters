@@ -13,7 +13,7 @@ resources:
   - gpu-operator
   # - plex (managed by Flux)
   - media
-  - vpn
+  # - vpn (managed by Flux)
   # - cloudflared (managed by Flux)
   # - speedtest (managed by Flux)
   # - local-services (managed by Flux)

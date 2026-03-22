@@ -18,3 +18,4 @@ resources:
   - registry-kustomization.yaml
   - oauth2-proxy-kustomization.yaml
   - plex-kustomization.yaml
+  - vpn-kustomization.yaml
