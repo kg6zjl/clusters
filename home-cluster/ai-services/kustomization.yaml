@@ -7,8 +7,6 @@ resources:
   - network-policy.yaml
   - namespace.yaml
   - wyoming-whisper.yaml
-  - ollama.yaml
-  - ollama-amd.yaml
   - open-webui.yaml
   - ingressroute.yaml
   - dnsendpoint.yaml
@@ -17,11 +15,7 @@ resources:
   - middleware-comfy.yaml
   - ingressroute-comfy.yaml
   - dnsendpoint-comfy.yaml
-  - pigallery2.yaml
-  - ingressroute-pigallery2.yaml
-  - dnsendpoint-pigallery2.yaml
   - external-secrets.yaml
-  - external-secrets-pigallery2.yaml
 
 patches:
   - target:
@@ -29,15 +23,6 @@ patches:
       version: v1alpha1
       kind: DNSEndpoint
       name: chat
-    patch: |-
-      - op: replace
-        path: /metadata/namespace
-        value: kube-system
-  - target:
-      group: externaldns.k8s.io
-      version: v1alpha1
-      kind: DNSEndpoint
-      name: pigallery2
     patch: |-
       - op: replace
         path: /metadata/namespace
