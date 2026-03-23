@@ -3,7 +3,7 @@ kind: Kustomization
 namespace: cert-manager
 
 secretGenerator:
-- name: nas-smb-credentials
+  - name: nas-smb-credentials
   options:
     disableNameSuffixHash: true
     annotations:
@@ -27,7 +27,7 @@ patches:
       name: cert-manager
       namespace: cert-manager
     patch: |-
-      - op: add
+  - op: add
         path: /metadata/annotations
         value:
           prometheus.io/scrape: "true"

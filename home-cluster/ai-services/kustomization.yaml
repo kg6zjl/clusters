@@ -30,7 +30,7 @@ patches:
       kind: DNSEndpoint
       name: chat
     patch: |-
-      - op: replace
+  - op: replace
         path: /metadata/namespace
         value: kube-system
   - target:
@@ -39,6 +39,6 @@ patches:
       kind: DNSEndpoint
       name: pigallery2
     patch: |-
-      - op: replace
+  - op: replace
         path: /metadata/namespace
         value: kube-system
