@@ -18,14 +18,13 @@ spec:
       port: 53
     - protocol: TCP
       port: 53
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: kube-system
+    ports:
+    - protocol: TCP
+      port: 443
   ingress:
   - from:
-    - namespaceSelector:
-        matchLabels:
-          kubernetes.io/metadata.name: traefik
-    - namespaceSelector:
-        matchLabels:
-          kubernetes.io/metadata.name: auth
-    - namespaceSelector:
-        matchLabels:
-          kubernetes.io/metadata.name: pihole
+    - namespaceSelector: {}
