@@ -57,6 +57,29 @@ kubectl describe <resource> -n <namespace>
 kubectl get secret wildcard-stevearnett-com-tls -n cert-manager -o jsonpath='{.data.tls\.crt}' | base64 -d | openssl x509 -noout -dates
 ```
 
+### Debugging Network Policies and RBAC (IMPORTANT)
+
+**This cluster uses default-deny NetworkPolicies.** Most connectivity issues stem from missing egress/ingress rules.
+
+```bash
+# Check if namespace has a NetworkPolicy
+kubectl get networkpolicy -n <namespace>
+
+# View NetworkPolicy details
+kubectl get networkpolicy -n <namespace> -o yaml
+
+# Check RBAC (ServiceAccount, Role, RoleBinding)
+kubectl get sa -n <namespace>
+kubectl get role,rolebinding -n <namespace>
+kubectl auth can-i get pods --as=system:serviceaccount:<namespace>:<sa-name>
+```
+
+**Common fixes:**
+- Pod can't reach API server: Allow egress to `kube-system` namespace (contains API server endpoint)
+- Pod can't reach external service: Allow egress to port 443/80 in NetworkPolicy
+- Pod can't be reached: Allow ingress from `traefik` namespace for ingress access
+- Permission denied: Check ServiceAccount and RBAC bindings
+
 ---
 
 ## Code Style Guidelines
