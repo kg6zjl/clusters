@@ -4,7 +4,7 @@ kind: Kustomization
 namespace: registry
 
 resources:
-  - dns-egress.yaml
+  - network-policy.yaml
   - namespace.yaml
   - pvc.yaml
   - ingressroute.yaml

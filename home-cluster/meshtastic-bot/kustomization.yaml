@@ -4,7 +4,7 @@ kind: Kustomization
 namespace: meshtastic
 
 resources:
-  - dns-egress.yaml
+  - network-policy.yaml
   - deployment.yaml
   - external-secrets.yaml
 

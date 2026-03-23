@@ -4,7 +4,7 @@ kind: Kustomization
 namespace: quotes
 
 resources:
-  - dns-egress.yaml
+  - network-policy.yaml
   - namespace.yaml
   - configmap.yaml
   - deployment.yaml

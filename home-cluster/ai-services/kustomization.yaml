@@ -4,7 +4,7 @@ kind: Kustomization
 namespace: ai-services
 
 resources:
-  - dns-egress.yaml
+  - network-policy.yaml
   - namespace.yaml
   - wyoming-whisper.yaml
   - ollama.yaml

@@ -11,7 +11,7 @@ secretGenerator:
       reflector.v1.k8s.emberstack.com/reflection-allowed-namespaces: "backup"
 
 resources:
-  - dns-egress.yaml
+  - network-policy.yaml
   - external-secrets.yaml
   - clusterissuer.yaml
   - certificate.yaml

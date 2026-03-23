@@ -3,7 +3,7 @@ kind: Kustomization
 namespace: home-assistant
 
 resources:
-  - dns-egress.yaml
+  - network-policy.yaml
   - namespace.yaml
   - dnsendpoint.yaml
   - deployment.yaml

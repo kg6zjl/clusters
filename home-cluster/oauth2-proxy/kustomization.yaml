@@ -4,7 +4,7 @@ kind: Kustomization
 namespace: auth
 
 resources:
-  - dns-egress.yaml
+  - network-policy.yaml
   - namespace.yaml
   - ingress-auth.yaml
   - ingress-dashboard.yaml
