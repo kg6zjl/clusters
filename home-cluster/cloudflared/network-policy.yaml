@@ -1,7 +1,7 @@
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: cloudflared-allow-dns
+  name: cloudflared-allow-egress
   namespace: cloudflared
 spec:
   podSelector: {}
@@ -18,8 +18,11 @@ spec:
       port: 53
     - protocol: TCP
       port: 53
+  - to:
+    - namespaceSelector: {}
+    ports:
+    - protocol: TCP
+      port: 443
   ingress:
   - from:
-    - namespaceSelector:
-        matchLabels:
-          kubernetes.io/metadata.name: traefik
+    - namespaceSelector: {}
