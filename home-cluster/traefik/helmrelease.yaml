@@ -7,7 +7,7 @@ spec:
   interval: 1h
   chart:
     spec:
-      chart: traefik/traefik
+      chart: traefik
       version: 39.0.6
       sourceRef:
         kind: HelmRepository
