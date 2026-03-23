@@ -10,3 +10,4 @@ resources:
   - external-secrets-namespace.yaml
   - external-secrets-store.yaml
   - external-secrets.yaml
+  - network-policy.yaml
