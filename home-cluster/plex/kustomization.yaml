@@ -3,10 +3,10 @@ kind: Kustomization
 namespace: plex
 resources:
   - dns-egress.yaml
-- namespace.yaml
-- dnsendpoint.yaml
-- ingress.yaml
-- external-secrets.yaml
+  - namespace.yaml
+  - dnsendpoint.yaml
+  - ingress.yaml
+  - external-secrets.yaml
 
 generatorOptions:
   disableNameSuffixHash: true

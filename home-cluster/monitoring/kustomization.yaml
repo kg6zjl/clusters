@@ -1,12 +1,12 @@
 resources:
   - dns-egress.yaml
-- namespace.yaml
-- ingress-grafana.yaml
-- ingress-prometheus.yaml
-- ingress-alertmanager.yaml
-- prometheus-rules.yaml
-- dashboard-ugreen-nas.yaml
-- external-secrets.yaml
+  - namespace.yaml
+  - ingress-grafana.yaml
+  - ingress-prometheus.yaml
+  - ingress-alertmanager.yaml
+  - prometheus-rules.yaml
+  - dashboard-ugreen-nas.yaml
+  - external-secrets.yaml
 
 configMapGenerator:
 
