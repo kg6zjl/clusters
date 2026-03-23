@@ -20,12 +20,4 @@ spec:
       port: 53
   ingress:
   - from:
-    - namespaceSelector:
-        matchLabels:
-          kubernetes.io/metadata.name: traefik
-    - namespaceSelector:
-        matchLabels:
-          kubernetes.io/metadata.name: auth
-    - namespaceSelector:
-        matchLabels:
-          kubernetes.io/metadata.name: pihole
+    - namespaceSelector: {}
