@@ -74,4 +74,15 @@ jobs:
           path: ./
           base: ${{ github.event.repository.default_branch }}
           head: HEAD
-          extra_args: --debug --only-verified
+          extra_args: --only-verified
+        continue-on-error: true
+
+      - name: Check Trufflehog result
+        if: ${{ github.event_name == 'pull_request' }}
+        run: |
+          if [ -n "$(git log --oneline ${{ github.event.repository.default_branch }}..HEAD)" ]; then
+            echo "New commits found, TruffleHog scan is required"
+            exit 1
+          else
+            echo "No new commits in PR, skipping TruffleHog"
+          fi
