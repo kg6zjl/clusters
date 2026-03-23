@@ -4,6 +4,7 @@ kind: Kustomization
 namespace: vpn
 
 resources:
+  - dns-egress.yaml
   - vpn-qbittorent.yaml
   - ingress-qbittorrent.yaml
   - external-secrets.yaml

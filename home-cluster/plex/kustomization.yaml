@@ -2,10 +2,11 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 namespace: plex
 resources:
-- namespace.yaml
-- dnsendpoint.yaml
-- ingress.yaml
-- external-secrets.yaml
+  - dns-egress.yaml
+  - namespace.yaml
+  - dnsendpoint.yaml
+  - ingress.yaml
+  - external-secrets.yaml
 
 generatorOptions:
   disableNameSuffixHash: true
