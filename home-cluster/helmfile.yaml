@@ -256,6 +256,25 @@ releases:
                 static_configs:
                   - targets:
                       - nas.stevearnett.com:9100
+              - job_name: ingress-availability
+                metrics_path: /probe
+                params:
+                  module: [http_2xx]
+                static_configs:
+                  - targets:
+                      - https://ha.kube.stevearnett.com/
+                      - https://frigate.kube.stevearnett.com/
+                      - https://grafana.kube.stevearnett.com/
+                      - https://prometheus.kube.stevearnett.com/
+                    labels:
+                      service: ingress
+                relabel_configs:
+                  - source_labels: [__address__]
+                    target_label: __param_target
+                  - source_labels: [__param_target]
+                    target_label: instance
+                  - target_label: __address__
+                    replacement: blackbox-exporter.monitoring.svc:9115
             ruleSelectorNilUsesHelmValues: false
             additionalRules:
               - name: disable-builtin-alerts
@@ -266,6 +285,16 @@ releases:
                     rules: []
                   - name: kubernetes-system-kube-proxy
                     rules: []
+              - name: ingress-availability
+                rules:
+                  - alert: IngressDown
+                    expr: probe_success{job="ingress-availability"} == 0
+                    for: 2m
+                    labels:
+                      severity: critical
+                    annotations:
+                      summary: "Ingress {{`{{`}} $labels.instance {{`}}`}} is down"
+                      description: "Cannot reach {{`{{`}} $labels.instance {{`}}`}} for 2 minutes"
         grafana:
           enabled: true
           admin:
@@ -500,6 +529,18 @@ releases:
       - config:
           clients:
             - url: http://loki:3100/loki/api/v1/push
+  - name: blackbox-exporter
+    namespace: monitoring
+    chart: prometheus-community/prometheus-blackbox-exporter
+    version: 9.2.0
+    values:
+      - config:
+          modules:
+            http_2xx:
+              prober: http
+              http:
+                follow_redirects: true
+                insecure_skip_verify: false
   - name: pihole
     namespace: pihole
     chart: pihole-v6/pihole
