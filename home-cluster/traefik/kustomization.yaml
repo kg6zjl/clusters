@@ -9,3 +9,4 @@ resources:
   - dnsendpoint.yaml
   - ingress-dashboard.yaml
   - middleware-oauth.yaml
+  - helmrelease.yaml
