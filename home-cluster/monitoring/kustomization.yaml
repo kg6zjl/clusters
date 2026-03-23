@@ -7,6 +7,10 @@ resources:
   - prometheus-rules.yaml
   - dashboard-ugreen-nas.yaml
   - external-secrets.yaml
+  - kube-prometheus-stack-helmrelease.yaml
+  - loki-helmrelease.yaml
+  - promtail-helmrelease.yaml
+  - blackbox-exporter-helmrelease.yaml
 
 configMapGenerator:
 

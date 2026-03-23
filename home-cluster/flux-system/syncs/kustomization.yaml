@@ -4,6 +4,8 @@ namespace: flux-system
 resources:
   - clusters-gitrepository.yaml
   - traefik-helmrepository.yaml
+  - prometheus-community-helmrepository.yaml
+  - grafana-helmrepository.yaml
   - traefik-kustomization.yaml
   - cert-manager-kustomization.yaml
   - netalertx-kustomization.yaml

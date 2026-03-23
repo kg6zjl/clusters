@@ -1,0 +1,82 @@
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: kube-prometheus-stack
+  namespace: monitoring
+spec:
+  interval: 1h
+  chart:
+    spec:
+      chart: kube-prometheus-stack
+      version: 82.13.2
+      sourceRef:
+        kind: HelmRepository
+        name: prometheus-community
+        namespace: flux-system
+  values:
+    crds:
+      enabled: true
+    prometheus:
+      serviceMonitorSelectorNilUsesHelmValues: false
+      prometheusSpec:
+        retention: 10d
+        ruleSelectorNilUsesHelmValues: false
+        additionalScrapeConfigs:
+          - job_name: ugreen-dxp2800
+            static_configs:
+              - targets:
+                  - nas.stevearnett.com:9100
+          - job_name: ingress-availability
+            metrics_path: /probe
+            params:
+              module: [http_2xx]
+            static_configs:
+              - targets:
+                  - https://ha.kube.stevearnett.com/
+                  - https://frigate.kube.stevearnett.com/
+                  - https://grafana.kube.stevearnett.com/
+                  - https://prometheus.kube.stevearnett.com/
+                labels:
+                  service: ingress
+            relabel_configs:
+              - source_labels: [__address__]
+                target_label: __param_target
+              - source_labels: [__param_target]
+                target_label: instance
+              - target_label: __address__
+                replacement: blackbox-exporter-prometheus-blackbox-exporter.monitoring.svc:9115
+        additionalRules:
+          - name: disable-builtin-alerts
+            groups:
+              - name: kubernetes-system-controller-manager
+                rules: []
+              - name: kubernetes-system-scheduler
+                rules: []
+              - name: kubernetes-system-kube-proxy
+                rules: []
+          - name: ingress-availability
+            rules:
+              - alert: IngressDown
+                expr: probe_success{job="ingress-availability"} == 0
+                for: 2m
+                labels:
+                  severity: critical
+                annotations:
+                  summary: "Ingress {{ $labels.instance }} is down"
+                  description: "Cannot reach {{ $labels.instance }} for 2 minutes"
+    grafana:
+      enabled: true
+      admin:
+        existingSecret: grafana-admin-secret
+        userKey: admin-user
+        passwordKey: GRAFANA_ADMIN_PASSWORD
+      additionalDataSources:
+        - name: Loki
+          type: loki
+          url: http://loki.monitoring.svc.cluster.local:3100
+          access: proxy
+          isDefault: false
+          jsonData:
+            maxLines: 1000
+    alertmanager:
+      enabled: true
