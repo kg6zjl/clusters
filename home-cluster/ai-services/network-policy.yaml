@@ -1,7 +1,7 @@
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: ai-services-allow-dns
+  name: ai-services-allow-egress
   namespace: ai-services
 spec:
   podSelector: {}
@@ -18,6 +18,10 @@ spec:
       port: 53
     - protocol: TCP
       port: 53
+    - protocol: TCP
+      port: 443
+  - to:
+    - namespaceSelector: {}
   ingress:
   - from:
     - namespaceSelector:
