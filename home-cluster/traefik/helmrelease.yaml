@@ -21,6 +21,10 @@ spec:
       websecure:
         port: 8443
         exposedPort: 443
+      meshmonitor-tcp:
+        port: 4404
+        exposedPort: 4404
+        protocol: tcp
     service:
       type: LoadBalancer
     ingressRoute:
