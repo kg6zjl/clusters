@@ -1,7 +1,7 @@
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: mqtt-allow-dns
+  name: mqtt-allow-egress
   namespace: mqtt
 spec:
   podSelector: {}
@@ -18,6 +18,10 @@ spec:
       port: 53
     - protocol: TCP
       port: 53
+    - protocol: TCP
+      port: 443
+  - to:
+    - namespaceSelector: {}
   ingress:
   - from:
     - namespaceSelector:

@@ -1,7 +1,7 @@
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: registry-allow-dns
+  name: registry-allow-egress
   namespace: registry
 spec:
   podSelector: {}
@@ -18,8 +18,10 @@ spec:
       port: 53
     - protocol: TCP
       port: 53
+    - protocol: TCP
+      port: 443
+  - to:
+    - namespaceSelector: {}
   ingress:
   - from:
-    - namespaceSelector:
-        matchLabels:
-          kubernetes.io/metadata.name: traefik
+    - namespaceSelector: {}

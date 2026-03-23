@@ -1,7 +1,7 @@
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: meshtastic-bot-allow-dns
+  name: meshtastic-bot-allow-egress
   namespace: meshtastic-bot
 spec:
   podSelector: {}
@@ -18,6 +18,10 @@ spec:
       port: 53
     - protocol: TCP
       port: 53
+    - protocol: TCP
+      port: 443
+  - to:
+    - namespaceSelector: {}
   ingress:
   - from:
     - namespaceSelector:
