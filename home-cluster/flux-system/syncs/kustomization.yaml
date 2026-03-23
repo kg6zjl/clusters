@@ -23,4 +23,8 @@ resources:
   - renovate-kustomization.yaml
   - media-kustomization.yaml
   - monitoring-kustomization.yaml
+  - spegel-kustomization.yaml
+  - external-secrets-kustomization.yaml
+  - clustersecret-kustomization.yaml
+  - gpu-operator-kustomization.yaml
   - arc-kustomization.yaml
