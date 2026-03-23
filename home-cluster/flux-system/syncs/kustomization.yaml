@@ -21,7 +21,6 @@ resources:
   - vpn-kustomization.yaml
   - home-assistant-kustomization.yaml
   - renovate-kustomization.yaml
-  - ai-services-kustomization.yaml
   - media-kustomization.yaml
   - monitoring-kustomization.yaml
   - arc-kustomization.yaml
