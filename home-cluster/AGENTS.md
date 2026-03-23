@@ -82,6 +82,36 @@ kubectl auth can-i get pods --as=system:serviceaccount:<namespace>:<sa-name>
 
 ---
 
+### Network Policy Checklist (IMPORTANT)
+
+**This cluster uses default-deny NetworkPolicies.** Before adding a new namespace or troubleshooting connectivity, always answer:
+
+1. **Internal Egress** - What namespaces does this pod need to reach inside the cluster?
+   - `default` - Kubernetes API server endpoint (kubernetes.default.svc)
+   - `kube-system` - DNS, API server components
+   - Other service namespaces (databases, message queues, etc.)
+
+2. **External Egress** - What does this pod need outside the cluster?
+   - DNS: port 53 (UDP + TCP)
+   - HTTPS: port 443 (for external APIs, registries)
+   - HTTP: port 80 (if needed)
+
+3. **Ingress** - What needs to reach this pod?
+   - `traefik` - For ingress access via Traefik
+   - Other internal namespaces that call this service
+
+**Example minimal egress for a pod that calls the K8s API:**
+```yaml
+egress:
+  - ports: [{port: 443, protocol: TCP}]
+    to: [{namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: default}}}]
+  - ports: [{port: 53, protocol: UDP}, {port: 53, protocol: TCP}]
+    to: [{namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: kube-system}}}]
+  - {}  # Allow all other egress (or be more specific)
+```
+
+---
+
 ## Code Style Guidelines
 
 ### Kubernetes Resource Conventions

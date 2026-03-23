@@ -1,0 +1,11 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: arc-systems-allow-egress
+  namespace: arc-systems
+spec:
+  podSelector: {}
+  policyTypes:
+  - Egress
+  egress:
+  - {}
