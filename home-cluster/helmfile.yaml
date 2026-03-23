@@ -540,7 +540,6 @@ releases:
               prober: http
               http:
                 follow_redirects: true
-                insecure_skip_verify: false
   - name: pihole
     namespace: pihole
     chart: pihole-v6/pihole
