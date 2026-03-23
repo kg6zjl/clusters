@@ -1,7 +1,7 @@
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: monitoring-allow-dns
+  name: monitoring-allow-egress
   namespace: monitoring
 spec:
   podSelector: {}
@@ -18,17 +18,10 @@ spec:
       port: 53
     - protocol: TCP
       port: 53
-  - to:
-    - namespaceSelector:
-        matchLabels:
-          kubernetes.io/metadata.name: traefik
-  - to:
-    - namespaceSelector: {}
-    ports:
     - protocol: TCP
       port: 443
-    - protocol: TCP
-      port: 80
+  - to:
+    - namespaceSelector: {}
   ingress:
   - from:
     - namespaceSelector:
