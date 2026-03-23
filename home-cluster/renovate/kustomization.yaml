@@ -4,7 +4,7 @@ kind: Kustomization
 namespace: renovate
 
 resources:
-  - dns-egress.yaml
+  - network-policy.yaml
   - namespace.yaml
   - external-secrets.yaml
 

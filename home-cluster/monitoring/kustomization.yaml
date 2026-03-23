@@ -1,5 +1,5 @@
 resources:
-  - dns-egress.yaml
+  - network-policy.yaml
   - namespace.yaml
   - ingress-grafana.yaml
   - ingress-prometheus.yaml
