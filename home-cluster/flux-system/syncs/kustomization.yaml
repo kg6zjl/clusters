@@ -5,6 +5,7 @@ resources:
   - clusters-gitrepository.yaml
   - traefik-helmrepository.yaml
   - traefik-kustomization.yaml
+  - cert-manager-kustomization.yaml
   - netalertx-kustomization.yaml
   - quotes-kustomization.yaml
   - speedtest-kustomization.yaml
