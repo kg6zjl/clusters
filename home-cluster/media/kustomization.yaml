@@ -4,6 +4,7 @@ kind: Kustomization
 namespace: media
 
 resources:
+  - network-policy.yaml
   - namespace.yaml
   - overseerr.yaml
   - prowlarr.yaml

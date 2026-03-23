@@ -4,6 +4,7 @@ kind: Kustomization
 namespace: frigate
 
 resources:
+  - network-policy.yaml
   - namespace.yaml
   - configmap.yaml
   - deployment.yaml

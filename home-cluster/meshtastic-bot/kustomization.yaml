@@ -4,6 +4,7 @@ kind: Kustomization
 namespace: meshtastic
 
 resources:
+  - network-policy.yaml
   - deployment.yaml
   - external-secrets.yaml
 

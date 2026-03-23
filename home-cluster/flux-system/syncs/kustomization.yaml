@@ -1,0 +1,26 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: flux-system
+resources:
+  - clusters-gitrepository.yaml
+  - netalertx-kustomization.yaml
+  - quotes-kustomization.yaml
+  - speedtest-kustomization.yaml
+  - headlamp-kustomization.yaml
+  - pihole-kustomization.yaml
+  - mqtt-kustomization.yaml
+  - frigate-kustomization.yaml
+  - meshtastic-kustomization.yaml
+  - meshtastic-bot-kustomization.yaml
+  - openclaw-kustomization.yaml
+  - cloudflared-kustomization.yaml
+  - local-services-kustomization.yaml
+  - registry-kustomization.yaml
+  - oauth2-proxy-kustomization.yaml
+  - plex-kustomization.yaml
+  - vpn-kustomization.yaml
+  - home-assistant-kustomization.yaml
+  - renovate-kustomization.yaml
+  - media-kustomization.yaml
+  - monitoring-kustomization.yaml
+  - arc-kustomization.yaml

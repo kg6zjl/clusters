@@ -4,6 +4,7 @@ kind: Kustomization
 namespace: quotes
 
 resources:
+  - network-policy.yaml
   - namespace.yaml
   - configmap.yaml
   - deployment.yaml
@@ -11,12 +12,3 @@ resources:
   - networkpolicy.yaml
   - pvc.yaml
   - external-secrets.yaml
-
-secretGenerator:
-  - name: quotes-registry-auth
-    type: kubernetes.io/dockerconfigjson
-    literals:
-      - .dockerconfigjson={"auths":{"registry.kube.stevearnett.com":{"username":"$(REGISTRY_USERNAME)","password":"$(REGISTRY_PASSWORD)"}}}
-
-generatorOptions:
-  disableNameSuffixHash: true

@@ -1,0 +1,14 @@
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: quotes
+  namespace: flux-system
+spec:
+  interval: 1m0s
+  path: ./home-cluster/quotes
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: clusters
+  targetNamespace: quotes
+  timeout: 2m0s

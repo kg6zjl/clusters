@@ -16,38 +16,57 @@ spec:
         app: headlamp
     spec:
       serviceAccountName: headlamp
+      initContainers:
+        - name: install-flux-plugin
+          image: alpine:3.19
+          command:
+            - sh
+            - -c
+            - |
+              apk add --no-cache curl
+              mkdir -p /plugins/flux
+              curl -sL https://github.com/headlamp-k8s/plugins/releases/latest/download/flux-plugin.tar.gz | tar -xz -C /plugins/flux
+          volumeMounts:
+            - name: plugins
+              mountPath: /plugins
       containers:
-      - name: headlamp
-        image: ghcr.io/headlamp-k8s/headlamp:latest
-        args:
-        - -plugins-dir=/headlamp/plugins
-        ports:
-        - containerPort: 4466
-          name: http
-        resources:
-          requests:
-            cpu: 100m
-            memory: 128Mi
-          limits:
-            cpu: "1"
-            memory: 512Mi
-        securityContext:
-          allowPrivilegeEscalation: false
-          capabilities:
-            drop:
-            - ALL
-          runAsNonRoot: true
-          runAsUser: 100
-          runAsGroup: 101
-        volumeMounts:
-        - name: plugins
-          mountPath: /headlamp/plugins
-        - name: kubeconfig
-          mountPath: /etc/kubeconfig
-          readOnly: true
+        - name: headlamp
+          image: ghcr.io/headlamp-k8s/headlamp:latest
+          args:
+            - -plugins-dir=/headlamp/plugins
+          env:
+            - name: KUBECONFIG
+              value: /home/headlamp/.kube/config
+          ports:
+            - containerPort: 4466
+              name: http
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 1
+              memory: 512Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            runAsGroup: 2000
+            runAsNonRoot: true
+            runAsUser: 1000
+          volumeMounts:
+            - name: plugins
+              mountPath: /headlamp/plugins
+            - name: kubeconfig
+              mountPath: /home/headlamp/.kube
+              readOnly: true
       volumes:
-      - name: plugins
-        emptyDir: {}
-      - name: kubeconfig
-        secret:
-          secretName: headlamp-kubeconfig
+        - name: plugins
+          emptyDir: {}
+        - name: kubeconfig
+          secret:
+            secretName: headlamp-kubeconfig
+            items:
+              - key: config
+                path: config

@@ -64,6 +64,8 @@ spec:
           env:
             - name: DOCKER_HOST
               value: unix:///var/run/docker.sock
+            - name: PATH
+              value: /opt/tools:/opt/tools/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
           volumeMounts:
             - mountPath: /var/run
               name: docker-sock

@@ -1,31 +1,33 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
+  - flux-system
+  - flux-system/syncs
   - traefik
   - cert-manager
-  - oauth2-proxy
+  # - oauth2-proxy (managed by Flux)
   - cluster-secrets
   - monitoring
-  - home-assistant
-  - ai-services
+  # - home-assistant (managed by Flux)
+  # - ai-services (managed by Flux)
   - gpu-operator
-  - plex
-  - media
-  - vpn
-  - cloudflared
-  - speedtest
-  - local-services
-  - registry
-  # - netalertx
-  # - quotes
-  - headlamp
-  - frigate
-  - mqtt
-  - meshtastic
-  - meshtastic-bot
-  - pihole
+  # - plex (managed by Flux)
+  # - media (managed by Flux)
+  # - vpn (managed by Flux)
+  # - cloudflared (managed by Flux)
+  # - speedtest (managed by Flux)
+  # - local-services (managed by Flux)
+  # - registry (managed by Flux)
+  # - netalertx (managed by Flux)
+  # - quotes (managed by Flux)
+  # - headlamp (managed by Flux)
+  # - frigate (managed by Flux)
+  # - mqtt (managed by Flux)
+  # - meshtastic (managed by Flux)
+  # - meshtastic-bot (managed by Flux)
+  # - pihole (managed by Flux)
+  # - openclaw (managed by Flux)
   - kube-system/coredns-configmap-patch.yaml
   - kube-system/dnsendpoint-openclaw.yaml
-  - renovate
+  # - renovate (managed by Flux)
   - github-runners
-  - openclaw

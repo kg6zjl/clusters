@@ -4,6 +4,7 @@ kind: Kustomization
 namespace: renovate
 
 resources:
+  - network-policy.yaml
   - namespace.yaml
   - external-secrets.yaml
 
