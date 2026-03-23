@@ -13,5 +13,4 @@ spec:
   - name: virtual-node
     port: 4404
     targetPort: 4404
-    nodePort: 31404
-  type: NodePort
+  type: ClusterIP
