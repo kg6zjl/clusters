@@ -23,7 +23,7 @@ dependencies:
   version: 2.7.0
 - name: kube-prometheus-stack
   repository: https://prometheus-community.github.io/helm-charts
-  version: 82.13.0
+  version: 82.13.2
 - name: loki
   repository: https://grafana.github.io/helm-charts
   version: 6.55.0
