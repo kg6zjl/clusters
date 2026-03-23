@@ -4,6 +4,7 @@ kind: Kustomization
 namespace: cloudflared
 
 resources:
+  - dns-egress.yaml
   - namespace.yaml
   - configmap.yaml
   - deployment.yaml

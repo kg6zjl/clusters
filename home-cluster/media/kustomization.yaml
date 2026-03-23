@@ -4,6 +4,7 @@ kind: Kustomization
 namespace: media
 
 resources:
+  - dns-egress.yaml
   - namespace.yaml
   - overseerr.yaml
   - prowlarr.yaml
