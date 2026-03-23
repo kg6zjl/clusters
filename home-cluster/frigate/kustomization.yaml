@@ -4,6 +4,7 @@ kind: Kustomization
 namespace: frigate
 
 resources:
+  - dns-egress.yaml
   - namespace.yaml
   - configmap.yaml
   - deployment.yaml

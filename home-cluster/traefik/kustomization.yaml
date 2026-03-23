@@ -4,6 +4,7 @@ kind: Kustomization
 namespace: traefik
 
 resources:
+  - dns-egress.yaml
   - namespace.yaml
   - dnsendpoint.yaml
   - ingress-dashboard.yaml
