@@ -24,8 +24,8 @@ spec:
   values:
     githubConfigUrl: "https://github.com/kg6zjl/clusters"
     githubConfigSecret: github-runner-secret
-    minReplicas: 2
-    maxReplicas: 5
+    minReplicas: 3
+    maxReplicas: 10
     controllerServiceAccount:
       name: arc-operator-gha-runner-scale-set-controller
       namespace: arc-systems
