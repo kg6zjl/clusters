@@ -2,24 +2,16 @@
 
 ## Task 1: Meshmonitor App Connection (TCP 4404)
 
-**Status**: BLOCKED - needs physical node connection
+**Status**: FIXED - Added network policy rule for Meshtastic node
 
-**Issue**: App stuck in "connecting" phase on port 4404
+**Fix**: Added `ipBlock` rule for 192.168.1.0/24 on ports 4403/4404 in meshtastic network policy
 
-**Findings**:
-- Port 4404 is exposed via Traefik (verified with nc)
-- IngressRouteTCP configured with TLS passthrough
-- MeshMonitor has `ENABLE_VIRTUAL_NODE=true` and `MESHTASTIC_NODE_IP=192.168.1.43`
-- **BUT**: MeshMonitor is NOT connected to physical node (192.168.1.43)
-- Logs show `Reconnection failed: Connection timeout` repeatedly
-- Virtual Node requires MeshMonitor to first connect to physical node on 4403
+**Changes**:
+- `meshtastic/network-policy.yaml` - Added explicit egress to 192.168.1.0/24 for Meshtastic TCP ports
 
-**Required**: Physical Meshtastic node must be reachable at 192.168.1.43
-- Check if node IP changed
-- Check network connectivity from meshmonitor pod to 192.168.1.43:
-  ```bash
-  kubectl exec -n meshtastic deploy/meshmonitor -- nc -zv 192.168.1.43 4403
-  ```
+**Verification**:
+- meshmonitor now connects to physical node (logs show `Received GetConfigResponse`)
+- Try connecting the app to `meshmonitor.kube.stevearnett.com:4404`
 
 ---
 
@@ -77,6 +69,7 @@
 2. **#290** - fix/traefik-runners
    - RunnerDeployment for GitHub runners
    - Traefik helmrelease fix
+   - MeshMonitor network policy fix (ipBlock for 192.168.1.0/24)
 
 3. **#288** - docs/network-policy-debugging
    - AGENTS.md network policy checklist
@@ -92,3 +85,4 @@ These need to be committed or the next flux sync will revert:
 1. **Traefik service port 4404**: Manually patched service to add port 4404
 2. **controller-manager secret**: Manually created in arc-systems
 3. **Webhook deletions**: Deleted webhook configs in github-runners namespace
+4. **MeshMonitor network policy**: Added ipBlock for 192.168.1.0/24
