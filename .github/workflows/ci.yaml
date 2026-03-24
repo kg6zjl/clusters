@@ -40,7 +40,9 @@ jobs:
       - name: Install kustomize
         run: |
           curl -s "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh" | bash
+          mkdir -p /opt/tools/bin
           mv kustomize /opt/tools/bin/
+          export PATH="/opt/tools/bin:$PATH"
 
       - name: Validate Kustomize
         run: |
