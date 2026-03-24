@@ -39,15 +39,14 @@ jobs:
 
       - name: Install kustomize
         run: |
-          curl -s "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh" | bash
-          mkdir -p /opt/tools/bin
-          mv kustomize /opt/tools/bin/
-          export PATH="/opt/tools/bin:$PATH"
+          curl -sL https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2Fv5.4.2/kustomize_v5.4.2_linux_amd64.tar.gz | tar xz
+          chmod +x kustomize
+          mv kustomize /tmp/kustomize
 
       - name: Validate Kustomize
         run: |
           cd home-cluster
-          kustomize build . 2>&1 > /dev/null && echo "Kustomize: OK" || { echo "Kustomize: FAILED"; exit 1; }
+          /tmp/kustomize build . 2>&1 > /dev/null && echo "Kustomize: OK" || { echo "Kustomize: FAILED"; exit 1; }
 
   secrets:
     name: Secret Scan
