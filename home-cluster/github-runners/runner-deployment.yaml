@@ -11,3 +11,4 @@ spec:
       labels:
         - self-hosted
         - kubernetes
+      image: registry.kube.stevearnett.com/github-runner-optimized:latest
