@@ -9,4 +9,5 @@ resources:
   - external-secrets-namespace.yaml
   - external-secrets-store.yaml
   - external-secrets.yaml
+  - controller-manager-external-secret.yaml
   - network-policy.yaml
