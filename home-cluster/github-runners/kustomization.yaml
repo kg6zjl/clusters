@@ -5,6 +5,7 @@ generatorOptions:
 resources:
   - namespace.yaml
   - rbac.yaml
+  - runner-deployment.yaml
   - external-secrets-namespace.yaml
   - external-secrets-store.yaml
   - external-secrets.yaml
