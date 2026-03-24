@@ -230,6 +230,13 @@ envFrom:
 
 ## Security Guidelines
 
+### NEVER Print Secrets to Console
+
+Do NOT echo, print, or log secrets, tokens, or credentials to the console. If debugging requires checking a secret:
+- Use `kubectl get secret <name> -o jsonpath='...'` without printing the value
+- Or describe the resource and redact any sensitive values
+- If a secret must be displayed (e.g., for debugging), redact all but the first/last few characters
+
 ### Secrets are in 1Password
 
 All secrets are stored in the 1Password `home-cluster` vault and synced to Kubernetes via ESO. Do NOT:
