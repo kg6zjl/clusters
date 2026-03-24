@@ -40,7 +40,7 @@ jobs:
       - name: Install kustomize
         run: |
           curl -s "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh" | bash
-          mv kustomize /usr/local/bin/
+          mv kustomize /opt/tools/bin/
 
       - name: Validate Kustomize
         run: |
