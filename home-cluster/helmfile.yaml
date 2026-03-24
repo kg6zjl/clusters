@@ -383,34 +383,6 @@ releases:
         claimSecret:
           name: plex-claim-secret
           key: PLEX_CLAIM
-  - name: renovate
-    namespace: renovate
-    chart: renovate/renovate
-    version: 46.79.2
-    values:
-      - cronjob:
-          schedule: "0 * * * *"  # Run every hour
-        renovate:
-          config: |
-            {
-              "platform": "github",
-              "gitAuthor": "Renovate Bot <kg6zjl@users.noreply.github.com>",
-              "repositories": ["kg6zjl/clusters"],
-              "baseBranches": ["main"],
-              "onboarding": false,
-              "requireConfig": "optional",
-              "enabledManagers": ["helmfile", "kubernetes", "helm-values"],
-              "helmfile": {
-                "fileMatch": ["helmfile\\.yaml$"]
-              },
-              "constraints": {
-                "helm": "^3.15.0"
-              }
-            }
-        existingSecret: renovate-github-token
-        env:
-          - name: LOG_LEVEL
-            value: "info"
   - name: traefik
     namespace: traefik
     chart: traefik/traefik
@@ -477,69 +449,6 @@ releases:
           enabled: true
           serviceMonitor:
             enabled: true
-  - name: loki
-    namespace: monitoring
-    chart: grafana/loki
-    version: 6.55.0
-    values:
-      - deploymentMode: SingleBinary
-        loki:
-          auth_enabled: false
-          commonConfig:
-            replication_factor: 1
-          storage:
-            type: filesystem
-          limits_config:
-            retention_period: 240h
-          compactor:
-            retention_enabled: true
-            delete_request_store: filesystem
-          schemaConfig:
-            configs:
-              - from: 2024-01-01
-                store: tsdb
-                object_store: filesystem
-                schema: v13
-                index:
-                  prefix: loki_index_
-                  period: 24h
-        singleBinary:
-          replicas: 1
-          persistence:
-            enabled: true
-            size: 10Gi
-        backend:
-          replicas: 0
-        read:
-          replicas: 0
-        write:
-          replicas: 0
-        chunksCache:
-          enabled: false
-        resultsCache:
-          enabled: false
-        sidecar:
-          enabled: false
-          skipTlsVerify: true
-  - name: promtail
-    namespace: monitoring
-    chart: grafana/promtail
-    version: 6.17.1
-    values:
-      - config:
-          clients:
-            - url: http://loki:3100/loki/api/v1/push
-  - name: blackbox-exporter
-    namespace: monitoring
-    chart: prometheus-community/prometheus-blackbox-exporter
-    version: 9.2.0
-    values:
-      - config:
-          modules:
-            http_2xx:
-              prober: http
-              http:
-                follow_redirects: true
   - name: pihole
     namespace: pihole
     chart: pihole-v6/pihole
@@ -634,47 +543,6 @@ releases:
             cpu: 100m
           limits:
             memory: 512Mi
-  - name: gpu-operator
-    namespace: gpu-operator
-    chart: nvidia/gpu-operator
-    version: v26.3.0
-    values:
-      - operator:
-          defaultRuntime: containerd
-        driver:
-          enabled: false  # Use pre-installed NVIDIA drivers
-        toolkit:
-          enabled: true
-          env:
-            - name: CONTAINERD_CONFIG
-              value: /var/snap/microk8s/current/args/containerd-template.toml
-            - name: CONTAINERD_SOCKET
-              value: /var/snap/microk8s/common/run/containerd.sock
-            - name: CONTAINERD_RUNTIME_CLASS
-              value: nvidia
-            - name: CONTAINERD_SET_AS_DEFAULT
-              value: "true"
-        devicePlugin:
-          config:
-            name: gpu-time-slicing
-            default: any
-
-  - name: spegel
-    namespace: spegel
-    chart: oci://ghcr.io/spegel-org/helm-charts/spegel
-    version: 0.6.0
-    values:
-      - spegel:
-          containerdSock: /var/snap/microk8s/common/run/containerd.sock
-          containerdRegistryConfigPath: /var/snap/microk8s/current/args/certs.d
-          containerdContentPath: /var/snap/microk8s/common/var/lib/containerd/io.containerd.content.v1.content
-          containerdMirrorAdd: true
-          mirroredRegistries:
-            - https://docker.io
-            - https://ghcr.io
-            - https://quay.io
-          additionalMirrorTargets:
-            - https://registry.kube.stevearnett.com
   - name: actions-runner-controller
     namespace: github-runners
     chart: actions-runner-controller/actions-runner-controller
