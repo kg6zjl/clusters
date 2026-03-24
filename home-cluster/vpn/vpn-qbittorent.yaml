@@ -47,13 +47,23 @@ spec:
         image: busybox:1.36
         securityContext:
           privileged: true
-        command: ['sh', '-c', 'mkdir -p /config/qBittorrent']  # && cp /config-init/qBittorrent.conf /config/qBittorrent/qBittorrent.conf || true']
+        command: ['sh', '-c', 'mkdir -p /config/qBittorrent']
         volumeMounts:
         - name: config
           mountPath: /config
         - name: config-init
           mountPath: /config-init
-
+      - name: setup-ovpn
+        image: busybox:1.36
+        command:
+          - sh
+          - -c
+          - |
+            FILENAME=$(cat /etc/ovpn-secret/filename)
+            cp /etc/ovpn-secret/$FILENAME /etc/ovpn-secret/custom.ovpn
+        volumeMounts:
+        - name: expressvpn-ovpn
+          mountPath: /etc/ovpn-secret
       containers:
       - name: gluetun
         image: qmcgaw/gluetun:latest
@@ -75,7 +85,7 @@ spec:
         - name: VPN_TYPE
           value: openvpn
         - name: OPENVPN_CUSTOM_CONFIG
-          value: /gluetun/my_expressvpn_usa_-_seattle_udp.ovpn
+          value: /etc/ovpn-secret/custom.ovpn
         - name: OPENVPN_USER
           valueFrom:
             secretKeyRef:
@@ -107,8 +117,7 @@ spec:
         - name: downloads
           mountPath: /downloads
         - name: expressvpn-ovpn
-          mountPath: /gluetun/my_expressvpn_usa_-_seattle_udp.ovpn
-          subPath: my_expressvpn_usa_-_seattle_udp.ovpn
+          mountPath: /etc/ovpn-secret
           readOnly: true
       - name: qbittorrent
         image: linuxserver/qbittorrent:latest
@@ -152,9 +161,6 @@ spec:
       - name: expressvpn-ovpn
         secret:
           secretName: expressvpn-ovpn
-          items:
-            - key: my_expressvpn_usa_-_seattle_udp.ovpn
-              path: my_expressvpn_usa_-_seattle_udp.ovpn
 ---
 apiVersion: v1
 kind: ConfigMap
