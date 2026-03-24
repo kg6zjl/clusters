@@ -57,6 +57,59 @@ kubectl describe <resource> -n <namespace>
 kubectl get secret wildcard-stevearnett-com-tls -n cert-manager -o jsonpath='{.data.tls\.crt}' | base64 -d | openssl x509 -noout -dates
 ```
 
+### Debugging Network Policies and RBAC (IMPORTANT)
+
+**This cluster uses default-deny NetworkPolicies.** Most connectivity issues stem from missing egress/ingress rules.
+
+```bash
+# Check if namespace has a NetworkPolicy
+kubectl get networkpolicy -n <namespace>
+
+# View NetworkPolicy details
+kubectl get networkpolicy -n <namespace> -o yaml
+
+# Check RBAC (ServiceAccount, Role, RoleBinding)
+kubectl get sa -n <namespace>
+kubectl get role,rolebinding -n <namespace>
+kubectl auth can-i get pods --as=system:serviceaccount:<namespace>:<sa-name>
+```
+
+**Common fixes:**
+- Pod can't reach API server: Allow egress to `kube-system` namespace (contains API server endpoint)
+- Pod can't reach external service: Allow egress to port 443/80 in NetworkPolicy
+- Pod can't be reached: Allow ingress from `traefik` namespace for ingress access
+- Permission denied: Check ServiceAccount and RBAC bindings
+
+---
+
+### Network Policy Checklist (IMPORTANT)
+
+**This cluster uses default-deny NetworkPolicies.** Before adding a new namespace or troubleshooting connectivity, always answer:
+
+1. **Internal Egress** - What namespaces does this pod need to reach inside the cluster?
+   - `default` - Kubernetes API server endpoint (kubernetes.default.svc)
+   - `kube-system` - DNS, API server components
+   - Other service namespaces (databases, message queues, etc.)
+
+2. **External Egress** - What does this pod need outside the cluster?
+   - DNS: port 53 (UDP + TCP)
+   - HTTPS: port 443 (for external APIs, registries)
+   - HTTP: port 80 (if needed)
+
+3. **Ingress** - What needs to reach this pod?
+   - `traefik` - For ingress access via Traefik
+   - Other internal namespaces that call this service
+
+**Example minimal egress for a pod that calls the K8s API:**
+```yaml
+egress:
+  - ports: [{port: 443, protocol: TCP}]
+    to: [{namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: default}}}]
+  - ports: [{port: 53, protocol: UDP}, {port: 53, protocol: TCP}]
+    to: [{namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: kube-system}}}]
+  - {}  # Allow all other egress (or be more specific)
+```
+
 ---
 
 ## Code Style Guidelines
