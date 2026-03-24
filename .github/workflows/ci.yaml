@@ -37,6 +37,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
+      - name: Install kustomize
+        run: |
+          curl -s "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh" | bash
+          mv kustomize /usr/local/bin/
+
       - name: Validate Kustomize
         run: |
           cd home-cluster
