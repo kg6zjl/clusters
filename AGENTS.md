@@ -11,6 +11,8 @@ This is a **single-node Kubernetes home lab cluster** running on an AMD-based Ac
 - **Config management**: Kustomize (manifests) + Helmfile (Helm releases)
 - **Cluster scope**: Home / self-hosted, not production SaaS
 
+**Cluster topology**: See [TOPOLOGY.md](documentation/TOPOLOGY.md) for complete endpoint list, dependency graphs, and machine-readable data.
+
 ---
 
 ## Build, Lint, and Apply Commands

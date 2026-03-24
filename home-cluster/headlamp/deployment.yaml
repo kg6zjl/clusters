@@ -34,9 +34,6 @@ spec:
           image: ghcr.io/headlamp-k8s/headlamp:latest
           args:
             - -plugins-dir=/headlamp/plugins
-          env:
-            - name: KUBECONFIG
-              value: /home/headlamp/.kube/config
           ports:
             - containerPort: 4466
               name: http
@@ -58,15 +55,6 @@ spec:
           volumeMounts:
             - name: plugins
               mountPath: /headlamp/plugins
-            - name: kubeconfig
-              mountPath: /home/headlamp/.kube
-              readOnly: true
       volumes:
         - name: plugins
           emptyDir: {}
-        - name: kubeconfig
-          secret:
-            secretName: headlamp-kubeconfig
-            items:
-              - key: config
-                path: config
