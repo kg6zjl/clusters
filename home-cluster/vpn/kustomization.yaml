@@ -8,6 +8,7 @@ resources:
   - vpn-qbittorent.yaml
   - ingress-qbittorrent.yaml
   - external-secrets.yaml
+  - external-secrets-ovpn.yaml
 
 generatorOptions:
   disableNameSuffixHash: true
