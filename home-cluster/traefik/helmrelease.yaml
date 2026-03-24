@@ -24,9 +24,20 @@ spec:
       meshmonitor-tcp:
         port: 4404
         exposedPort: 4404
-        protocol: tcp
+        protocol: TCP
     service:
       type: LoadBalancer
+      spec:
+        ports:
+          - name: web
+            port: 80
+            targetPort: web
+          - name: websecure
+            port: 443
+            targetPort: websecure
+          - name: meshmonitor-tcp
+            port: 4404
+            targetPort: meshmonitor-tcp
     ingressRoute:
       dashboard:
         enabled: true
