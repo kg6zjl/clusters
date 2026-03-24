@@ -9,24 +9,7 @@ spec:
   - Ingress
   - Egress
   egress:
-  - to:
-    - namespaceSelector: {}
-      podSelector: {}
-  - to:
-    - ipBlock:
-        cidr: 10.0.0.0/8
-    ports:
-    - protocol: TCP
-      ports:
-      - 443
-      - 80
-      - 53
-  - to:
-    - ipBlock:
-        cidr: 0.0.0.0/0
-    ports:
-    - protocol: TCP
-      port: 443
+  - {}
   ingress:
   - from:
     - namespaceSelector: {}
