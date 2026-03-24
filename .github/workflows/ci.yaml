@@ -32,7 +32,7 @@ jobs:
 
   validate:
     name: Validate
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     env:
       PATH: /opt/tools/bin:/opt/tools:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
       PYTHONPATH: /opt/tools/bin
@@ -56,17 +56,21 @@ jobs:
 
   secrets:
     name: Secret Scan
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
+      - name: Install Gitleaks
+        run: |
+          curl -sSfL https://github.com/gitleaks/gitleaks/releases/download/v8.18.2/gitleaks_8.18.2_linux_x64.tar.gz | tar -zxf - -C /tmp
+          sudo mv /tmp/gitleaks /usr/local/bin/
+
       - name: Run Gitleaks
         run: |
-          export PYTHONPATH=/opt/tools/bin
-          /opt/tools/gitleaks protect --source . --exit-code 1
+          gitleaks protect --source . --exit-code 1
 
       - name: Run Trufflehog
         uses: trufflesecurity/trufflehog@main
