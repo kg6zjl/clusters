@@ -75,7 +75,7 @@ spec:
         - name: VPN_TYPE
           value: openvpn
         - name: OPENVPN_CUSTOM_CONFIG
-          value: /gluetun/expressvpn.ovpn
+          value: /gluetun/my_expressvpn_usa_-_seattle_udp.ovpn
         - name: OPENVPN_USER
           valueFrom:
             secretKeyRef:
@@ -107,8 +107,8 @@ spec:
         - name: downloads
           mountPath: /downloads
         - name: expressvpn-ovpn
-          mountPath: /gluetun/expressvpn.ovpn
-          subPath: expressvpn.ovpn
+          mountPath: /gluetun/my_expressvpn_usa_-_seattle_udp.ovpn
+          subPath: my_expressvpn_usa_-_seattle_udp.ovpn
           readOnly: true
       - name: qbittorrent
         image: linuxserver/qbittorrent:latest
@@ -153,8 +153,8 @@ spec:
         secret:
           secretName: expressvpn-ovpn
           items:
-            - key: expressvpn.ovpn
-              path: expressvpn.ovpn
+            - key: my_expressvpn_usa_-_seattle_udp.ovpn
+              path: my_expressvpn_usa_-_seattle_udp.ovpn
 ---
 apiVersion: v1
 kind: ConfigMap
