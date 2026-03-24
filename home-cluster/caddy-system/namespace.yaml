@@ -1,6 +1,0 @@
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: caddy-system
-  labels:
-    kubernetes.io/metadata.name: caddy-system
