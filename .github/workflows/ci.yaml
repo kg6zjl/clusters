@@ -57,11 +57,6 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Run Gitleaks
-        run: |
-          go install github.com/gitleaks/gitleaks/v8@latest
-          ~/go/bin/gitleaks protect --source . --exit-code 1
-
       - name: Run Trufflehog
         uses: trufflesecurity/trufflehog@main
         with:
