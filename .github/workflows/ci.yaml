@@ -33,26 +33,20 @@ jobs:
   validate:
     name: Validate
     runs-on: self-hosted
-    env:
-      PATH: /opt/tools/bin:/opt/tools:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-      PYTHONPATH: /opt/tools/bin
     steps:
       - name: Checkout
         uses: actions/checkout@v6
 
-      - name: Generate dockerconfigjson
-        timeout-minutes: 1
+      - name: Install kustomize
         run: |
-          REGISTRY_PASS=$(kubectl get secret registry-secrets -n registry -o jsonpath='{.data.REGISTRY_PASSWORD}' | base64 -d)
-          REGISTRY_USER=$(kubectl get secret registry-secrets -n registry -o jsonpath='{.data.htpasswd}' | base64 -d | cut -d: -f1)
-          AUTH=$(echo -n "$REGISTRY_USER:$REGISTRY_PASS" | base64)
-          mkdir -p home-cluster/cluster-secrets
-          echo "{\"auths\":{\"registry.kube.stevearnett.com\":{\"username\":\"$REGISTRY_USER\",\"password\":\"$REGISTRY_PASS\",\"auth\":\"$AUTH\"}}}" > home-cluster/cluster-secrets/.dockerconfigjson
+          curl -sL https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2Fv5.4.2/kustomize_v5.4.2_linux_amd64.tar.gz | tar xz
+          chmod +x kustomize
+          mv kustomize /tmp/kustomize
 
       - name: Validate Kustomize
         run: |
           cd home-cluster
-          kubectl kustomize . 2>&1 > /dev/null && echo "Kustomize: OK" || { echo "Kustomize: FAILED"; exit 1; }
+          /tmp/kustomize build . 2>&1 > /dev/null && echo "Kustomize: OK" || { echo "Kustomize: FAILED"; exit 1; }
 
   secrets:
     name: Secret Scan
@@ -62,11 +56,6 @@ jobs:
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
-
-      - name: Run Gitleaks
-        run: |
-          export PYTHONPATH=/opt/tools/bin
-          /opt/tools/gitleaks protect --source . --exit-code 1
 
       - name: Run Trufflehog
         uses: trufflesecurity/trufflehog@main

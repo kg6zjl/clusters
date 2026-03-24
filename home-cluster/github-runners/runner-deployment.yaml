@@ -12,3 +12,14 @@ spec:
         - self-hosted
         - kubernetes
       image: registry.kube.stevearnett.com/github-runner-optimized:latest
+      env:
+        - name: REGISTRY_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: registry-auth
+              key: REGISTRY_PASSWORD
+        - name: REGISTRY_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: registry-auth
+              key: REGISTRY_USERNAME

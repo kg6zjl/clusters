@@ -34,6 +34,5 @@ resources:
   - clustersecret-kustomization.yaml
   - gpu-operator-kustomization.yaml
   - metallb-system-kustomization.yaml
-  - caddy-system-kustomization.yaml
   - github-runners-kustomization.yaml
   - arc-kustomization.yaml

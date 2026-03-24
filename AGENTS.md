@@ -325,18 +325,37 @@ Use `192.168.1.0/24` to cover all ranges.
 
 ## CI/CD Notes
 
+### Self-Hosted Runners
+
+- All CI workflows use **self-hosted runners** (no GitHub-hosted runners)
+- Secrets are mounted into runner pods via ESO, not GitHub secrets
+- Runner pods automatically have access to mounted secrets as environment variables
+
 ### Image Building
 
 - **Use `docker/build-push-action` for building and pushing images** - NOT kaniko (kaniko is deprecated/archived)
 - Image registry: `registry.kube.stevearnett.com`
-- Registry credentials:
-  - Secret: `registry-auth` in `registry` namespace
-  - Keys: `htpasswd` (contains `username:password`), `REGISTRY_PASSWORD`
-  - Extract username from htpasswd: `echo "$HTPASSWD" | cut -d: -f1`
-- Authentication: Use `docker login` with `--password-stdin`:
+- **No GitHub secrets needed** - secrets are mounted from ESO into the runner pod
+- Secrets must be added to ESO in the `github-runners` namespace
+- Authentication in workflow:
   ```bash
-  echo "$REGISTRY_PASS" | docker login $REGISTRY -u "$REGISTRY_USER" --password-stdin
+  echo "$REGISTRY_PASSWORD" | docker login $REGISTRY -u "$REGISTRY_USERNAME" --password-stdin
   ```
+
+### Adding Secrets to Runners
+
+For a new secret needed by CI workflows:
+1. Add the secret to 1Password `home-cluster` vault
+2. Create/update ESO in `github-runners` namespace
+3. Update RunnerDeployment to mount the secret:
+   ```yaml
+   env:
+     - name: SECRET_NAME
+       valueFrom:
+         secretKeyRef:
+           name: my-secret
+           key: SECRET_KEY
+   ```
 
 ### Runner Tools
 
@@ -349,6 +368,7 @@ The self-hosted runner has these tools installed via init container:
 ### Build Workflow Pattern
 
 For meshtastic-bot-style builds:
-1. `docker/login-action@v3` or `docker login` for registry auth
-2. `docker/setup-buildx-action@v3` for buildx
-3. `docker/build-push-action@v6` for building and pushing
+1. Secrets are already mounted - no auth setup needed
+2. `docker/login-action@v3` or `docker login` for registry auth
+3. `docker/setup-buildx-action@v3` for buildx
+4. `docker/build-push-action@v6` for building and pushing
