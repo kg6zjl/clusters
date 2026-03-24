@@ -14,7 +14,7 @@ on:
 jobs:
   lint:
     name: Lint
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -32,22 +32,10 @@ jobs:
 
   validate:
     name: Validate
-    runs-on: ubuntu-latest
-    env:
-      PATH: /opt/tools/bin:/opt/tools:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-      PYTHONPATH: /opt/tools/bin
+    runs-on: self-hosted
     steps:
       - name: Checkout
         uses: actions/checkout@v6
-
-      - name: Generate dockerconfigjson
-        timeout-minutes: 1
-        run: |
-          REGISTRY_PASS=$(kubectl get secret registry-secrets -n registry -o jsonpath='{.data.REGISTRY_PASSWORD}' | base64 -d)
-          REGISTRY_USER=$(kubectl get secret registry-secrets -n registry -o jsonpath='{.data.htpasswd}' | base64 -d | cut -d: -f1)
-          AUTH=$(echo -n "$REGISTRY_USER:$REGISTRY_PASS" | base64)
-          mkdir -p home-cluster/cluster-secrets
-          echo "{\"auths\":{\"registry.kube.stevearnett.com\":{\"username\":\"$REGISTRY_USER\",\"password\":\"$REGISTRY_PASS\",\"auth\":\"$AUTH\"}}}" > home-cluster/cluster-secrets/.dockerconfigjson
 
       - name: Validate Kustomize
         run: |
@@ -56,21 +44,16 @@ jobs:
 
   secrets:
     name: Secret Scan
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     steps:
       - name: Checkout
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
-      - name: Install Gitleaks
-        run: |
-          curl -sSfL https://github.com/gitleaks/gitleaks/releases/download/v8.18.2/gitleaks_8.18.2_linux_x64.tar.gz | tar -zxf - -C /tmp
-          sudo mv /tmp/gitleaks /usr/local/bin/
-
       - name: Run Gitleaks
         run: |
-          gitleaks protect --source . --exit-code 1
+          /opt/tools/gitleaks protect --source . --exit-code 1
 
       - name: Run Trufflehog
         uses: trufflesecurity/trufflehog@main
