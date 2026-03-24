@@ -4,3 +4,4 @@ resources:
   - namespace.yaml
   - time-slicing.yaml
   - network-policy.yaml
+  - helmrelease.yaml

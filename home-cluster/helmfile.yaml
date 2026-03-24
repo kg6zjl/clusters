@@ -543,31 +543,6 @@ releases:
             cpu: 100m
           limits:
             memory: 512Mi
-  - name: gpu-operator
-    namespace: gpu-operator
-    chart: nvidia/gpu-operator
-    version: v26.3.0
-    values:
-      - operator:
-          defaultRuntime: containerd
-        driver:
-          enabled: false  # Use pre-installed NVIDIA drivers
-        toolkit:
-          enabled: true
-          env:
-            - name: CONTAINERD_CONFIG
-              value: /var/snap/microk8s/current/args/containerd-template.toml
-            - name: CONTAINERD_SOCKET
-              value: /var/snap/microk8s/common/run/containerd.sock
-            - name: CONTAINERD_RUNTIME_CLASS
-              value: nvidia
-            - name: CONTAINERD_SET_AS_DEFAULT
-              value: "true"
-        devicePlugin:
-          config:
-            name: gpu-time-slicing
-            default: any
-
   - name: actions-runner-controller
     namespace: github-runners
     chart: actions-runner-controller/actions-runner-controller
