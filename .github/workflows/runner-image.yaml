@@ -22,7 +22,7 @@ jobs:
 
       - name: Configure Docker auth
         run: |
-          echo "${{ secrets.REGISTRY_PASSWORD }}" | docker login ${{ env.REGISTRY }} -u "${{ secrets.REGISTRY_USERNAME }}" --password-stdin
+          echo "$REGISTRY_PASSWORD" | docker login ${{ env.REGISTRY }} -u "$REGISTRY_USERNAME" --password-stdin
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
