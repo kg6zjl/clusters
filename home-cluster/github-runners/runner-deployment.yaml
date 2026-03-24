@@ -13,3 +13,35 @@ spec:
         - self-hosted
         - kubernetes
       image: summerwind/actions-runner:latest
+      initContainers:
+        - name: install-tools
+          image: ghcr.io/onedr0p/task:latest
+          command:
+            - sh
+            - -c
+            - |
+              mkdir -p /opt/tools/bin
+              curl -sL https://dl.k8s.io/release/$(curl -sL https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl -o /usr/local/bin/kubectl
+              chmod +x /usr/local/bin/kubectl
+              curl -sL https://get.helmfile.dev | sh
+              mv helmfile /opt/tools/bin/
+              pip3 install yamllint
+          volumeMounts:
+            - name: tools
+              mountPath: /opt/tools/bin
+            - name: usr-local
+              mountPath: /usr/local/bin
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+      containers:
+        - name: runner
+          volumeMounts:
+            - name: tools
+              mountPath: /opt/tools/bin
+      volumes:
+        - name: tools
+          emptyDir: {}
+        - name: usr-local
+          emptyDir: {}
