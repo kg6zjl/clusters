@@ -73,7 +73,7 @@ releases:
   - name: oauth2-proxy
     namespace: auth
     chart: oauth2-proxy/oauth2-proxy
-    version: 10.1.5
+    version: 10.3.0
     values:
       - config:
           existingSecret: oauth2-proxy-secret
@@ -116,7 +116,7 @@ releases:
   - name: oauth2-proxy-quotes
     namespace: quotes
     chart: oauth2-proxy/oauth2-proxy
-    version: 10.1.5
+    version: 10.3.0
     installed: false
     values:
       - config:
@@ -160,7 +160,7 @@ releases:
   - name: oauth2-proxy-headlamp
     namespace: headlamp
     chart: oauth2-proxy/oauth2-proxy
-    version: 10.1.5
+    version: 10.3.0
     values:
       - config:
           existingSecret: oauth2-proxy-secret
