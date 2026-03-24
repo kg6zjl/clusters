@@ -4,3 +4,8 @@ NOTES.md
 .DS_Store
 onepassword.env
 home-cluster/home-cluster/
+*.pem
+*.crt
+*.key
+*.p12
+*.pfx

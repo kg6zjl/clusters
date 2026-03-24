@@ -245,6 +245,10 @@ The `.env` files that exist are for local development only (e.g., `github-runner
 
 All `.env*` files and `.dockerconfigjson` are gitignored. Do not override this.
 
+**ALWAYS check for sensitive files before committing:**
+- Certificates: `*.pem`, `*.crt`, `*.key`, `*.p12`, `*.pfx`
+- If sensitive files are accidentally committed, they must be **immediately rotated** as compromised
+
 ### Checking for Leaked Secrets
 
 Before committing, run:

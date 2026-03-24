@@ -3,10 +3,8 @@ kind: Kustomization
 generatorOptions:
   disableNameSuffixHash: true
 resources:
-  - namespace.yaml
   - rbac.yaml
   - runner-deployment.yaml
-  - external-secrets-namespace.yaml
   - external-secrets-store.yaml
   - external-secrets.yaml
   - controller-manager-external-secret.yaml
