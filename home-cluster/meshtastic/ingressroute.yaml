@@ -35,3 +35,5 @@ spec:
         - name: meshmonitor
           port: 4404
           terminationDelay: 0
+  tls:
+    passthrough: true

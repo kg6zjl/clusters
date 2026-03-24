@@ -18,4 +18,5 @@ spec:
   upgrade:
     remediation:
       retries: 3
-  values: {}
+  values:
+    certManagerEnabled: false
