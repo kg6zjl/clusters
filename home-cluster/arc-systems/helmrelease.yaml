@@ -20,3 +20,6 @@ spec:
       retries: 3
   values:
     certManagerEnabled: false
+    githubTokenSecretRef:
+      name: controller-manager
+      key: github_token
