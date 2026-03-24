@@ -40,7 +40,7 @@ jobs:
       - name: Validate Kustomize
         run: |
           cd home-cluster
-          kubectl kustomize . 2>&1 > /dev/null && echo "Kustomize: OK" || { echo "Kustomize: FAILED"; exit 1; }
+          kustomize build . 2>&1 > /dev/null && echo "Kustomize: OK" || { echo "Kustomize: FAILED"; exit 1; }
 
   secrets:
     name: Secret Scan
