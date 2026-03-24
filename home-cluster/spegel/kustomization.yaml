@@ -3,3 +3,4 @@ kind: Kustomization
 resources:
   - namespace.yaml
   - network-policy.yaml
+  - helmrelease.yaml

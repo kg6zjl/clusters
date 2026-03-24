@@ -596,22 +596,6 @@ releases:
             name: gpu-time-slicing
             default: any
 
-  - name: spegel
-    namespace: spegel
-    chart: oci://ghcr.io/spegel-org/helm-charts/spegel
-    version: 0.6.0
-    values:
-      - spegel:
-          containerdSock: /var/snap/microk8s/common/run/containerd.sock
-          containerdRegistryConfigPath: /var/snap/microk8s/current/args/certs.d
-          containerdContentPath: /var/snap/microk8s/common/var/lib/containerd/io.containerd.content.v1.content
-          containerdMirrorAdd: true
-          mirroredRegistries:
-            - https://docker.io
-            - https://ghcr.io
-            - https://quay.io
-          additionalMirrorTargets:
-            - https://registry.kube.stevearnett.com
   - name: actions-runner-controller
     namespace: github-runners
     chart: actions-runner-controller/actions-runner-controller
