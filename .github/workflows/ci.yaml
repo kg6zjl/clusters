@@ -59,7 +59,7 @@ jobs:
 
       - name: Run Gitleaks
         run: |
-          curl -sSfL https://github.com/gitleaks/gitleaks/releases/download/v8.18.2/gitleaks_8.18.2_linux_amd64.tar.gz | tar -zxf - -C /tmp
+          curl -sSfL https://github.com/gitleaks/gitleaks/releases/download/v8.21.2/gitleaks_8.21.2_linux_amd64.tar.gz | tar -zxf - -C /tmp
           chmod +x /tmp/gitleaks
           /tmp/gitleaks protect --source . --exit-code 1
 
