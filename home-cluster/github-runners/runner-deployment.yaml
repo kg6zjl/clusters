@@ -1,0 +1,13 @@
+apiVersion: actions.summerwind.dev/v1alpha1
+kind: RunnerDeployment
+metadata:
+  name: github-runner
+  namespace: github-runners
+spec:
+  replicas: 2
+  template:
+    spec:
+      repository: kg6zjl/clusters
+      labels:
+        - self-hosted
+        - kubernetes
