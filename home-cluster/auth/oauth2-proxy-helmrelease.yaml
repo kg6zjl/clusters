@@ -12,7 +12,7 @@ spec:
       sourceRef:
         kind: HelmRepository
         name: oauth2-proxy
-        namespace: flux-system
+        namespace: auth
   install:
     createNamespace: true
   upgrade:

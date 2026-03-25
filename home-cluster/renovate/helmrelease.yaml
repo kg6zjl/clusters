@@ -12,7 +12,7 @@ spec:
       sourceRef:
         kind: HelmRepository
         name: renovate
-        namespace: flux-system
+        namespace: renovate
   values:
     cronjob:
       schedule: "0 * * * *"

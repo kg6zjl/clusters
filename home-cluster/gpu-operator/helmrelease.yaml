@@ -12,7 +12,7 @@ spec:
       sourceRef:
         kind: HelmRepository
         name: nvidia
-        namespace: flux-system
+        namespace: gpu-operator
   values:
     operator:
       defaultRuntime: containerd

@@ -11,7 +11,7 @@ spec:
       sourceRef:
         kind: HelmRepository
         name: spegel
-        namespace: flux-system
+        namespace: spegel
       version: 0.6.0
   values:
     spegel:

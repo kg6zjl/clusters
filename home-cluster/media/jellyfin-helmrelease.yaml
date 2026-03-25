@@ -12,7 +12,7 @@ spec:
       sourceRef:
         kind: HelmRepository
         name: jellyfin
-        namespace: flux-system
+        namespace: media
   install:
     createNamespace: true
   upgrade:
