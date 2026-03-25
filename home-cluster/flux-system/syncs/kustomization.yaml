@@ -10,6 +10,11 @@ resources:
   - external-dns-helmrepository.yaml
   - pihole-helmrepository.yaml
   - plexinc-helmrepository.yaml
+  - actions-runner-controller-helmrepository.yaml
+  - external-secrets-helmrepository.yaml
+  - nvidia-helmrepository.yaml
+  - renovate-helmrepository.yaml
+  - spegel-helmrepository.yaml
   - traefik-kustomization.yaml
   - cert-manager-kustomization.yaml
   - netalertx-kustomization.yaml
