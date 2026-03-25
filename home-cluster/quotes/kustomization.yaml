@@ -6,6 +6,7 @@ namespace: quotes
 resources:
   - network-policy.yaml
   - namespace.yaml
+  - oauth2-proxy-helmrelease.yaml
   - configmap.yaml
   - deployment.yaml
   - service.yaml
