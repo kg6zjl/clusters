@@ -3,19 +3,6 @@ kind: Kustomization
 namespace: flux-system
 resources:
   - clusters-gitrepository.yaml
-  - jellyfin-helmrepository.yaml
-  - external-dns-helmrepository.yaml
-  - pihole-helmrepository.yaml
-  - plexinc-helmrepository.yaml
-  - external-secrets-helmrepository.yaml
-  - nvidia-helmrepository.yaml
-  - renovate-helmrepository.yaml
-  - spegel-helmrepository.yaml
-  - emberstack-helmrepository.yaml
-  - stakater-helmrepository.yaml
-  - metrics-server-helmrepository.yaml
-  - oauth2-proxy-helmrepository.yaml
-  - csi-driver-smb-helmrepository.yaml
   - traefik-kustomization.yaml
   - cert-manager-kustomization.yaml
   - netalertx-kustomization.yaml
