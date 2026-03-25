@@ -12,7 +12,7 @@ spec:
       sourceRef:
         kind: HelmRepository
         name: pihole
-        namespace: flux-system
+        namespace: pihole
   install:
     createNamespace: true
   upgrade:
