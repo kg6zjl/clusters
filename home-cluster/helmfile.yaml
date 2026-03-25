@@ -1,6 +1,0 @@
-helmDefaults:
-  historyMax: 3
-  cleanupOnFail: true
-  timeout: 900
-environments:
-  default:
