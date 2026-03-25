@@ -31,6 +31,7 @@ resources:
   - monitoring-kustomization.yaml
   - spegel-kustomization.yaml
   - external-secrets-kustomization.yaml
+  - onepassword-connect-kustomization.yaml
   - clustersecret-kustomization.yaml
   - gpu-operator-kustomization.yaml
   - metallb-system-kustomization.yaml
