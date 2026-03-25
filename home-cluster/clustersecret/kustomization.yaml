@@ -3,4 +3,5 @@ kind: Kustomization
 resources:
   - namespace.yaml
   - network-policy.yaml
+  - emberstack-helmrepository.yaml
   - reflector-helmrelease.yaml

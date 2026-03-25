@@ -6,6 +6,7 @@ namespace: media
 resources:
   - network-policy.yaml
   - namespace.yaml
+  - jellyfin-helmrepository.yaml
   - jellyfin-helmrelease.yaml
   - overseerr.yaml
   - prowlarr.yaml
