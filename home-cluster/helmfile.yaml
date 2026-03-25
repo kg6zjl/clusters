@@ -203,45 +203,6 @@ releases:
   - name: csi-driver-smb
     namespace: kube-system
     chart: csi-driver-smb/csi-driver-smb
-  - name: plex
-    namespace: plex
-    chart: plexinc/plex-media-server
-    version: "1.5.0"
-    values:
-      - service:
-          type: ClusterIP
-        ingress:
-          enabled: false
-        persistence:
-          config:
-            enabled: true
-            size: 10Gi
-          data:
-            enabled: true
-            size: 100Gi
-        extraVolumes:
-          - name: media-tv
-            hostPath:
-              path: /mnt/nas/tv
-              type: Directory
-          - name: media-movies
-            hostPath:
-              path: /mnt/nas/movies
-              type: Directory
-          - name: media-music
-            hostPath:
-              path: /mnt/nas/music
-              type: Directory
-        extraVolumeMounts:
-          - name: media-tv
-            mountPath: /media/tv
-          - name: media-movies
-            mountPath: /media/movies
-          - name: media-music
-            mountPath: /media/music
-        claimSecret:
-          name: plex-claim-secret
-          key: PLEX_CLAIM
   - name: pihole
     namespace: pihole
     chart: pihole-v6/pihole
