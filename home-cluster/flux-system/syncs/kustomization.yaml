@@ -6,6 +6,7 @@ resources:
   - traefik-helmrepository.yaml
   - prometheus-community-helmrepository.yaml
   - grafana-helmrepository.yaml
+  - jellyfin-helmrepository.yaml
   - traefik-kustomization.yaml
   - cert-manager-kustomization.yaml
   - netalertx-kustomization.yaml

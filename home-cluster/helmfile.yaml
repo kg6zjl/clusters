@@ -282,45 +282,6 @@ releases:
         claimSecret:
           name: plex-claim-secret
           key: PLEX_CLAIM
-  - name: jellyfin
-    namespace: media
-    chart: jellyfin/jellyfin
-    version: 2.7.0
-    values:
-      - service:
-          type: ClusterIP
-          port: 8096
-        ingress:
-          enabled: false
-        persistence:
-          config:
-            enabled: true
-            size: 10Gi
-          cache:
-            enabled: true
-            size: 50Gi
-          media:
-            enabled: true
-            type: hostPath
-            hostPath: /mnt/nas
-        # AMD GPU hardware transcoding (Ryzen 5 5700U Vega graphics)
-        volumes:
-          - name: dev-dri
-            hostPath:
-              path: /dev/dri
-        volumeMounts:
-          - name: dev-dri
-            mountPath: /dev/dri
-        podSecurityContext:
-          supplementalGroups:
-            - 44   # video group
-            - 993  # render group
-        securityContext:
-          privileged: true
-        metrics:
-          enabled: true
-          serviceMonitor:
-            enabled: true
   - name: pihole
     namespace: pihole
     chart: pihole-v6/pihole
