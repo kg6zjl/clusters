@@ -20,6 +20,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
+      - name: Install kubectl
+        run: |
+          curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+          chmod +x kubectl
+          sudo mv kubectl /usr/local/bin/
+
       - name: Configure Docker auth
         run: |
           REGISTRY_USER=$(kubectl get secret registry-secrets -n registry -o jsonpath='{.data.htpasswd}' | base64 -d | cut -d: -f1)
