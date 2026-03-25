@@ -200,46 +200,6 @@ releases:
             prometheus.io/path: "/metrics"
         ingress:
           enabled: false
-  - name: external-dns
-    namespace: kube-system
-    chart: external-dns/external-dns
-    version: 1.20.0
-    values:
-      - provider: cloudflare
-        cloudflare:
-          apiToken:
-            secretName: cloudflare-api-creds-root
-            secretKey: CLOUDFLARE_API_TOKEN
-        domainFilters:
-          - stevearnett.com
-        txtOwnerId: home-cluster
-        logLevel: debug
-        env:
-          - name: CF_API_TOKEN
-            valueFrom:
-              secretKeyRef:
-                name: cloudflare-api-creds-root
-                key: CLOUDFLARE_API_TOKEN
-        extraArgs:
-          - --source=crd
-          - --crd-source-apiversion=externaldns.k8s.io/v1alpha1
-          - --crd-source-kind=DNSEndpoint
-          - --source=ingress
-        rbac:
-          additionalPermissions:
-            - apiGroups:
-                - "externaldns.k8s.io"
-              resources:
-                - "dnsendpoints"
-              verbs:
-                - "get"
-                - "watch"
-                - "list"
-        service:
-          annotations:
-            prometheus.io/scrape: "true"
-            prometheus.io/port: "7979"
-            prometheus.io/path: "/metrics"
   - name: csi-driver-smb
     namespace: kube-system
     chart: csi-driver-smb/csi-driver-smb
