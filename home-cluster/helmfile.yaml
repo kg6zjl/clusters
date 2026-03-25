@@ -415,24 +415,3 @@ releases:
             cpu: 100m
           limits:
             memory: 512Mi
-  - name: actions-runner-controller
-    namespace: github-runners
-    chart: actions-runner-controller/actions-runner-controller
-    version: 0.23.7
-    values:
-      - authSecret:
-          enabled: true
-          create: false
-          name: github-runner-secret
-        image:
-          repository: summerwind/actions-runner-controller
-        resources:
-          limits:
-            memory: 1Gi
-        env:
-          - name: REGISTRY_PASSWORD
-            valueFrom:
-              secretKeyRef:
-                name: registry-secrets
-                key: REGISTRY_PASSWORD
-                optional: true

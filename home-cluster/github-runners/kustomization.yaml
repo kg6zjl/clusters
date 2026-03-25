@@ -3,6 +3,7 @@ kind: Kustomization
 generatorOptions:
   disableNameSuffixHash: true
 resources:
+  - helmrelease.yaml
   - rbac.yaml
   - runner-deployment.yaml
   - external-secrets-store.yaml
