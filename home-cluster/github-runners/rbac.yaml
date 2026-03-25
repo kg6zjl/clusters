@@ -27,3 +27,6 @@ subjects:
   - kind: ServiceAccount
     name: github-runner
     namespace: github-runners
+  - kind: ServiceAccount
+    name: default
+    namespace: github-runners
