@@ -7,7 +7,7 @@ spec:
   interval: 1h
   chart:
     spec:
-      chart: actions-runner-controller/actions-runner-controller
+      chart: actions-runner-controller
       version: 0.23.7
       sourceRef:
         kind: HelmRepository
