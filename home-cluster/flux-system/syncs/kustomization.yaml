@@ -30,7 +30,6 @@ resources:
   - external-secrets-kustomization.yaml
   - onepassword-connect-kustomization.yaml
   - clustersecret-kustomization.yaml
-  - gpu-operator-kustomization.yaml
   - metallb-system-kustomization.yaml
   - github-runners-kustomization.yaml
   - kube-system-kustomization.yaml
