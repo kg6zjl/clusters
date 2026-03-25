@@ -7,7 +7,7 @@ spec:
   interval: 1h
   chart:
     spec:
-      chart: pihole-v6/pihole
+      chart: pihole
       version: 1.2.1
       sourceRef:
         kind: HelmRepository

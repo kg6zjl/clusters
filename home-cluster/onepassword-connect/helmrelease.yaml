@@ -7,7 +7,7 @@ spec:
   interval: 1h
   chart:
     spec:
-      chart: 1password/connect
+      chart: connect
       version: 2.4.0
       sourceRef:
         kind: HelmRepository
