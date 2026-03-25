@@ -7,7 +7,7 @@ spec:
   interval: 1h
   chart:
     spec:
-      chart: emberstack/reflector
+      chart: reflector
       version: 10.0.22
       sourceRef:
         kind: HelmRepository

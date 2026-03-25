@@ -7,7 +7,7 @@ spec:
   interval: 1h
   chart:
     spec:
-      chart: plexinc/plex-media-server
+      chart: plex
       version: "1.5.0"
       sourceRef:
         kind: HelmRepository
