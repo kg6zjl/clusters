@@ -1,0 +1,13 @@
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: auth
+  namespace: flux-system
+spec:
+  interval: 1h
+  path: ./home-cluster/auth
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: clusters
+  targetNamespace: auth
