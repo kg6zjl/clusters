@@ -17,6 +17,26 @@ This is a **single-node Kubernetes home lab cluster** running on an AMD-based Ac
 
 ## Build, Lint, and Apply Commands
 
+### ⚠️ CRITICAL: NEVER Apply Changes Directly to the Cluster ⚠️
+
+**DO NOT run `kubectl apply`, `kubectl delete`, `helm install`, `helm upgrade`, or any variant that modifies cluster state directly.**
+
+**DO NOT use `kubectl set image`, `kubectl edit`, `kubectl patch`, or any imperative command to modify running resources.**
+
+**The only way changes reach the cluster is through the GitHub Actions workflow triggered by merging a PR.**
+
+Local `kubectl` commands are for **read-only debugging only** (get, describe, logs, etc.). Any write operation will:
+1. Be overwritten by Flux when it next reconciles
+2. Cause Flux to show as "drifted" and potentially trigger unwanted rollbacks
+3. Break the GitOps guarantee that git is the single source of truth
+
+If you need to make a change:
+1. Edit the YAML manifest in this repository
+2. Create a branch and commit
+3. Open a PR and wait for CI
+4. Merge to main
+5. Let the GitHub Actions workflow apply the change
+
 ### Apply Changes to Cluster
 
 Changes are applied via GitHub Actions workflow. DO NOT run `task apply` locally.
@@ -26,11 +46,16 @@ Changes are applied via GitHub Actions workflow. DO NOT run `task apply` locally
 3. Merge PR to trigger "Apply to Cluster" workflow
 4. Workflow syncs helmfile and applies kustomize manifests
 
-**Local commands (for testing only):**
+**Local commands (for testing only - READ ONLY):**
 ```bash
-helm repo update
-helmfile sync
+# These are OK for local testing of YAML syntax only:
+kubectl kustomize .
+kubectl apply --dry-run=client -k .
+
+# These are NEVER OK:
 kubectl apply -k .
+helmfile sync
+task apply
 ```
 
 ### Validate Manifests
