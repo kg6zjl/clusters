@@ -9,6 +9,7 @@ resources:
   - jellyfin-helmrepository.yaml
   - external-dns-helmrepository.yaml
   - pihole-helmrepository.yaml
+  - plexinc-helmrepository.yaml
   - traefik-kustomization.yaml
   - cert-manager-kustomization.yaml
   - netalertx-kustomization.yaml
