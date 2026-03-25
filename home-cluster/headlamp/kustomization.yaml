@@ -6,7 +6,6 @@ resources:
   - service.yaml
   - serviceaccount.yaml
   - clusterrolebinding.yaml
-  - secret.yaml
   - ingressroute.yaml
   - dnsendpoint.yaml
   - networkpolicy.yaml
