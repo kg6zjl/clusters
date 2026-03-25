@@ -4,3 +4,4 @@ namespace: flux-system
 resources:
   - gotk-components.yaml
   - arc-helmrepository.yaml
+  - flux-system-sources-kustomization.yaml
