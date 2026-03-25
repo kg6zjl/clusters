@@ -22,10 +22,9 @@ jobs:
 
       - name: Configure Docker auth
         run: |
-          echo "$REGISTRY_PASSWORD" | docker login ${{ env.REGISTRY }} -u "$REGISTRY_USERNAME" --password-stdin
-        env:
-          REGISTRY_USERNAME: ${{ secrets.REGISTRY_USERNAME }}
-          REGISTRY_PASSWORD: ${{ secrets.REGISTRY_PASSWORD }}
+          REGISTRY_USER=$(kubectl get secret registry-secrets -n registry -o jsonpath='{.data.htpasswd}' | base64 -d | cut -d: -f1)
+          REGISTRY_PASS=$(kubectl get secret registry-secrets -n registry -o jsonpath='{.data.REGISTRY_PASSWORD}' | base64 -d)
+          echo "$REGISTRY_PASS" | docker login ${{ env.REGISTRY }} -u "$REGISTRY_USER" --password-stdin
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
