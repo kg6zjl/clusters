@@ -4,7 +4,7 @@ metadata:
   name: github-runner
   namespace: github-runners
 spec:
-  replicas: 2
+  replicas: 0
   template:
     spec:
       priorityClassName: system-cluster-critical
