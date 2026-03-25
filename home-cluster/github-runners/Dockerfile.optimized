@@ -20,26 +20,26 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Install kubectl
-RUN curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl" && \
+RUN curl -LO --retry 5 --retry-delay 5 "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl" && \
     chmod +x kubectl && mv kubectl /usr/local/bin/
 
 # Install Helm
-RUN curl -fsSL https://get.helm.sh/helm-v3.16.4-linux-amd64.tar.gz | tar -zxf - -C /tmp && \
+RUN curl -fsSL --retry 5 --retry-delay 5 https://get.helm.sh/helm-v3.16.4-linux-amd64.tar.gz | tar -zxf - -C /tmp && \
     mv /tmp/linux-amd64/helm /usr/local/bin/ && rm -rf /tmp/linux-amd64
 
 # Install Kustomize
-RUN curl -s "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh" | bash && \
+RUN curl -s --retry 5 --retry-delay 5 "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh" | bash && \
     mv kustomize /usr/local/bin/
 
 # Install GitHub CLI (gh)
-RUN curl -fsSL https://github.com/cli/cli/releases/download/v2.47.0/gh_2.47.0_linux_amd64.tar.gz | tar -zxf - -C /tmp && \
+RUN curl -fsSL --retry 5 --retry-delay 5 https://github.com/cli/cli/releases/download/v2.47.0/gh_2.47.0_linux_amd64.tar.gz | tar -zxf - -C /tmp && \
     mv /tmp/gh_2.47.0_linux_amd64/bin/gh /usr/local/bin/ && rm -rf /tmp/gh*
 
 # Install Gitleaks
-RUN curl -fsSL https://github.com/gitleaks/gitleaks/releases/download/v8.18.2/gitleaks_8.18.2_linux_x64.tar.gz | tar -zxf - -C /usr/local/bin/ gitleaks
+RUN curl -fsSL --retry 5 --retry-delay 5 https://github.com/gitleaks/gitleaks/releases/download/v8.18.2/gitleaks_8.18.2_linux_x64.tar.gz | tar -zxf - -C /usr/local/bin/ gitleaks
 
 # Install yq
-RUN curl -L "https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64" -o /usr/local/bin/yq && \
+RUN curl -L --retry 5 --retry-delay 5 "https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64" -o /usr/local/bin/yq && \
     chmod +x /usr/local/bin/yq
 
 # Install Yamllint via pip (system-wide for easier access)
