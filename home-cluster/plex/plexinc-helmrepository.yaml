@@ -5,4 +5,4 @@ metadata:
   namespace: plex
 spec:
   interval: 1h
-  url: https://plexinc.github.io/pms-docker/
+  url: https://raw.githubusercontent.com/plexinc/pms-docker/gh-pages

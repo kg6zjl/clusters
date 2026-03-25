@@ -16,11 +16,28 @@ spec:
         app: headlamp
     spec:
       serviceAccountName: headlamp
+      initContainers:
+        - name: headlamp-plugins
+          image: ghcr.io/headlamp-k8s/headlamp-plugin-flux:latest
+          command:
+            - /bin/sh
+            - -c
+            - |
+              mkdir -p /plugins/flux
+              cp -r /plugins/* /plugins/flux/ 2>/dev/null || true
+              chown -R 100:101 /plugins
+          volumeMounts:
+            - name: headlamp-plugins
+              mountPath: /plugins
+          securityContext:
+            runAsNonRoot: false
+            runAsUser: 0
       containers:
         - name: headlamp
           image: ghcr.io/headlamp-k8s/headlamp:latest
           args:
             - "--in-cluster"
+            - "--plugins-dir=/headlamp/plugins"
           env:
             - name: HEADLAMP_CONFIG_TRACING_ENABLED
               value: "true"
@@ -63,3 +80,9 @@ spec:
             capabilities:
               drop:
                 - ALL
+          volumeMounts:
+            - name: headlamp-plugins
+              mountPath: /headlamp/plugins
+      volumes:
+        - name: headlamp-plugins
+          emptyDir: {}
