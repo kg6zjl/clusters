@@ -7,6 +7,7 @@ resources:
   - prometheus-community-helmrepository.yaml
   - grafana-helmrepository.yaml
   - jellyfin-helmrepository.yaml
+  - external-dns-helmrepository.yaml
   - traefik-kustomization.yaml
   - cert-manager-kustomization.yaml
   - netalertx-kustomization.yaml
@@ -37,4 +38,5 @@ resources:
   - gpu-operator-kustomization.yaml
   - metallb-system-kustomization.yaml
   - github-runners-kustomization.yaml
+  - kube-system-kustomization.yaml
   - arc-kustomization.yaml
