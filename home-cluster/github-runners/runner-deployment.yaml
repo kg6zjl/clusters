@@ -15,17 +15,18 @@ spec:
       image: summerwind/actions-runner:latest
       initContainers:
         - name: install-tools
-          image: ghcr.io/onedr0p/task:latest
+          image: alpine:3.19
           command:
             - sh
             - -c
             - |
-              mkdir -p /opt/tools/bin
+              apk add --no-cache curl bash python3 py3-pip
+              mkdir -p /opt/tools/bin /usr/local/bin
               curl -sL https://dl.k8s.io/release/$(curl -sL https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl -o /usr/local/bin/kubectl
               chmod +x /usr/local/bin/kubectl
               curl -sL https://get.helmfile.dev | sh
               mv helmfile /opt/tools/bin/
-              pip3 install yamllint
+              pip3 install yamllint || true
           volumeMounts:
             - name: tools
               mountPath: /opt/tools/bin

@@ -573,6 +573,8 @@ releases:
         serviceAccount:
           annotations:
             eks.amazonaws.com/role-arn: ""
+        webhook:
+          timeoutSeconds: 30
   - name: onepassword-connect
     namespace: external-secrets
     chart: 1password/connect
