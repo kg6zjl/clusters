@@ -8,6 +8,7 @@ resources:
   - grafana-helmrepository.yaml
   - jellyfin-helmrepository.yaml
   - external-dns-helmrepository.yaml
+  - pihole-helmrepository.yaml
   - traefik-kustomization.yaml
   - cert-manager-kustomization.yaml
   - netalertx-kustomization.yaml

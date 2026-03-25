@@ -1,0 +1,104 @@
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: pihole
+  namespace: pihole
+spec:
+  interval: 1h
+  chart:
+    spec:
+      chart: pihole-v6/pihole
+      version: 1.2.1
+      sourceRef:
+        kind: HelmRepository
+        name: pihole
+        namespace: flux-system
+  install:
+    createNamespace: true
+  upgrade:
+    remediation:
+      retries: 3
+  values:
+    timezone: "America/Los_Angeles"
+    replicas: 1
+    hostNetwork: false
+    labels:
+      alert-on-down: "true"
+    pihole:
+      web:
+        existingSecret: pihole-web-password
+        passwordSecretKey: PIHOLE_WEB_PASSWORD
+        service:
+          enabled: true
+          type: ClusterIP
+          ports:
+            http: 80
+            https: 443
+      lists:
+        adlists:
+          - address: "https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts"
+            comment: "StevenBlack Master"
+          - address: "https://raw.githubusercontent.com/PolishFiltersTeam/KADhosts/master/KADhosts.txt"
+            comment: "KADhosts"
+          - address: "https://raw.githubusercontent.com/FadeMind/hosts.extras/master/add.Spam/hosts"
+            comment: "FadeMind Spam"
+          - address: "https://v.firebog.net/hosts/Easyprivacy.txt"
+            comment: "Easyprivacy"
+          - address: "https://v.firebog.net/hosts/Prigent-Ads.txt"
+            comment: "Prigent Ads"
+          - address: "https://raw.githubusercontent.com/DandelionSprout/adfilt/master/Alternate%20versions%20Anti-Malware%20List/AntiMalwareHosts.txt"
+            comment: "AntiMalware"
+          - address: "https://osint.digitalside.it/Threat-Intel/lists/latestdomains.txt"
+            comment: "OSINT Threat Intel"
+          - address: "https://s3.amazonaws.com/lists.disconnect.me/simple_tracking.txt"
+            comment: "Disconnect Tracking"
+          - address: "https://s3.amazonaws.com/lists.disconnect.me/simple_ad.txt"
+            comment: "Disconnect Ads"
+        whitelist:
+          - domain: "clients4.google.com"
+          - domain: "clients2.google.com"
+          - domain: "s.youtube.com"
+          - domain: "video-stats.l.google.com"
+          - domain: "android.clients.google.com"
+          - domain: "reminders-pa.googleapis.com"
+          - domain: "firebaseremoteconfig.googleapis.com"
+          - domain: "app-measurement.com"
+          - domain: "dl.dropboxusercontent.com"
+          - domain: "www.dropbox.com"
+          - domain: "log.spotify.com"
+          - domain: "apresolve.spotify.com"
+        blacklist: []
+        regex_whitelist: []
+        regex_blacklist: []
+      ftl:
+        dns:
+          upstreams:
+            - "1.1.1.1"
+            - "8.8.8.8"
+          listeningMode: "all"
+          service:
+            enabled: true
+            type: LoadBalancer
+            loadBalancerIP: "192.168.1.240"
+            externalTrafficPolicy: Local
+            annotations:
+              metallb.universe.tf/allow-shared-ip: pihole-svc
+        database:
+          maxDBdays: 7
+        webserver:
+          port: "80,[::]:80,443s,[::]:443s"
+        misc:
+          privacylevel: 0
+      dhcp:
+        active: false
+    persistence:
+      etcPihole:
+        enabled: true
+        accessMode: ReadWriteOnce
+        size: 2Gi
+    resources:
+      requests:
+        memory: 128Mi
+        cpu: 100m
+      limits:
+        memory: 512Mi
