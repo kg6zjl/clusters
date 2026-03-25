@@ -406,3 +406,23 @@ For meshtastic-bot-style builds:
 2. `docker/login-action@v3` or `docker login` for registry auth
 3. `docker/setup-buildx-action@v3` for buildx
 4. `docker/build-push-action@v6` for building and pushing
+
+---
+
+## Pending Tasks
+
+### Headlamp Access Issue
+
+Headlamp (kubernetes dashboard) is not accessible. User reports they cannot access it. Possible causes:
+- NetworkPolicy blocking access
+- Oauth2-proxy misconfiguration
+- IngressRoute issues
+- Missing secrets or misconfigured auth
+
+Debug steps:
+1. Check Headlamp pod status: `kubectl get pods -n headlamp`
+2. Check Headlamp logs: `kubectl logs -n headlamp -l app=headlamp`
+3. Check Oauth2-proxy status: `kubectl get pods -n headlamp | grep oauth`
+4. Check IngressRoute: `kubectl get ingressroute -n headlamp`
+5. Check NetworkPolicy: `kubectl get networkpolicy -n headlamp`
+6. Verify oauth2-proxy is working correctly
