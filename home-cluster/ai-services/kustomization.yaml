@@ -7,7 +7,6 @@ resources:
   - network-policy.yaml
   - namespace.yaml
   - wyoming-whisper.yaml
-  - ollama.yaml
   - ollama-amd.yaml
   - open-webui.yaml
   - ingressroute.yaml
