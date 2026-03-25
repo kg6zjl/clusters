@@ -243,6 +243,13 @@ env:
 
 - You have permissions via the `GITHUB_TOKEN` environment variable. Use it properly for git operations and PR creation.
 
+### POLLING & BACKOFF (CRITICAL)
+
+- **NEVER poll in a tight loop.** Every tool call consumes tokens and cluster resources.
+- **Use Exponential Backoff:** If waiting for a job or pod, increase the wait time between checks (e.g., 30s -> 1m -> 2m -> 5m).
+- **Silent Monitoring:** Do not report status updates for every poll unless there is a significant change or failure. 
+- **Maximum Polls:** After 3-5 failed/pending checks, stop polling and ask the user to check back later or provide a direct link for them to monitor.
+
 ### Before Pushing - Check Branch/PR Status
 
 **Always verify the target branch/PR status before pushing:**
