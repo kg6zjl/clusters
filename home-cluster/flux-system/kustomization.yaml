@@ -8,3 +8,4 @@ resources:
   - prometheus-community-helmrepository.yaml
   - grafana-helmrepository.yaml
   - actions-runner-controller-helmrepository.yaml
+  - syncs-kustomization.yaml
