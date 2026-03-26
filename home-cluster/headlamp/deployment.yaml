@@ -36,9 +36,14 @@ spec:
         - name: headlamp
           image: ghcr.io/headlamp-k8s/headlamp:latest
           args:
-            - - -in-cluster
+            - -in-cluster
             - -oidc-skip-login
-            - "--plugins-dir=/headlamp/plugins"
+            - -plugins-dir=/headlamp/plugins
+          ports:
+            - containerPort: 4466
+              name: http
+            - containerPort: 9090
+              name: metrics
           env:
             - name: HEADLAMP_CONFIG_TRACING_ENABLED
               value: "true"
@@ -50,25 +55,27 @@ spec:
               value: "headlamp"
             - name: HEADLAMP_CONFIG_SERVICE_VERSION
               value: "latest"
-          ports:
-            - containerPort: 4466
-              name: http
-            - containerPort: 9090
-              name: metrics
-          readinessProbe:
-            httpGet:
-              scheme: HTTP
-              path: /
-              port: 4466
-            initialDelaySeconds: 30
-            timeoutSeconds: 30
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            runAsUser: 100
+          volumeMounts:
+            - name: headlamp-plugins
+              mountPath: /headlamp/plugins
           livenessProbe:
             httpGet:
-              scheme: HTTP
               path: /
               port: 4466
             initialDelaySeconds: 30
             timeoutSeconds: 30
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 4466
+            initialDelaySeconds: 30
+            timeoutSeconds: 30
+            periodSeconds: 10
           resources:
             requests:
               cpu: 100m
@@ -76,14 +83,6 @@ spec:
             limits:
               cpu: 1
               memory: 512Mi
-          securityContext:
-            allowPrivilegeEscalation: false
-            capabilities:
-              drop:
-                - ALL
-          volumeMounts:
-            - name: headlamp-plugins
-              mountPath: /headlamp/plugins
       volumes:
         - name: headlamp-plugins
           emptyDir: {}
