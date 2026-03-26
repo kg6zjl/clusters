@@ -151,6 +151,7 @@ When proposing or implementing architectural changes (e.g., CI/CD, migration to 
 ### Secrets Management (CRITICAL)
 
 Secrets are managed via **1Password + External Secrets Operator (ESO)**:
+- **Webhook Connectivity**: If ExternalSecret dry-runs fail with "context deadline exceeded" on the webhook, ensure the `flux-system` namespace has egress to the `external-secrets` webhook port (443/10250) and the webhook namespace has ingress from `flux-system`.
 - **1Password** is the source of truth for all secrets
 - **ESO** syncs secrets from 1Password to Kubernetes automatically
 - **NEVER hardcode secrets** in YAML files or `.env` files

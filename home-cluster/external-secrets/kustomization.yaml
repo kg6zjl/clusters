@@ -5,3 +5,4 @@ resources:
   - network-policy.yaml
   - helmrepository.yaml
   - helmrelease.yaml
+  - eso-flux-networkpolicy.yaml
