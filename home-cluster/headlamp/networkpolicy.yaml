@@ -1,25 +1,52 @@
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: headlamp-allow-all
+  name: headlamp-restrictive
   namespace: headlamp
 spec:
-  podSelector: {}
+  podSelector:
+    matchLabels:
+      app: headlamp
   policyTypes:
   - Ingress
   - Egress
   ingress:
   - from:
-    - namespaceSelector: {}
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: traefik
     ports:
     - protocol: TCP
       port: 4466
     - protocol: TCP
       port: 80
-    - protocol: TCP
-      port: 443
   egress:
   - to:
-    - namespaceSelector: {}
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: kube-system
+    ports:
+    - protocol: UDP
+      port: 53
+    - protocol: TCP
+      port: 53
+  - to:
+    - ipBlock:
+        cidr: 192.168.1.0/24
+    ports:
+    - protocol: TCP
+      port: 6443
+    - protocol: TCP
+      port: 443
+  - to:
     - ipBlock:
         cidr: 0.0.0.0/0
+        except:
+        - 10.0.0.0/8
+        - 192.168.0.0/16
+        - 172.16.0.0/12
+    ports:
+    - protocol: TCP
+      port: 443
+    - protocol: TCP
+      port: 80
