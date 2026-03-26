@@ -8,6 +8,21 @@ spec:
   policyTypes:
   - Ingress
   - Egress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: traefik
+    ports:
+    - protocol: TCP
+      port: 5000
+    - protocol: TCP
+      port: 8554
+    - protocol: UDP
+      port: 8554
+  - from:
+    - ipBlock: # Allow direct access from local network for feeds
+        cidr: 192.168.1.0/24
   egress:
   - to:
     - namespaceSelector:
@@ -20,10 +35,8 @@ spec:
       port: 53
     - protocol: TCP
       port: 443
-  - to:
+  - to: # Allow talking to all other pods/namespaces
     - namespaceSelector: {}
-  ingress:
-  - from:
-    - namespaceSelector:
-        matchLabels:
-          kubernetes.io/metadata.name: traefik
+  - to: # Allow talking to the local network (Cameras/API)
+    - ipBlock:
+        cidr: 192.168.1.0/24
