@@ -11,6 +11,6 @@ spec:
       kind: Rule
       services:
         - name: headlamp
-          port: 4466
+          port: 80
   tls:
     secretName: wildcard-stevearnett-com-tls

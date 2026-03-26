@@ -3,13 +3,11 @@ kind: Service
 metadata:
   name: headlamp
   namespace: headlamp
-  labels:
-    app: headlamp
 spec:
-  type: ClusterIP
-  ports:
-  - port: 4466
-    targetPort: 4466
-    name: http
   selector:
     app: headlamp
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+  type: ClusterIP
