@@ -11,6 +11,13 @@ spec:
   ingress:
   - from:
     - namespaceSelector: {}
+    ports:
+    - protocol: TCP
+      port: 4466
+    - protocol: TCP
+      port: 80
+    - protocol: TCP
+      port: 443
   egress:
   - to:
     - namespaceSelector: {}
