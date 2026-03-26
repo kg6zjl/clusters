@@ -1,73 +1,25 @@
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: headlamp-default-deny
+  name: headlamp-allow-all
   namespace: headlamp
 spec:
   podSelector: {}
   policyTypes:
   - Ingress
   - Egress
----
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: headlamp-allow-dns
-  namespace: headlamp
-spec:
-  podSelector: {}
-  policyTypes:
-  - Egress
-  egress:
-  - to:
-    - namespaceSelector:
-        matchLabels:
-          kubernetes.io/metadata.name: kube-system
-    ports:
-    - protocol: UDP
-      port: 53
-    - protocol: TCP
-      port: 53
----
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: headlamp-allow-ingress
-  namespace: headlamp
-spec:
-  podSelector: {}
-  policyTypes:
-  - Ingress
   ingress:
   - from:
-    - namespaceSelector:
-        matchLabels:
-          kubernetes.io/metadata.name: traefik
+    - namespaceSelector: {}
     ports:
     - protocol: TCP
-      port: 443
+      port: 4466
     - protocol: TCP
       port: 80
----
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: headlamp-allow-internet-egress
-  namespace: headlamp
-spec:
-  podSelector: {}
-  policyTypes:
-  - Egress
+    - protocol: TCP
+      port: 443
   egress:
   - to:
+    - namespaceSelector: {}
     - ipBlock:
         cidr: 0.0.0.0/0
-        except:
-        - 10.0.0.0/8
-        - 192.168.0.0/16
-        - 172.16.0.0/12
-    ports:
-    - protocol: TCP
-      port: 443
-    - protocol: TCP
-      port: 80
