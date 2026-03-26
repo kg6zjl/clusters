@@ -37,6 +37,7 @@ spec:
           image: ghcr.io/headlamp-k8s/headlamp:latest
           args:
             - - -in-cluster
+            - -oidc-skip-login
             - "--plugins-dir=/headlamp/plugins"
           env:
             - name: HEADLAMP_CONFIG_TRACING_ENABLED
