@@ -9,3 +9,12 @@ home-cluster/home-cluster/
 *.key
 *.p12
 *.pfx
+# OpenClaw Workspace Meta Files
+USER.md
+SOUL.md
+IDENTITY.md
+HEARTBEAT.md
+BOOTSTRAP.md
+TOOLS.md
+repo/
+clusters/
