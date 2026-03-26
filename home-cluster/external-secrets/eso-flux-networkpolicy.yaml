@@ -19,7 +19,7 @@ spec:
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: eso-allow-flux-ingress
+  name: eso-allow-all-namespaces-ingress
   namespace: external-secrets
 spec:
   podSelector:
@@ -29,11 +29,9 @@ spec:
   - Ingress
   ingress:
   - from:
-    - namespaceSelector:
-        matchLabels:
-          kubernetes.io/metadata.name: flux-system
+    - namespaceSelector: {}
     ports:
     - protocol: TCP
-      port: 10250 # The webhook server port inside the pod
+      port: 10250
     - protocol: TCP
-      port: 443   # The service port
+      port: 443
