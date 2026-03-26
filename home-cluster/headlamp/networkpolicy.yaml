@@ -32,6 +32,12 @@ spec:
       port: 53
   - to:
     - ipBlock:
+        cidr: 10.152.0.0/16
+    ports:
+    - protocol: TCP
+      port: 443
+  - to:
+    - ipBlock:
         cidr: 192.168.1.0/24
     ports:
     - protocol: TCP
