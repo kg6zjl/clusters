@@ -17,3 +17,10 @@ spec:
             apiTokenSecretRef:
               name: cloudflare-api-creds-root
               key: CLOUDFLARE_API_TOKEN
+---
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: selfsigned-issuer
+spec:
+  selfSigned: {}
