@@ -5,6 +5,10 @@
   ],
   "dependencyDashboard": true,
   "prConcurrentLimit": 1,
+  "enabledManagers": ["helmfile", "helm-values", "flux", "kubernetes"],
+  "flux": {
+    "fileMatch": ["home-cluster/[^/]+/helmrelease\\.yaml$"]
+  },
   "constraints": {
     "helm": "^3.15.0"
   },
