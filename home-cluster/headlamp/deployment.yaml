@@ -55,6 +55,10 @@ spec:
               value: "headlamp"
             - name: HEADLAMP_CONFIG_SERVICE_VERSION
               value: "latest"
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            runAsUser: 100
           volumeMounts:
             - name: headlamp-plugins
               mountPath: /headlamp/plugins
