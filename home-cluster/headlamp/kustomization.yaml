@@ -12,3 +12,4 @@ resources:
   - dnsendpoint.yaml
   - networkpolicy.yaml
   - oauth2-proxy-networkpolicy.yaml
+  - middleware.yaml
