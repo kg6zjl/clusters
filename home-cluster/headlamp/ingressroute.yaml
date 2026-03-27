@@ -7,15 +7,8 @@ spec:
   entryPoints:
     - websecure
   routes:
-    - match: Host(`headlamp.kube.stevearnett.com`) && PathPrefix(`/oauth2`)
-      kind: Rule
-      services:
-        - name: oauth2-proxy-headlamp
-          port: 4180
     - match: Host(`headlamp.kube.stevearnett.com`)
       kind: Rule
-      middlewares:
-        - name: oauth2-proxy
       services:
         - name: headlamp
           port: 80
