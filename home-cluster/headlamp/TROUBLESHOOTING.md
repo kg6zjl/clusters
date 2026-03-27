@@ -4,11 +4,30 @@
 Headlamp dashboard shows "Failed to get authentication information: Request timed-out" when accessed via browser.
 
 ## Root Cause
-The NetworkPolicy for Headlamp used `ipBlock` CIDRs for internal cluster communication, but this approach was causing connection timeouts to the Kubernetes API server. Other working services in the cluster use `namespaceSelector: {}` instead.
+The NetworkPolicy for Headlamp used specific egress rules that were not being correctly interpreted by Calico for ClusterIP service access. Despite having rules that should allow traffic to `10.152.183.1:443` (Kubernetes API), the TCP connections were timing out at the SYN stage.
+
+The working ai-services namespace uses `egress: [{}]` (allow all egress) which works correctly.
 
 ## Changes Made
-1. Updated `headlamp-restrictive` NetworkPolicy to use `namespaceSelector: {}` for internal cluster traffic
+1. Changed `headlamp-restrictive` NetworkPolicy to use `egress: [{}]` (allow all egress) matching the working ai-services pattern
 2. Added `oauth2-proxy-allow-egress` NetworkPolicy for the oauth2-proxy pod
+3. Added explicit ingress rules from traefik namespace
+
+## Debugging Commands Used
+```bash
+# Check TCP connection states from within pod
+kubectl exec -n headlamp deploy/headlamp -- cat /proc/net/tcp
+# Result: SYN_SENT state indicates network policy blocking
+
+# Test API connectivity  
+kubectl exec -n flux-system deploy/helm-controller -- nc -zv -w 5 10.152.183.1 443
+# Result: "open" = working
+
+# Compare working vs broken pod routing
+kubectl exec -n headlamp deploy/headlamp -- ip route
+kubectl exec -n flux-system deploy/helm-controller -- ip route
+# Both should show same routes
+```
 
 ## Verification Steps
 
