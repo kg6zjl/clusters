@@ -30,7 +30,7 @@ spec:
       http-address: "0.0.0.0:4180"
       whitelist-domain: ".stevearnett.com"
       cookie-domain: ".stevearnett.com"
-      skip-provider-button: "true"
+      skip-provider-button: "false"
     extraVolumes:
       - name: authenticated-emails
         secret:
