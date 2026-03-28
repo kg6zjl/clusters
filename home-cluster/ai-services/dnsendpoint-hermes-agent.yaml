@@ -1,0 +1,11 @@
+apiVersion: externaldns.k8s.io/v1alpha1
+kind: DNSEndpoint
+metadata:
+  name: hermes
+  namespace: ai-services
+spec:
+  endpoints:
+    - dnsName: hermes.kube.stevearnett.com
+      recordType: CNAME
+      targets:
+        - kube.stevearnett.com

@@ -1,0 +1,19 @@
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: hermes-agent
+  namespace: ai-services
+  annotations:
+    external-dns.alpha.kubernetes.io/hostname: hermes.kube.stevearnett.com
+    external-dns.alpha.kubernetes.io/target: kube.stevearnett.com
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - match: Host(`hermes.kube.stevearnett.com`)
+      kind: Rule
+      services:
+        - name: hermes-agent
+          port: 8642
+  tls:
+    secretName: wildcard-stevearnett-com-tls

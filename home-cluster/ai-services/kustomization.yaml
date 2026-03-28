@@ -17,6 +17,10 @@ resources:
   - ingressroute-comfy.yaml
   - dnsendpoint-comfy.yaml
   - external-secrets.yaml
+  - deployment-hermes-agent.yaml
+  - external-secrets-hermes-agent.yaml
+  - ingressroute-hermes-agent.yaml
+  - dnsendpoint-hermes-agent.yaml
 
 patches:
   - target:
