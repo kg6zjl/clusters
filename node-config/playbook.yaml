@@ -104,11 +104,6 @@
       block:
         - name: Install MicroK8s from snapd
           ansible.builtin.shell:
-            cmd: snap install microk8s --classic --version={{ microk8s_version }}
-            creates: /snap/bin/microk8s
-      rescue:
-        - name: Install MicroK8s latest from snapd
-          ansible.builtin.shell:
             cmd: snap install microk8s --classic
             creates: /snap/bin/microk8s
 
