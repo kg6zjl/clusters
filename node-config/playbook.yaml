@@ -94,9 +94,9 @@
                 [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.nvidia.options]
                   BinaryName = "/usr/bin/nvidia-container-runtime"
 
-        - name: Restart containerd via snap
-          ansible.builtin.shell:
-            cmd: systemctl --user restart snap.microk8s.daemon-containerd || true
+        - name: Restart containerd via snap (skip - picked up on reboot)
+          ansible.builtin.debug:
+            msg: "containerd config updated - will be picked up on reboot"
 
       when: true  # GPU is installed
 
@@ -235,6 +235,14 @@
           PATH: "/snap/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
       register: label_result
       failed_when: false
+
+    - name: Reboot to apply all changes
+      ansible.builtin.reboot:
+        msg: "Rebooting to apply kernel, containerd, and microk8s changes"
+        reboot_timeout: 300
+        connect_timeout: 5
+        pre_reboot_delay: 10
+      become: true
 
     - name: Verify node is joined
       ansible.builtin.shell:
