@@ -32,6 +32,7 @@
           - python3
           - ufw
           - net-tools
+          - jq
         state: present
 
     - name: Disable swap
@@ -71,9 +72,14 @@
 
     - name: Install NVIDIA Container Toolkit
       block:
+        - name: Add NVIDIA GPG key
+          ansible.builtin.apt_key:
+            url: https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2404/x86_64/3bf863cc.pub
+            state: present
+
         - name: Add NVIDIA package repository
           ansible.builtin.apt_repository:
-            repo: "deb https://developer.download.nvidia.com/compute/cuda/repos/{{ ansible_distribution | lower }}{{ ansible_distribution_version | replace('.', '') }}/x86_64/ /"
+            repo: "deb https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2404/x86_64/ /"
             state: present
             filename: nvidia-cuda
 
@@ -81,56 +87,37 @@
           ansible.builtin.apt:
             name:
               - nvidia-container-toolkit
-              - nvidia-docker2
             state: present
             update_cache: true
           environment:
             DEBIAN_FRONTEND: noninteractive
 
-        - name: Configure Docker runtime for NVIDIA
+        - name: Configure NVIDIA runtime for containerd
           ansible.builtin.copy:
-            dest: /etc/docker/daemon.json
+            dest: /etc/containerd/nvidia-container-runtime.conf
             content: |
-              {
-                "runtimes": {
-                  "nvidia": {
-                    "args": [],
-                    "path": "nvidia-container-runtime"
-                  }
-                }
-              }
+              [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.nvidia]
+                runtime_type = "io.containerd.runc.v2"
+                [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.nvidia.options]
+                  BinaryName = "/usr/bin/nvidia-container-runtime"
 
-        - name: Create Docker daemon config directory
-          ansible.builtin.file:
-            path: /etc/docker
-            state: directory
+        - name: Restart containerd
+          ansible.builtin.service:
+            name: snap.microk8s.daemon-containerd
+            state: restarted
 
       when: false  # Disable for now - enable when NVIDIA hardware is present
 
     - name: Install MicroK8s
       block:
-        - name: Download MicroK8s snap
-          ansible.builtin.get_url:
-            url: "https://snapcraft.io/microk8s"
-            dest: /tmp/microk8s.snap
-            mode: '0644'
-
-        - name: Install MicroK8s via snap
-          ansible.builtin.shell:
-            cmd: |
-              snap install microk8s --classic --version={{ microk8s_version }}
-            creates: /snap/bin/microk8s
-
-        - name: Add microk8s to PATH
-          ansible.builtin.shell:
-            cmd: |
-              ln -sf /snap/bin/microk8s /usr/local/bin/microk8s
-              ln -sf /snap/bin/microk8s /usr/bin/microk8s
-            creates: /usr/local/bin/microk8s
-      rescue:
         - name: Install MicroK8s from snapd
           ansible.builtin.shell:
             cmd: snap install microk8s --classic --version={{ microk8s_version }}
+            creates: /snap/bin/microk8s
+      rescue:
+        - name: Install MicroK8s latest from snapd
+          ansible.builtin.shell:
+            cmd: snap install microk8s --classic
             creates: /snap/bin/microk8s
 
     - name: Create microk8s group and add user
