@@ -136,7 +136,7 @@
     - name: Join cluster
       ansible.builtin.shell:
         cmd: |
-          microk8s join {{ cluster_join_url }}
+          microk8s join {{ cluster_join_url }} --worker
         creates: /var/snap/microk8s/current/credentials/cluster-join-token
 
     - name: Wait for node to join cluster
