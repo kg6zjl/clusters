@@ -5,6 +5,7 @@
   vars:
     microk8s_version: "1.33"
     cluster_join_url: ""
+    is_worker: true
     node_labels:
       - "gpu=nvidia"
       - "microk8s.io/cluster=true"
@@ -136,7 +137,11 @@
     - name: Join cluster
       ansible.builtin.shell:
         cmd: |
+          {% if is_worker | bool %}
           microk8s join {{ cluster_join_url }} --worker
+          {% else %}
+          microk8s join {{ cluster_join_url }}
+          {% endif %}
         creates: /var/snap/microk8s/current/credentials/cluster-join-token
 
     - name: Wait for node to join cluster
