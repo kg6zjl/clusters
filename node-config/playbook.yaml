@@ -96,8 +96,9 @@
 
         - name: Restart containerd via microk8s
           ansible.builtin.shell:
-            cmd: microk8s stop && microk8s start
-            executable: /snap/bin/microk8s
+            cmd: /snap/bin/microk8s stop && /snap/bin/microk8s start
+          environment:
+            PATH: "/snap/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 
       when: true  # GPU is installed
 
