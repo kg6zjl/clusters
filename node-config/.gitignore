@@ -1,8 +1,9 @@
 # Ansible
 *.retry
 *.log
-inventory/*/host_vars/*
-!inventory/example/
+inventory/hosts.yml
+inventory/host_vars/*.yml
+!inventory/host_vars/README.md
 
 # Sensitive files
 *.key

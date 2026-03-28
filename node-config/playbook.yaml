@@ -5,14 +5,6 @@
   vars:
     microk8s_version: "1.33"
     cluster_join_url: ""
-    is_worker: true
-    node_labels:
-      - "gpu=nvidia"
-      - "microk8s.io/cluster=true"
-    node_taints:
-      - key: "gpu-only"
-        value: "true"
-        effect: "NoSchedule"
 
   tasks:
     - name: Ensure required variables are set
