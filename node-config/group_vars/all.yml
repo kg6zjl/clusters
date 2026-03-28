@@ -1,0 +1,10 @@
+---
+# Default variables for all nodes
+is_worker: true
+microk8s_version: "1.33"
+cluster_join_url: ""
+
+node_labels:
+  - "microk8s.io/cluster=true"
+
+node_taints: []

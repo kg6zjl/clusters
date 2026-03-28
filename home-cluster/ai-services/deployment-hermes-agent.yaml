@@ -1,0 +1,106 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: hermes-agent-data
+  namespace: ai-services
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: hermes-agent-config
+  namespace: ai-services
+data:
+  config.yaml: |
+    terminal:
+      backend: local
+    security:
+      tirith_enabled: true
+      tirith_fail_open: true
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hermes-agent
+  namespace: ai-services
+  labels:
+    app: hermes-agent
+    alert-on-down: "true"
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: hermes-agent
+  template:
+    metadata:
+      labels:
+        app: hermes-agent
+    spec:
+      nodeSelector:
+        kubernetes.io/hostname: beast
+      containers:
+      - name: hermes-agent
+        image: registry.kube.stevearnett.com/hermes-agent:latest
+        ports:
+        - containerPort: 8642
+          name: api
+        command: ["hermes", "gateway"]
+        args:
+        - --host
+        - "0.0.0.0"
+        env:
+        - name: API_SERVER_ENABLED
+          value: "true"
+        - name: HERMES_EXEC_ASK
+          value: "1"
+        - name: OPENAI_BASE_URL
+          value: "http://ollama.ai-services.svc.cluster.local:11434/v1"
+        - name: OPENAI_API_KEY
+          value: "ollama"
+        - name: LLM_MODEL
+          value: "qwen2.5-coder:14b"
+        envFrom:
+        - configMapRef:
+            name: hermes-agent-config
+        - secretRef:
+            name: hermes-agent-secrets
+        - secretRef:
+            name: ai-services-secrets
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "500m"
+          limits:
+            memory: "4Gi"
+            cpu: "2"
+        volumeMounts:
+        - name: hermes-data
+          mountPath: /root/.hermes
+      volumes:
+      - name: hermes-data
+        persistentVolumeClaim:
+          claimName: hermes-agent-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: hermes-agent
+  namespace: ai-services
+  labels:
+    app: hermes-agent
+spec:
+  type: ClusterIP
+  ports:
+  - port: 8642
+    targetPort: 8642
+    protocol: TCP
+    name: api
+  selector:
+    app: hermes-agent
