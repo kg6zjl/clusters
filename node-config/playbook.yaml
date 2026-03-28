@@ -106,7 +106,7 @@
             name: snap.microk8s.daemon-containerd
             state: restarted
 
-      when: false  # Disable for now - enable when NVIDIA hardware is present
+      when: true  # GPU is installed
 
     - name: Install MicroK8s
       block:
