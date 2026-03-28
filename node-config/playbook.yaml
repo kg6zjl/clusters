@@ -94,10 +94,10 @@
                 [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.nvidia.options]
                   BinaryName = "/usr/bin/nvidia-container-runtime"
 
-        - name: Restart containerd
-          ansible.builtin.service:
-            name: snap.microk8s.daemon-containerd
-            state: restarted
+        - name: Restart containerd via microk8s
+          ansible.builtin.shell:
+            cmd: microk8s stop && microk8s start
+            executable: /snap/bin/microk8s
 
       when: true  # GPU is installed
 
