@@ -7,8 +7,7 @@ Headlamp dashboard shows "Failed to get authentication information: Request time
 The NetworkPolicy for Headlamp used `ipBlock` CIDRs for internal cluster communication, but this approach was causing connection timeouts to the Kubernetes API server. Other working services in the cluster use `namespaceSelector: {}` instead.
 
 ## Changes Made
-1. Updated `headlamp-restrictive` NetworkPolicy to use `namespaceSelector: {}` for internal cluster traffic
-2. Added `oauth2-proxy-allow-egress` NetworkPolicy for the oauth2-proxy pod
+Updated `headlamp-restrictive` NetworkPolicy to use `namespaceSelector: {}` for internal cluster traffic.
 
 ## Verification Steps
 
@@ -16,7 +15,7 @@ The NetworkPolicy for Headlamp used `ipBlock` CIDRs for internal cluster communi
 ```bash
 kubectl get pods -n headlamp
 ```
-Expected: Both headlamp and oauth2-proxy pods should be Running
+Expected: Headlamp pod should be Running
 
 ### 2. Test API Server Connectivity from Headlamp Pod
 ```bash
@@ -28,7 +27,7 @@ Expected: Should show connection attempt (may fail TLS handshake but connection 
 ```bash
 kubectl get networkpolicy -n headlamp
 ```
-Expected: Both headlamp-restrictive and oauth2-proxy-allow-egress should be listed
+Expected: headlamp-restrictive should be listed
 
 ### 4. Test DNS Resolution
 ```bash
@@ -49,19 +48,7 @@ Navigate to https://headlamp.kube.stevearnett.com in browser and verify it loads
 
 ### headlamp-restrictive (for headlamp pod)
 - **Ingress**: From traefik namespace (ports 80, 4466)
-- **Egress**:
-  - DNS (53 UDP/TCP) and HTTPS (443) to kube-system namespace
-  - All traffic to all namespaces (`namespaceSelector: {}`)
-  - HTTPS/HTTP to external IPs (excluding private ranges)
-
-### oauth2-proxy-allow-egress (for oauth2-proxy pod)
-- **Ingress**: From traefik namespace (port 4180)
-- **Egress**:
-  - DNS (53 UDP/TCP) and HTTPS (443) to kube-system namespace
-  - Port 4466 to headlamp namespace
-  - All traffic to all namespaces
-  - HTTPS/HTTP to external IPs
+- **Egress**: Allow all
 
 ## Related Files
 - `headlamp/networkpolicy.yaml` - Headlamp pod NetworkPolicy
-- `headlamp/oauth2-proxy-networkpolicy.yaml` - Oauth2-proxy NetworkPolicy
