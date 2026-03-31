@@ -1,0 +1,29 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: renovate-config
+  namespace: renovate
+data:
+  config.json: |
+    {
+      "platform": "github",
+      "repositories": ["kg6zjl/clusters"],
+      "enabledManagers": ["helmfile", "kubernetes", "helm-values"],
+      "helmfile": {
+        "fileMatch": ["helmfile\.yaml$"]
+      },
+      "constraints": {
+        "helm": "^3.15.0"
+      },
+      "gitAuthor": "Renovate Bot <kg6zjl@users.noreply.github.com>",
+      "baseBranches": ["main"],
+      "requireConfig": "optional",
+      "onboarding": false,
+      "minimumReleaseAge": "7 days",
+      "packageRules": [
+        {
+          "matchPackageNames": ["*"],
+          "minimumReleaseAge": "7 days"
+        }
+      ]
+    }
