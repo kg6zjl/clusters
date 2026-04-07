@@ -1,0 +1,20 @@
+# Ansible
+*.retry
+*.log
+inventory/hosts.yml
+inventory/host_vars/*.yml
+!inventory/host_vars/README.md
+
+# Sensitive files
+*.key
+*.pem
+*.crt
+*.p12
+*.pfx
+secrets/
+.vault_pass
+
+# Temporary files
+/tmp/
+*.tmp
+.ansible-local/

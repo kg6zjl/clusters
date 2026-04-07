@@ -1,0 +1,256 @@
+---
+- name: Provision MicroK8s GPU Node
+  hosts: beast
+  become: true
+  vars:
+    microk8s_version: "1.33"
+    cluster_join_url: ""
+
+  tasks:
+    - name: Ensure required variables are set
+      ansible.builtin.fail:
+        msg: "cluster_join_url must be defined in vars or extra vars"
+      when: cluster_join_url == ""
+
+    - name: Update apt cache
+      ansible.builtin.apt:
+        update_cache: true
+        cache_valid_time: 3600
+
+    - name: Install required packages
+      ansible.builtin.apt:
+        name:
+          - curl
+          - git
+          - python3
+          - ufw
+          - net-tools
+          - jq
+        state: present
+
+    - name: Disable swap
+      ansible.builtin.shell:
+        cmd: |
+          swapoff -a
+          sed -i '/ swap / s/^\(.*\)$/#\1/' /etc/fstab || true
+        creates: /etc/swap.disabled
+
+    - name: Load kernel modules for container runtime
+      community.general.modprobe:
+        name: "{{ item }}"
+        state: present
+      loop:
+        - overlay
+        - br_netfilter
+        - nf_tables
+
+    - name: Configure kernel modules to load on boot
+      ansible.builtin.copy:
+        dest: /etc/modules-load.d/k8s.conf
+        content: |
+          overlay
+          br_netfilter
+          nf_tables
+
+    - name: Configure sysctl for Kubernetes
+      ansible.builtin.copy:
+        dest: /etc/sysctl.d/99-kubernetes.conf
+        content: |
+          net.bridge.bridge-nf-call-iptables  = 1
+          net.bridge.bridge-nf-call-ip6tables = 1
+          net.ipv4.ip_forward                 = 1
+
+    - name: Apply sysctl settings
+      ansible.builtin.command: sysctl --system
+
+    - name: Install NVIDIA Container Toolkit
+      block:
+        - name: Add NVIDIA GPG key
+          ansible.builtin.apt_key:
+            url: https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2404/x86_64/3bf863cc.pub
+            state: present
+
+        - name: Add NVIDIA package repository
+          ansible.builtin.apt_repository:
+            repo: "deb https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2404/x86_64/ /"
+            state: present
+            filename: nvidia-cuda
+
+        - name: Install NVIDIA Container Toolkit
+          ansible.builtin.apt:
+            name:
+              - nvidia-container-toolkit
+            state: present
+            update_cache: true
+          environment:
+            DEBIAN_FRONTEND: noninteractive
+
+        - name: Configure NVIDIA runtime for containerd
+          ansible.builtin.copy:
+            dest: /etc/containerd/nvidia-container-runtime.conf
+            content: |
+              [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.nvidia]
+                runtime_type = "io.containerd.runc.v2"
+                [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.nvidia.options]
+                  BinaryName = "/usr/bin/nvidia-container-runtime"
+
+        - name: Restart containerd via snap (skip - picked up on reboot)
+          ansible.builtin.debug:
+            msg: "containerd config updated - will be picked up on reboot"
+
+      when: true  # GPU is installed
+
+    - name: Install MicroK8s
+      block:
+        - name: Install MicroK8s from snapd
+          ansible.builtin.shell:
+            cmd: snap install microk8s --classic
+            creates: /snap/bin/microk8s
+
+    - name: Create microk8s group and add user
+      ansible.builtin.shell:
+        cmd: |
+          usermod -aG microk8s {{ ansible_user }}
+          newgrp microk8s
+        creates: /etc/group
+
+    - name: Wait for microk8s to be ready
+      ansible.builtin.wait_for:
+        path: /var/snap/microk8s/current/credentials/kubelet.config
+        delay: 10
+        timeout: 120
+
+    - name: Join cluster
+      ansible.builtin.shell:
+        cmd: |
+          {% if is_worker | bool %}
+          microk8s join {{ cluster_join_url }} --worker
+          {% else %}
+          microk8s join {{ cluster_join_url }}
+          {% endif %}
+        creates: /var/snap/microk8s/current/credentials/cluster-join-token
+
+    - name: Wait for node to join cluster
+      ansible.builtin.pause:
+        seconds: 30
+
+    - name: Add node labels
+      ansible.builtin.shell:
+        cmd: |
+          microk8s kubectl label node {{ ansible_hostname }} {% for label in node_labels %}{{ label }} {% endfor %}
+        environment:
+          PATH: "/snap/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+
+    - name: Add node taints
+      ansible.builtin.shell:
+        cmd: |
+          microk8s kubectl taint node {{ ansible_hostname }} {% for taint in node_taints %}{{ taint.key }}={{ taint.value }}:{{ taint.effect }} {% endfor %}
+        environment:
+          PATH: "/snap/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+
+    - name: Enable required microk8s addons
+      ansible.builtin.shell:
+        cmd: |
+          microk8s enable hostpath-storage dns helm3
+        environment:
+          PATH: "/snap/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+
+    - name: Configure microk8s kubelet arguments
+      ansible.builtin.copy:
+        dest: /var/snap/microk8s/current/args/kubelet
+        content: |
+          --cluster-dns=10.152.183.10
+          --cluster-domain=cluster.local
+          --resolv-conf=/run/systemd/resolve/resolv.conf
+          --kubeconfig=${SNAP_DATA}/credentials/kubelet.config
+          --cert-dir=${SNAP_DATA}/certs
+          --client-ca-file=${SNAP_DATA}/certs/ca.crt
+          --anonymous-auth=false
+          --root-dir=${SNAP_COMMON}/var/lib/kubelet
+          --fail-swap-on=false
+          --eviction-hard="memory.available<100Mi,nodefs.available<1Gi,imagefs.available<1Gi"
+          --container-runtime-endpoint=unix:///var/snap/microk8s/common/run/containerd.sock
+          --containerd=unix:///var/snap/microk8s/common/run/containerd.sock
+          --node-labels="microk8s.io/cluster=true,gpu=nvidia"
+          --authentication-token-webhook=true
+          --read-only-port=0
+          --serialize-image-pulls=false
+        backup: true
+
+    - name: Restart microk8s kubelet
+      ansible.builtin.service:
+        name: snap.microk8s.kubelet
+        state: restarted
+
+    - name: Secure SSH access
+      block:
+        - name: Disable password authentication
+          ansible.builtin.lineinfile:
+            path: /etc/ssh/sshd_config
+            regexp: "^PasswordAuthentication"
+            line: "PasswordAuthentication no"
+            state: present
+
+        - name: Disable root login
+          ansible.builtin.lineinfile:
+            path: /etc/ssh/sshd_config
+            regexp: "^PermitRootLogin"
+            line: "PermitRootLogin no"
+            state: present
+
+        - name: Restart SSH service
+          ansible.builtin.service:
+            name: ssh
+            state: restarted
+      when: false  # Enable after testing
+
+    - name: Configure sudo for microk8s commands only
+      ansible.builtin.copy:
+        dest: /etc/sudoers.d/microk8s-node
+        content: |
+          %microk8s ALL=(root) NOPASSWD: /snap/bin/microk8s.*
+          %microk8s ALL=(root) NOPASSWD: /usr/bin/snap *
+        validate: "visudo -cf %s"
+
+    - name: Restrict sudo group access
+      ansible.builtin.shell:
+        cmd: |
+          # Remove passwordless sudo for sudo group (keep microk8s commands)
+          sed -i '/^%sudo.*ALL=(ALL) NOPASSWD: ALL/d' /etc/sudoers.d/sudo-nopasswd 2>/dev/null || true
+        ignore_errors: true
+
+    - name: Set microk8s kubelet node labels
+      ansible.builtin.shell:
+        cmd: |
+          microk8s kubectl label node {{ ansible_hostname }} \
+            gpu=nvidia \
+            node.kubernetes.io/microk8s-controlplane=microk8s-controlplane \
+            --overwrite
+        environment:
+          PATH: "/snap/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+      register: label_result
+      failed_when: false
+
+    - name: Reboot to apply all changes
+      ansible.builtin.reboot:
+        msg: "Rebooting to apply kernel, containerd, and microk8s changes"
+        reboot_timeout: 300
+        connect_timeout: 5
+        pre_reboot_delay: 10
+      become: true
+
+    - name: Verify node is joined
+      ansible.builtin.shell:
+        cmd: |
+          microk8s kubectl get node {{ ansible_hostname }}
+        environment:
+          PATH: "/snap/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+        register: node_status
+        failed_when: false
+
+    - name: Display node status
+      ansible.builtin.debug:
+        msg: |
+          Node {{ ansible_hostname }} has been provisioned.
+          Node status:
+          {{ node_status.stdout if node_status.stdout else 'Unable to verify - check cluster manually' }}
