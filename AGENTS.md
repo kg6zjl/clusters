@@ -4,6 +4,18 @@ This file provides guidance for AI coding agents operating in this repository.
 
 ---
 
+## ⚠️ ABSOLUTE RULES - NEVER VIOLATE
+
+1. **NEVER use kubectl apply, delete, edit, patch** - These break the GitOps model
+2. **NEVER use helm install, upgrade, rollback** - These break the GitOps model  
+3. **Only use kubectl for READ-ONLY operations** - get, describe, logs, etc.
+4. **All changes MUST go through PR → GitHub Actions → Flux**
+5. **If you break these rules, you lose permissions**
+
+If you need to fix something in the cluster: Edit YAML → Branch → Commit → PR → Merge → Wait for Flux
+
+---
+
 ## Repository Overview
 
 This is a **single-node Kubernetes home lab cluster** running on an AMD-based Acemagicial K1 (NUC-size) system.
