@@ -5,4 +5,5 @@ resources:
   - network-policy.yaml
   - helmrepository.yaml
   - helmrelease.yaml
+  - certificate.yaml
   - eso-flux-networkpolicy.yaml
