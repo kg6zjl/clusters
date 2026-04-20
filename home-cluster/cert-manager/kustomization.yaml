@@ -17,6 +17,7 @@ resources:
   - certificate.yaml
   - sync-cert-cronjob.yaml
   - sync-cert-namespaces-cronjob.yaml
+  - reflector-rbac.yaml
   - servicemonitor.yaml
 
 patches:
