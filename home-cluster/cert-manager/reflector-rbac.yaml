@@ -1,0 +1,23 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: reflector-read-secrets
+  namespace: cert-manager
+rules:
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: reflector-read-secrets-binding
+  namespace: cert-manager
+subjects:
+  - kind: ServiceAccount
+    name: reflector
+    namespace: clustersecret
+roleRef:
+  kind: Role
+  name: reflector-read-secrets
+  apiGroup: rbac.authorization.k8s.io
