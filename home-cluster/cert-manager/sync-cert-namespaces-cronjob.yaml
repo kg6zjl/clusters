@@ -72,6 +72,9 @@ rules:
   - apiGroups: ["traefik.io", "traefik.containo.us"]
     resources: ["ingressroutes"]
     verbs: ["get", "list"]
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["get", "list", "patch", "update"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
