@@ -1,0 +1,19 @@
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: overseerr
+  namespace: media
+  annotations:
+    external-dns.alpha.kubernetes.io/hostname: overseerr.kube.stevearnett.com
+    external-dns.alpha.kubernetes.io/target: kube.stevearnett.com
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - match: Host(`overseerr.kube.stevearnett.com`)
+      kind: Rule
+      services:
+        - name: overseerr
+          port: 5055
+  tls:
+    secretName: wildcard-stevearnett-com-tls

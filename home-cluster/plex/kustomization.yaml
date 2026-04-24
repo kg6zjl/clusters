@@ -7,7 +7,7 @@ resources:
   - network-policy.yaml
   - namespace.yaml
   - dnsendpoint.yaml
-  - ingress.yaml
+  - ingressroute.yaml
   - external-secrets.yaml
 
 generatorOptions:

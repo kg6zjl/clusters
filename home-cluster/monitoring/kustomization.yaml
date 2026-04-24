@@ -1,9 +1,9 @@
 resources:
   - network-policy.yaml
   - namespace.yaml
-  - ingress-grafana.yaml
-  - ingress-prometheus.yaml
-  - ingress-alertmanager.yaml
+  - ingressroute-grafana.yaml
+  - ingressroute-prometheus.yaml
+  - ingressroute-alertmanager.yaml
   - prometheus-rules.yaml
   - dashboard-ugreen-nas.yaml
   - external-secrets.yaml

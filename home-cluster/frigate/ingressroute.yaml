@@ -1,0 +1,19 @@
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: frigate
+  namespace: frigate
+  annotations:
+    external-dns.alpha.kubernetes.io/hostname: frigate.kube.stevearnett.com
+    external-dns.alpha.kubernetes.io/target: kube.stevearnett.com
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - match: Host(`frigate.kube.stevearnett.com`)
+      kind: Rule
+      services:
+        - name: frigate
+          port: 5000
+  tls:
+    secretName: wildcard-stevearnett-com-tls

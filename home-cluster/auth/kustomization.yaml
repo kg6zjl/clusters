@@ -4,3 +4,4 @@ resources:
   - namespace.yaml
   - oauth2-proxy-helmrepository.yaml
   - oauth2-proxy-helmrelease.yaml
+  - ingressroute-dashboard.yaml
