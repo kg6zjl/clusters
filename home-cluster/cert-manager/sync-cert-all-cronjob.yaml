@@ -1,7 +1,7 @@
 apiVersion: batch/v1
 kind: CronJob
 metadata:
-  name: auto-sync-wildcard-cert
+  name: sync-wildcard-cert-all
   namespace: cert-manager
 spec:
   schedule: "*/5 * * * *"
@@ -21,18 +21,25 @@ spec:
                 - -c
                 - |
                   set -e
-                  SOURCE_CERT=$(kubectl get secret wildcard-stevearnett-com-tls -n cert-manager -o jsonpath='{.metadata.resourceVersion}')
-                  DEST_NS="frigate meshtastic media traefik"
                   
-                  for ns in $DEST_NS; do
+                  SOURCE_CERT=$(kubectl get secret wildcard-stevearnett-com-tls -n cert-manager -o jsonpath='{.metadata.resourceVersion}')
+                  
+                  NS_WITH_INGRESSROUTES=$(kubectl get ingressroute.traefik.io -A -o jsonpath='{.items[*].metadata.namespace}' | tr ' ' '\n' | sort -u | grep -v cert-manager)
+                  
+                  for ns in $NS_WITH_INGRESSROUTES; do
                     if kubectl get secret wildcard-stevearnett-com-tls -n $ns >/dev/null 2>&1; then
                       DEST_CERT=$(kubectl get secret wildcard-stevearnett-com-tls -n $ns -o jsonpath='{.metadata.resourceVersion}')
                       if [ "$SOURCE_CERT" != "$DEST_CERT" ]; then
                         echo "Syncing cert to $ns (source: $SOURCE_CERT, dest: $DEST_CERT)"
                         kubectl get secret wildcard-stevearnett-com-tls -n cert-manager -o yaml | sed "s/namespace: cert-manager/namespace: $ns/" | kubectl apply -f -
-                        echo "Restarting traefik in $ns"
-                        kubectl rollout restart deployment traefik -n traefik 2>/dev/null || true
+                      else
+                        echo "Cert up to date in $ns"
                       fi
+                    else
+                      echo "Creating cert in $ns"
+                      kubectl get secret wildcard-stevearnett-com-tls -n cert-manager -o yaml | sed "s/namespace: cert-manager/namespace: $ns/" | kubectl apply -f -
                     fi
                   done
+                  
+                  kubectl rollout restart deployment traefik -n traefik 2>/dev/null || true
                   echo "Done"
