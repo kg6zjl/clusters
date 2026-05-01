@@ -8,7 +8,7 @@ resources:
   - namespace.yaml
   - jellyfin-helmrepository.yaml
   - jellyfin-helmrelease.yaml
-  - overseerr.yaml
+  - seerr.yaml
   - prowlarr.yaml
   - radarr.yaml
   - sonarr.yaml
@@ -16,7 +16,7 @@ resources:
   - lidarr.yaml
   - ingressroute-jellyfin.yaml
   - ingressroute-lidarr.yaml
-  - ingressroute-overseerr.yaml
+  - ingressroute-seerr.yaml
   - ingressroute-prowlarr.yaml
   - ingressroute-radarr.yaml
   - ingressroute-sonarr.yaml
