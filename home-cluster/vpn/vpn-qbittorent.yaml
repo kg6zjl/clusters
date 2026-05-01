@@ -73,8 +73,6 @@ spec:
           value: expressvpn
         - name: VPN_TYPE
           value: openvpn
-        - name: OPENVPN_PROTOCOL
-          value: tcp
         - name: SERVER_COUNTRIES
           value: USA
         - name: OPENVPN_USER
