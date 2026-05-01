@@ -26,6 +26,8 @@ spec:
     certController:
       create: false
     webhook:
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
       timeoutSeconds: 60
       env:
         WEBHOOK_CLIENT_TIMEOUT: 30s
