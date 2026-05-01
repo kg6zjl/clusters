@@ -26,10 +26,10 @@ spec:
     to:
     - ipBlock:
         cidr: 10.152.183.1/32
-  # Kube API server (host network, port 6443)
+  # Kube API server (host network, port 16443)
   - ports:
     - protocol: TCP
-      port: 6443
+      port: 16443
     to:
     - ipBlock:
         cidr: 192.168.1.0/24
