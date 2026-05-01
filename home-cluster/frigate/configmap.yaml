@@ -26,15 +26,10 @@ data:
     
     record:
       enabled: true
-      retain:
+      continuous:
         days: 3
-        mode: all
-      events:
-        pre_capture: 5
-        post_capture: 5
-        retain:
-          days: 7
-          mode: motion
+      motion:
+        days: 7
     
     cameras:
       driveway:
