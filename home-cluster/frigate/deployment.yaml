@@ -76,8 +76,9 @@ spec:
           configMap:
             name: frigate-config
         - name: media
-          persistentVolumeClaim:
-            claimName: frigate-media-pvc
+          hostPath:
+            path: /mnt/nas/frigate
+            type: DirectoryOrCreate
         - name: cache
           emptyDir:
             medium: Memory
