@@ -59,8 +59,8 @@ spec:
           - sh
           - -c
           - |
-            FILENAME=$(cat /etc/ovpn-secret/filename)
-            cp /etc/ovpn-secret/$FILENAME /etc/ovpn-secret/custom.ovpn
+            FILENAME=$(cat /etc/ovpn-secret/filename | tr -d ' ')
+            cp "/etc/ovpn-secret/$FILENAME" /etc/ovpn-secret/custom.ovpn
         volumeMounts:
         - name: expressvpn-ovpn
           mountPath: /etc/ovpn-secret
