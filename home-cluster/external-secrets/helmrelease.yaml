@@ -33,7 +33,7 @@ spec:
       env:
         WEBHOOK_CLIENT_TIMEOUT: 30s
       extraArgs:
-        - --port=9443
+        port: "9443"
       certManager:
         enabled: true
         addInjectorAnnotations: true
