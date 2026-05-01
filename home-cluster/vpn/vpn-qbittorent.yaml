@@ -59,10 +59,13 @@ spec:
           - sh
           - -c
           - |
-            cp /etc/ovpn-secret/ovpn_text /etc/ovpn-secret/custom.ovpn
+            cp /etc/ovpn-secret/ovpn_text /etc/ovpn-config/custom.ovpn
         volumeMounts:
         - name: expressvpn-ovpn
           mountPath: /etc/ovpn-secret
+          readOnly: true
+        - name: ovpn-config
+          mountPath: /etc/ovpn-config
       containers:
       - name: gluetun
         image: qmcgaw/gluetun:latest
@@ -84,7 +87,7 @@ spec:
         - name: VPN_TYPE
           value: openvpn
         - name: OPENVPN_CUSTOM_CONFIG
-          value: /etc/ovpn-secret/custom.ovpn
+          value: /etc/ovpn-config/custom.ovpn
         - name: OPENVPN_USER
           valueFrom:
             secretKeyRef:
@@ -115,8 +118,8 @@ spec:
         volumeMounts:
         - name: downloads
           mountPath: /downloads
-        - name: expressvpn-ovpn
-          mountPath: /etc/ovpn-secret
+        - name: ovpn-config
+          mountPath: /etc/ovpn-config
           readOnly: true
       - name: qbittorrent
         image: linuxserver/qbittorrent:latest
@@ -160,6 +163,8 @@ spec:
       - name: expressvpn-ovpn
         secret:
           secretName: expressvpn-ovpn
+      - name: ovpn-config
+        emptyDir: {}
 ---
 apiVersion: v1
 kind: ConfigMap
