@@ -28,6 +28,7 @@ spec:
     webhook:
       hostNetwork: true
       dnsPolicy: ClusterFirstWithHostNet
+      port: 9443
       timeoutSeconds: 60
       env:
         WEBHOOK_CLIENT_TIMEOUT: 30s
