@@ -1,3 +1,4 @@
+# Allow reflector to read secrets in cert-manager namespace
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
@@ -20,4 +21,30 @@ subjects:
 roleRef:
   kind: Role
   name: reflector-read-secrets
+  apiGroup: rbac.authorization.k8s.io
+---
+# Allow reflector to create/update reflected secret copies in ALL namespaces
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: reflector-secret-sync
+rules:
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: [""]
+    resources: ["namespaces"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: reflector-secret-sync-binding
+subjects:
+  - kind: ServiceAccount
+    name: reflector
+    namespace: clustersecret
+roleRef:
+  kind: ClusterRole
+  name: reflector-secret-sync
   apiGroup: rbac.authorization.k8s.io
