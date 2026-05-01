@@ -14,6 +14,11 @@ resources:
   - sonarr.yaml
   - flaresolverr.yaml
   - lidarr.yaml
-  - ingress-jellyfin.yaml
+  - ingressroute-jellyfin.yaml
+  - ingressroute-lidarr.yaml
+  - ingressroute-overseerr.yaml
+  - ingressroute-prowlarr.yaml
+  - ingressroute-radarr.yaml
+  - ingressroute-sonarr.yaml
   - jellyfin-cache-pvc.yaml
   - external-secrets.yaml

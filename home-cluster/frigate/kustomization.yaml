@@ -9,7 +9,7 @@ resources:
   - configmap.yaml
   - deployment.yaml
   - service.yaml
-  - ingress.yaml
+  - ingressroute.yaml
   - external-secrets.yaml
 
 generatorOptions:

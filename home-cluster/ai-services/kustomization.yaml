@@ -10,6 +10,8 @@ resources:
   - ollama-amd.yaml
   - open-webui.yaml
   - ingressroute.yaml
+  - ingressroute-dolphin.yaml
+  - ingressroute-ollama-chat.yaml
   - dnsendpoint.yaml
   - service-comfy.yaml
   - deployment-comfy.yaml
