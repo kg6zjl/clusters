@@ -2,7 +2,7 @@
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: overseerr
+  name: seerr
   namespace: media
   annotations:
     kubernetes.io/ingress.class: traefik
@@ -21,14 +21,14 @@ spec:
         pathType: Prefix
         backend:
           service:
-            name: overseerr
+            name: seerr
             port:
               number: 5055
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: overseerr-config
+  name: seerr-config
   namespace: media
 spec:
   accessModes:
@@ -41,22 +41,30 @@ spec:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: overseerr
+  name: seerr
   namespace: media
 spec:
   replicas: 1
   revisionHistoryLimit: 3
   selector:
     matchLabels:
-      app: overseerr
+      app: seerr
   template:
     metadata:
       labels:
-        app: overseerr
+        app: seerr
     spec:
+      securityContext:
+        fsGroup: 1000
       containers:
-      - name: overseerr
-        image: sctx/overseerr:latest
+      - name: seerr
+        image: seerr/seerr:latest
+        securityContext:
+          runAsUser: 1000
+          runAsGroup: 1000
+          runAsNonRoot: true
+          capabilities:
+            drop: ["ALL"]
         env:
         - name: LOG_LEVEL
           value: info
@@ -66,21 +74,21 @@ spec:
         - containerPort: 5055
           protocol: TCP
         volumeMounts:
-        - name: overseerr-config
+        - name: seerr-config
           mountPath: /app/config
       volumes:
-      - name: overseerr-config
+      - name: seerr-config
         persistentVolumeClaim:
-          claimName: overseerr-config
+          claimName: seerr-config
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: overseerr
+  name: seerr
   namespace: media
 spec:
   selector:
-    app: overseerr
+    app: seerr
   ports:
   - port: 5055
     targetPort: 5055
