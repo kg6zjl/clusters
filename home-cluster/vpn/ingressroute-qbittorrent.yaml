@@ -1,0 +1,19 @@
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: qbittorrent
+  namespace: vpn
+  annotations:
+    external-dns.alpha.kubernetes.io/hostname: qb.kube.stevearnett.com
+    external-dns.alpha.kubernetes.io/target: kube.stevearnett.com
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - match: Host(`qb.kube.stevearnett.com`)
+      kind: Rule
+      services:
+        - name: gluetun
+          port: 8080
+  tls:
+    secretName: wildcard-stevearnett-com-tls

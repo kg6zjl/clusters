@@ -6,7 +6,7 @@ namespace: vpn
 resources:
   - network-policy.yaml
   - vpn-qbittorent.yaml
-  - ingress-qbittorrent.yaml
+  - ingressroute-qbittorrent.yaml
   - external-secrets.yaml
   - external-secrets-ovpn.yaml
 

@@ -9,11 +9,25 @@ spec:
   - Ingress
   - Egress
   egress:
+  # DNS
   - ports:
     - protocol: UDP
       port: 53
     - protocol: TCP
       port: 53
+    to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: kube-system
+  # Kube API server (host network, port 6443)
+  - ports:
+    - protocol: TCP
+      port: 6443
+    to:
+    - ipBlock:
+        cidr: 192.168.1.0/24
+  # All other namespaces on port 443
+  - ports:
     - protocol: TCP
       port: 443
     to:
