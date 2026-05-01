@@ -24,16 +24,6 @@ data:
     detect:
       enabled: true
     
-    record:
-      enabled: true
-      retain:
-        days: 3
-        mode: all
-      events:
-        retain:
-          default: 7
-          mode: motion
-    
     cameras:
       driveway:
         enabled: true
@@ -71,9 +61,10 @@ data:
           mask: 0.403,0,0.403,0.053,0.583,0.06,0.582,0
         record:
           enabled: true
-          alerts:
-            pre_capture: 5
-            post_capture: 5
+          retain:
+            days: 3
+            mode: all
+          events:
             retain:
               days: 7
               mode: motion
@@ -99,9 +90,10 @@ data:
           mask: 0.408,0,0.408,0.06,0.588,0.06,0.588,0
         record:
           enabled: true
-          alerts:
-            pre_capture: 5
-            post_capture: 5
+          retain:
+            days: 3
+            mode: all
+          events:
             retain:
               days: 7
               mode: motion
@@ -122,7 +114,10 @@ data:
           mask: 0.281,0.008,0.28,0.07,0.704,0.072,0.708,0
         record:
           enabled: true
-          alerts:
+          retain:
+            days: 3
+            mode: all
+          events:
             retain:
               days: 7
               mode: motion
