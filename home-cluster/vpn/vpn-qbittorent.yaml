@@ -60,6 +60,15 @@ spec:
           - -c
           - |
             cp /etc/ovpn-secret/ovpn_text /etc/ovpn-config/custom.ovpn
+            HOSTNAME=$(grep '^remote ' /etc/ovpn-config/custom.ovpn | awk '{print $2}')
+            IP=$(nslookup $HOSTNAME 8.8.8.8 2>/dev/null | grep 'Address:' | tail -1 | awk '{print $2}')
+            if [ -n "$IP" ]; then
+              sed -i "s/remote $HOSTNAME/remote $IP/" /etc/ovpn-config/custom.ovpn
+              echo "Resolved $HOSTNAME -> $IP"
+            else
+              echo "Failed to resolve $HOSTNAME"
+              exit 1
+            fi
         volumeMounts:
         - name: expressvpn-ovpn
           mountPath: /etc/ovpn-secret
