@@ -32,6 +32,8 @@ spec:
       timeoutSeconds: 60
       env:
         WEBHOOK_CLIENT_TIMEOUT: 30s
+      extraArgs:
+        - --port=9443
       certManager:
         enabled: true
         addInjectorAnnotations: true
