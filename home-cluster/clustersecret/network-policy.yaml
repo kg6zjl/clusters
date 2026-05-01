@@ -19,6 +19,13 @@ spec:
     - namespaceSelector:
         matchLabels:
           kubernetes.io/metadata.name: kube-system
+  # Kube API server service (ClusterIP)
+  - ports:
+    - protocol: TCP
+      port: 443
+    to:
+    - ipBlock:
+        cidr: 10.152.183.1/32
   # Kube API server (host network, port 6443)
   - ports:
     - protocol: TCP

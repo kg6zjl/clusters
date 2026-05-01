@@ -30,6 +30,8 @@ spec:
   ingress:
   - from:
     - namespaceSelector: {}
+    - ipBlock:
+        cidr: 192.168.1.96/32
     ports:
     - protocol: TCP
       port: 10250
