@@ -15,10 +15,8 @@ resources:
   - external-secrets.yaml
   - clusterissuer.yaml
   - certificate.yaml
-  - sync-cert-cronjob.yaml
-  - sync-cert-namespaces-cronjob.yaml
+  - nas-cert-backup-cronjob.yaml
   - reflector-rbac.yaml
-  - auto-sync-certs-cronjob.yaml
   - servicemonitor.yaml
 
 patches:
