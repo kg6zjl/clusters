@@ -13,22 +13,37 @@ This is a **single-node Kubernetes home lab cluster** running on an AMD-based Ac
 
 ---
 
-## Build, Lint, and Apply Commands
+## Deployment Model
 
-### Apply Changes to Cluster
+This cluster uses **Flux CD** for GitOps reconciliation. There is NO "Apply to Cluster" GitHub Actions workflow.
 
-Changes are applied via GitHub Actions workflow. DO NOT run `task apply` locally.
+### How changes reach the cluster
 
-1. Create a branch and PR for changes
-2. CI runs lint/validate checks
-3. Merge PR to trigger "Apply to Cluster" workflow
-4. Workflow syncs helmfile and applies kustomize manifests
+1. Edit YAML manifests in this repository
+2. Create a branch and commit
+3. Open a PR and wait for CI checks to pass
+4. Merge to main
+5. Flux reconciles the changed Kustomizations automatically (intervals vary: 1m-1h per resource)
 
-**Local commands (for testing only):**
+### ⚠️ CRITICAL: NEVER Apply Changes Directly to the Cluster ⚠️
+
+**DO NOT run `kubectl apply`, `kubectl delete`, `helm install`, `helm upgrade`, or any variant that modifies cluster state directly.**
+
+Local `kubectl` commands are for **read-only debugging only** (get, describe, logs, etc.). Any write operation will:
+1. Be overwritten by Flux when it next reconciles
+2. Cause Flux to show as "drifted" and potentially trigger unwanted rollbacks
+3. Break the GitOps guarantee that git is the single source of truth
+
+**Local commands (for testing only - READ ONLY):**
 ```bash
-helm repo update
-helmfile sync
+# These are OK for local testing of YAML syntax only:
+kubectl kustomize .
+kubectl apply --dry-run=client -k .
+
+# These are NEVER OK:
 kubectl apply -k .
+helmfile sync
+task apply
 ```
 
 ### Validate Manifests
@@ -55,6 +70,10 @@ kubectl describe <resource> -n <namespace>
 
 # Check certificate validity
 kubectl get secret wildcard-stevearnett-com-tls -n cert-manager -o jsonpath='{.data.tls\.crt}' | base64 -d | openssl x509 -noout -dates
+
+# Check Flux reconciliation status
+kubectl get kustomizations -n flux-system
+kubectl describe kustomization <name> -n flux-system
 ```
 
 ### Debugging Network Policies and RBAC (IMPORTANT)
@@ -350,7 +369,8 @@ grep -E "ghp_|eyJ|CLOUDFLARE_|RENOVATE_|password:\s*['\"][^$]" --include="*.yaml
 2. Add `namespace.yaml`, `kustomization.yaml`, and resource manifests
 3. Add `external-secrets.yaml` if the service requires secrets (add secrets to 1Password first!)
 4. Reference directory from root `kustomization.yaml`
-5. Run `task apply`
+5. Add a Flux Kustomization sync in `flux-system/syncs/`
+6. Merge PR — Flux will reconcile automatically
 
 ### Creating an Ingress
 
@@ -381,8 +401,8 @@ Include `servicemonitor.yaml` for services exposing metrics. Reference existing 
 
 ## Error Handling
 
-- Always check `task apply` output for errors
-- Verify pod status after apply: `kubectl get pods -A`
+- Check Flux reconciliation status: `kubectl get kustomizations -n flux-system`
+- Verify pod status after merge: `kubectl get pods -A`
 - Check pod logs if issues arise: `kubectl logs -n <ns> <pod>`
 - For CRD issues, ensure the CRD is installed before applying custom resources
 
@@ -430,12 +450,15 @@ kubectl get <resource> -n <namespace>
 kubectl describe deployment <name> -n <namespace>
 ```
 
-### After applying manifests:
+### After merging a PR:
 ```bash
+# Check Flux reconciliation
+kubectl get kustomizations -n flux-system
+
 # Validate the manifest first
 kubectl apply -f <file>.yaml --dry-run=client
 
-# Verify the resource exists after apply
+# Verify the resource exists after Flux reconciles
 kubectl get <resource> -n <namespace>
 ```
 
