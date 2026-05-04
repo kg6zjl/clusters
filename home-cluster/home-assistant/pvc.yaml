@@ -5,6 +5,7 @@ metadata:
 spec:
   accessModes:
     - ReadWriteOnce
+  storageClassName: nas-smb
   resources:
     requests:
       storage: 10Gi
@@ -16,6 +17,7 @@ metadata:
 spec:
   accessModes:
     - ReadWriteOnce
+  storageClassName: nas-smb
   resources:
     requests:
       storage: 2Gi
