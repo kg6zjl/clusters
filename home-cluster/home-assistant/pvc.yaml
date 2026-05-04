@@ -1,7 +1,7 @@
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: home-assistant-pvc
+  name: home-assistant-pvc-nas
 spec:
   accessModes:
     - ReadWriteOnce
@@ -13,7 +13,7 @@ spec:
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: matter-server-pvc
+  name: matter-server-pvc-nas
 spec:
   accessModes:
     - ReadWriteOnce
