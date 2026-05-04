@@ -4,7 +4,7 @@ metadata:
   name: nas-smb
 provisioner: smb.csi.k8s.io
 parameters:
-  source: "//192.168.1.176/k8s/{pvcName}"
+  source: "//192.168.1.176/Media/k8s/{pvcName}"
   csi.storage.k8s.io/node-stage-secret-name: smb-creds
   csi.storage.k8s.io/node-stage-secret-namespace: kube-system
 reclaimPolicy: Retain
