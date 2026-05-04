@@ -7,5 +7,3 @@ resources:
   - reloader-helmrelease.yaml
   - metrics-server-helmrelease.yaml
   - csi-driver-smb-helmrelease.yaml
-  - smb-storageclass.yaml
-  - smb-creds-external-secret.yaml

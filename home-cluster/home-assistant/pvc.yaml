@@ -1,11 +1,11 @@
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: home-assistant-pvc-nas
+  name: home-assistant-pvc
 spec:
   accessModes:
     - ReadWriteOnce
-  storageClassName: nas-smb
+  storageClassName: microk8s-hostpath
   resources:
     requests:
       storage: 10Gi
@@ -13,11 +13,11 @@ spec:
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: matter-server-pvc-nas
+  name: matter-server-pvc
 spec:
   accessModes:
     - ReadWriteOnce
-  storageClassName: nas-smb
+  storageClassName: microk8s-hostpath
   resources:
     requests:
       storage: 2Gi

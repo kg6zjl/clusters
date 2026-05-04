@@ -99,13 +99,13 @@ spec:
       volumes:
         - name: config
           persistentVolumeClaim:
-            claimName: home-assistant-pvc-nas
+            claimName: home-assistant-pvc
         - name: init-config
           configMap:
             name: home-assistant-config
         - name: matter-data
           persistentVolumeClaim:
-            claimName: matter-server-pvc-nas
+            claimName: matter-server-pvc
         - name: dbus
           hostPath:
             path: /run/dbus
