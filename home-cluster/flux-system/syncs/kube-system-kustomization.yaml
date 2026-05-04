@@ -4,9 +4,11 @@ metadata:
   name: kube-system
   namespace: flux-system
 spec:
-  interval: 1h
+  interval: 5m
   path: ./home-cluster/kube-system
   prune: true
   sourceRef:
     kind: GitRepository
     name: clusters
+  targetNamespace: kube-system
+  timeout: 2m0s
