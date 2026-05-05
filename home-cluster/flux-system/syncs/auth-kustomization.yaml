@@ -4,7 +4,7 @@ metadata:
   name: auth
   namespace: flux-system
 spec:
-  interval: 1h
+  interval: 5m
   path: ./home-cluster/auth
   prune: true
   sourceRef:
