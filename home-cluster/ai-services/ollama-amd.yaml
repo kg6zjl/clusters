@@ -7,7 +7,7 @@ metadata:
   labels:
     app: ollama-amd
 spec:
-  replicas: 1
+  replicas: 0
   strategy:
     type: Recreate
   selector:
@@ -81,7 +81,7 @@ metadata:
   labels:
     app: ollama-amd
 spec:
-  replicas: 1
+  replicas: 0
   strategy:
     type: Recreate
   selector:
