@@ -31,7 +31,12 @@ spec:
             - -c
             - |
               rm -f /config/configuration.yaml &&
-              cp /tmp/config/configuration.yaml /config/configuration.yaml
+              cp /tmp/config/configuration.yaml /config/configuration.yaml &&
+              mkdir -p /config/custom_components/hacs &&
+              wget -q -O /config/custom_components/hacs/hacs.zip https://github.com/hacs/integration/releases/latest/download/hacs.zip &&
+              cd /config/custom_components/hacs &&
+              unzip -o hacs.zip &&
+              rm hacs.zip
           volumeMounts:
             - name: config
               mountPath: /config
