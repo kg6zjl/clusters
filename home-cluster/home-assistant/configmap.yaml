@@ -22,6 +22,3 @@ data:
           hidden: false
         sensor.ugreen_xp2800_d460_pool_2:
           hidden: false
-    automation: !include automations.yaml
-    script: !include scripts.yaml
-    scene: !include scenes.yaml
