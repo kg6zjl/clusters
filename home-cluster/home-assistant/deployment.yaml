@@ -32,6 +32,7 @@ spec:
             - |
               rm -f /config/configuration.yaml &&
               cp /tmp/config/configuration.yaml /config/configuration.yaml &&
+              touch /config/automations.yaml /config/scripts.yaml /config/scenes.yaml &&
               mkdir -p /config/custom_components/hacs &&
               wget -q -O /config/custom_components/hacs/hacs.zip https://github.com/hacs/integration/releases/latest/download/hacs.zip &&
               cd /config/custom_components/hacs &&
