@@ -23,6 +23,12 @@ spec:
     ports:
     - protocol: TCP
       port: 443
+  - to:
+    - ipBlock:
+        cidr: 0.0.0.0/0
+    ports:
+    - protocol: TCP
+      port: 443
   ingress:
   - from:
     - namespaceSelector:
