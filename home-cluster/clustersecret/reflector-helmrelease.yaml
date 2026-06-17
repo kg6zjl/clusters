@@ -20,3 +20,4 @@ spec:
       retries: 3
   values:
     updateOnChange: true
+    nodeSelector: {}
