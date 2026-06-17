@@ -1,0 +1,14 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: wildcard-stevearnett-com-tls
+  namespace: traefik
+spec:
+  secretName: wildcard-stevearnett-com-tls
+  dnsNames:
+    - "*.stevearnett.com"
+    - "*.kube.stevearnett.com"
+    - "stevearnett.com"
+  issuerRef:
+    name: letsencrypt-issuer
+    kind: ClusterIssuer

@@ -14,9 +14,7 @@ resources:
   - network-policy.yaml
   - external-secrets.yaml
   - clusterissuer.yaml
-  - certificate.yaml
   - nas-cert-backup-cronjob.yaml
-  - reflector-rbac.yaml
   - servicemonitor.yaml
 
 patches:

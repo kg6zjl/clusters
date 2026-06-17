@@ -38,3 +38,6 @@ spec:
         enabled: true
         publishedService:
           enabled: true
+    tls:
+      defaultCertificate:
+        secretName: wildcard-stevearnett-com-tls
