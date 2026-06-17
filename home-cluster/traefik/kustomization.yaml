@@ -10,3 +10,4 @@ resources:
   - ingress-dashboard.yaml
   - middleware-oauth.yaml
   - helmrelease.yaml
+  - certificate.yaml
