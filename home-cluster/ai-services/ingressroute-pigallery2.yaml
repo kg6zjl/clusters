@@ -17,4 +17,3 @@ spec:
         - name: pigallery2
           port: 80
           scheme: http
-  tls: {}

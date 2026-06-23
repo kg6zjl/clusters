@@ -15,4 +15,3 @@ spec:
       services:
         - name: gluetun
           port: 8080
-  tls: {}

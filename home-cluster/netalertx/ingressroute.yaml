@@ -15,4 +15,3 @@ spec:
       services:
         - name: netalertx
           port: 20211
-  tls: {}

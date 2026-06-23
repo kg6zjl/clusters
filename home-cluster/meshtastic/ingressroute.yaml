@@ -15,7 +15,6 @@ spec:
       services:
         - name: meshmonitor
           port: 3001
-  tls: {}
 ---
 apiVersion: traefik.io/v1alpha1
 kind: IngressRouteTCP
