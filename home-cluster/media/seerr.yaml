@@ -12,7 +12,6 @@ spec:
   tls:
   - hosts:
     - overseerr.kube.stevearnett.com
-    secretName: wildcard-stevearnett-com-tls
   rules:
   - host: overseerr.kube.stevearnett.com
     http:

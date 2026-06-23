@@ -15,5 +15,4 @@ spec:
       services:
         - name: radarr
           port: 7878
-  tls:
-    secretName: wildcard-stevearnett-com-tls
+  tls: {}

@@ -12,7 +12,6 @@ spec:
   tls:
   - hosts:
     - radarr.kube.stevearnett.com
-    secretName: wildcard-stevearnett-com-tls
   rules:
   - host: radarr.kube.stevearnett.com
     http:

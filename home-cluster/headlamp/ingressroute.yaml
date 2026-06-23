@@ -12,5 +12,4 @@ spec:
       services:
         - name: headlamp
           port: 80
-  tls:
-    secretName: wildcard-stevearnett-com-tls
+  tls: {}

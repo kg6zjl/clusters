@@ -12,7 +12,6 @@ spec:
   tls:
   - hosts:
     - lidarr.kube.stevearnett.com
-    secretName: wildcard-stevearnett-com-tls
   rules:
   - host: lidarr.kube.stevearnett.com
     http:

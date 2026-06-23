@@ -15,5 +15,4 @@ spec:
       services:
         - name: home-assistant
           port: 8123
-  tls:
-    secretName: wildcard-stevearnett-com-tls
+  tls: {}

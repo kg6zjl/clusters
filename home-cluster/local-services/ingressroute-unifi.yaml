@@ -19,5 +19,4 @@ spec:
           port: 443
           scheme: https
           serversTransport: insecure-transport
-  tls:
-    secretName: wildcard-stevearnett-com-tls
+  tls: {}

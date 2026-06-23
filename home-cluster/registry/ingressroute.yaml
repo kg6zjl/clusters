@@ -15,5 +15,4 @@ spec:
     services:
     - name: registry
       port: 5000
-  tls:
-    secretName: wildcard-stevearnett-com-tls
+  tls: {}

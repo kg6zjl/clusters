@@ -17,5 +17,4 @@ spec:
         - name: pigallery2
           port: 80
           scheme: http
-  tls:
-    secretName: wildcard-stevearnett-com-tls
+  tls: {}

@@ -15,5 +15,4 @@ spec:
       services:
         - name: seerr
           port: 5055
-  tls:
-    secretName: wildcard-stevearnett-com-tls
+  tls: {}

@@ -13,7 +13,6 @@ spec:
   tls:
   - hosts:
     - dashboard.kube.stevearnett.com
-    secretName: wildcard-stevearnett-com-tls
   rules:
   - host: dashboard.kube.stevearnett.com
     http:

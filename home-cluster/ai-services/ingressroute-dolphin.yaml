@@ -15,5 +15,4 @@ spec:
       services:
         - name: ollama
           port: 11434
-  tls:
-    secretName: wildcard-stevearnett-com-tls
+  tls: {}

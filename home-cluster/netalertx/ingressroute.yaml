@@ -15,5 +15,4 @@ spec:
       services:
         - name: netalertx
           port: 20211
-  tls:
-    secretName: wildcard-stevearnett-com-tls
+  tls: {}
