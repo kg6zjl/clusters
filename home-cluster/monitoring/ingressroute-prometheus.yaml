@@ -15,5 +15,4 @@ spec:
       services:
         - name: kube-prometheus-stack-prometheus
           port: 9090
-  tls:
-    secretName: wildcard-stevearnett-com-tls
+  tls: {}

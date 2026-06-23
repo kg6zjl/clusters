@@ -13,7 +13,6 @@ spec:
   tls:
   - hosts:
     - zb.stevearnett.com
-    secretName: wildcard-stevearnett-com-tls
   rules:
   - host: zb.stevearnett.com
     http:

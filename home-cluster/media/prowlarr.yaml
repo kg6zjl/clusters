@@ -12,7 +12,6 @@ spec:
   tls:
   - hosts:
     - prowlarr.kube.stevearnett.com
-    secretName: wildcard-stevearnett-com-tls
   rules:
   - host: prowlarr.kube.stevearnett.com
     http:

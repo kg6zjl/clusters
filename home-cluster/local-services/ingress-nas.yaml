@@ -13,7 +13,6 @@ spec:
   tls:
   - hosts:
     - nas.stevearnett.com
-    secretName: wildcard-stevearnett-com-tls
   rules:
   - host: nas.stevearnett.com
     http:

@@ -12,7 +12,6 @@ spec:
   tls:
   - hosts:
     - sonarr.kube.stevearnett.com
-    secretName: wildcard-stevearnett-com-tls
   rules:
   - host: sonarr.kube.stevearnett.com
     http:

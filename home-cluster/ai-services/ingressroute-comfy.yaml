@@ -20,5 +20,4 @@ spec:
         - name: comfy-local
           port: 8080
           scheme: http
-  tls:
-    secretName: wildcard-stevearnett-com-tls
+  tls: {}
