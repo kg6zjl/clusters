@@ -15,4 +15,3 @@ spec:
       services:
         - name: prowlarr
           port: 9696
-  tls: {}

@@ -15,4 +15,3 @@ spec:
       services:
         - name: frigate
           port: 5000
-  tls: {}

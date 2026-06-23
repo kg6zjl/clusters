@@ -20,4 +20,3 @@ spec:
         - name: comfy-local
           port: 8080
           scheme: http
-  tls: {}
