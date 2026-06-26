@@ -48,6 +48,10 @@ spec:
         - 993
     securityContext:
       privileged: true
+    jellyfin:
+      env:
+        - name: JELLYFIN_PublishedServerUrl
+          value: "https://media.kube.stevearnett.com"
     metrics:
       enabled: true
       serviceMonitor:
