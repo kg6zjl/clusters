@@ -125,7 +125,7 @@ data:
         record:
           enabled: true
 
-    version: 0.17-0
+    version: 0.16
 
     semantic_search:
       enabled: false
