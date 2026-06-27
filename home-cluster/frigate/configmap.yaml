@@ -26,9 +26,7 @@ data:
     
     record:
       enabled: true
-      continuous:
-        days: 3
-      motion:
+      retain:
         days: 7
     
     cameras:
@@ -71,7 +69,6 @@ data:
       
       play_yard:
         enabled: true
-        friendly_name: Play Yard
         ffmpeg:
           inputs:
             - path: rtsp://{FRIGATE_RTSP_USERNAME}:{FRIGATE_RTSP_PASSWORD}@192.168.1.150:554/Preview_01_main
@@ -93,7 +90,6 @@ data:
 
       dining_room:
         enabled: true
-        friendly_name: Dining Room
         ffmpeg:
           inputs:
             - path: rtsp://{FRIGATE_RTSP_USERNAME}:{FRIGATE_RTSP_PASSWORD}@192.168.1.184:554/Preview_01_main
@@ -110,7 +106,6 @@ data:
 
       garage:
         enabled: true
-        friendly_name: Garage
         ffmpeg:
           inputs:
             - path: rtsp://{FRIGATE_RTSP_USERNAME}:{FRIGATE_RTSP_PASSWORD}@192.168.1.77:554/Preview_01_main
@@ -126,19 +121,6 @@ data:
           enabled: true
 
     version: 0.16
-
-    semantic_search:
-      enabled: false
-
-    face_recognition:
-      enabled: false
-
-    lpr:
-      enabled: false
-
-    classification:
-      bird:
-        enabled: false
 
     go2rtc:
       streams:
