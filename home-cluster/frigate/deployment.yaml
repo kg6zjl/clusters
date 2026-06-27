@@ -5,6 +5,8 @@ metadata:
   namespace: frigate
 spec:
   replicas: 1
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app: frigate
@@ -26,7 +28,7 @@ spec:
                       - kube-nuc
       initContainers:
       - name: copy-config
-        image: ghcr.io/blakeblackshear/frigate:0.16.4
+        image: ghcr.io/blakeblackshear/frigate:0.17.1
         command:
         - sh
         - -c
@@ -40,7 +42,7 @@ spec:
           mountPath: /config-src
       containers:
         - name: frigate
-          image: ghcr.io/blakeblackshear/frigate:0.16.4
+          image: ghcr.io/blakeblackshear/frigate:0.17.1
           envFrom:
             - secretRef:
                 name: frigate-credentials
