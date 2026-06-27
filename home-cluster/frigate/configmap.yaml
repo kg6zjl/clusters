@@ -108,6 +108,23 @@ data:
         record:
           enabled: true
 
+      garage:
+        enabled: true
+        friendly_name: Garage
+        ffmpeg:
+          inputs:
+            - path: rtsp://{FRIGATE_RTSP_USERNAME}:{FRIGATE_RTSP_PASSWORD}@192.168.1.77:554/Preview_01_main
+              roles:
+                - detect
+                - record
+        live:
+          streams:
+            Stream 1: garage
+        motion:
+          mask: 0.281,0.008,0.28,0.07,0.704,0.072,0.708,0
+        record:
+          enabled: true
+
     version: 0.17-0
 
     semantic_search:
