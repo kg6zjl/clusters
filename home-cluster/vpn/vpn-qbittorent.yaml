@@ -168,7 +168,7 @@ spec:
       - name: downloads
         hostPath:
           path: /mnt/nas/torrents/Downloads
-          type: Directory
+          type: DirectoryOrCreate
       - name: expressvpn-ovpn
         secret:
           secretName: expressvpn-ovpn
