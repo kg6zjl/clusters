@@ -9,6 +9,7 @@ resources:
   - external-secrets.yaml
   - renovate-helmrepository.yaml
   - helmrelease.yaml
+  - configmap.yaml
 
 generatorOptions:
   disableNameSuffixHash: true
