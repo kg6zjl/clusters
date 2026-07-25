@@ -22,7 +22,7 @@ spec:
       storage:
         type: filesystem
       limits_config:
-        retention_period: 240h
+        retention_period: 168h
       compactor:
         retention_enabled: true
         delete_request_store: filesystem

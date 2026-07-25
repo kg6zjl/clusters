@@ -33,7 +33,6 @@ spec:
             static_configs:
               - targets:
                   - https://ha.kube.stevearnett.com/
-                  - https://frigate.kube.stevearnett.com/
                   - https://grafana.kube.stevearnett.com/
                   - https://prometheus.kube.stevearnett.com/
                 labels:
