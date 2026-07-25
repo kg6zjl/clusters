@@ -10,7 +10,6 @@ resources:
   - speedtest-kustomization.yaml
   - headlamp-kustomization.yaml
   - mqtt-kustomization.yaml
-  - frigate-kustomization.yaml
   - meshtastic-kustomization.yaml
   - meshtastic-bot-kustomization.yaml
   - cloudflared-kustomization.yaml
