@@ -4,7 +4,7 @@ metadata:
   name: meshtastic-bot
   namespace: meshtastic
 spec:
-  replicas: 1
+  replicas: 0
   selector:
     matchLabels:
       app: meshtastic-bot
