@@ -31,12 +31,16 @@ spec:
     ports:
     - protocol: TCP
       port: 443
+    - protocol: TCP
+      port: 16443
   - to:
     - ipBlock:
         cidr: 0.0.0.0/0
     ports:
     - protocol: TCP
       port: 443
+    - protocol: TCP
+      port: 16443
   ingress:
   - from:
     - namespaceSelector:
