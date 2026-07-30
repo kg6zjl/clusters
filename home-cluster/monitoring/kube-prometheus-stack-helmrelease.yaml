@@ -65,6 +65,7 @@ spec:
                   description: "Cannot reach {{ $labels.instance }} for 2 minutes"
     grafana:
       enabled: true
+      replicas: 0
       admin:
         existingSecret: grafana-admin-secret
         userKey: admin-user

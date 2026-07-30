@@ -19,6 +19,7 @@ spec:
     remediation:
       retries: 3
   values:
+    replicas: 0
     service:
       type: ClusterIP
     ingress:
