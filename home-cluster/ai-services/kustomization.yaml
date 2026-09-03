@@ -6,7 +6,6 @@ namespace: ai-services
 resources:
   - network-policy.yaml
   - namespace.yaml
-  - wyoming-whisper.yaml
   - ollama-amd.yaml
   - ingressroute-dolphin.yaml
   - dnsendpoint.yaml
