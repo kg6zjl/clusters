@@ -70,13 +70,6 @@ spec:
         existingSecret: grafana-admin-secret
         userKey: admin-user
         passwordKey: GRAFANA_ADMIN_PASSWORD
-      additionalDataSources:
-        - name: Loki
-          type: loki
-          url: http://loki.monitoring.svc.cluster.local:3100
-          access: proxy
-          isDefault: false
-          jsonData:
-            maxLines: 1000
+      additionalDataSources: []
     alertmanager:
       enabled: true
