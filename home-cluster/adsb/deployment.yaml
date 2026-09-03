@@ -1,0 +1,74 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: adsb-ultrafeeder
+  namespace: adsb
+  labels:
+    alert-on-down: "true"
+spec:
+  strategy:
+    type: Recreate
+  replicas: 1
+  selector:
+    matchLabels:
+      app: adsb-ultrafeeder
+  template:
+    metadata:
+      labels:
+        app: adsb-ultrafeeder
+    spec:
+      nodeName: thinkcentre02
+      containers:
+      - name: ultrafeeder
+        image: ghcr.io/sdr-enthusiasts/docker-adsb-ultrafeeder:latest
+        ports:
+        - containerPort: 80
+          name: web
+        - containerPort: 30002
+          name: beast-input
+        - containerPort: 30005
+          name: beast-output
+        env:
+        - name: TZ
+          value: America/Los_Angeles
+        - name: READSB_DEVICE_TYPE
+          value: rtlsdr
+        - name: READSB_RTLSDR_DEVICE
+          value: "00000001"
+        - name: READSB_GAIN
+          value: auto
+        - name: LAT
+          valueFrom:
+            secretKeyRef:
+              name: adsb-secrets
+              key: LAT
+        - name: LONG
+          valueFrom:
+            secretKeyRef:
+              name: adsb-secrets
+              key: LONG
+        securityContext:
+          privileged: true
+          allowPrivilegeEscalation: true
+        volumeMounts:
+        - name: usb
+          mountPath: /dev/bus/usb
+        - name: history
+          mountPath: /var/globe_history
+        - name: timelapse
+          mountPath: /var/timelapse1090
+        - name: graphs
+          mountPath: /var/lib/collectd
+      volumes:
+      - name: usb
+        hostPath:
+          path: /dev/bus/usb
+      - name: history
+        persistentVolumeClaim:
+          claimName: adsb-history
+      - name: timelapse
+        persistentVolumeClaim:
+          claimName: adsb-timelapse
+      - name: graphs
+        persistentVolumeClaim:
+          claimName: adsb-graphs

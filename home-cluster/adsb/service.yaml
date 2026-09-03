@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: adsb-ultrafeeder
+  namespace: adsb
+spec:
+  selector:
+    app: adsb-ultrafeeder
+  ports:
+  - name: web
+    port: 80
+    targetPort: 80
+  - name: beast-input
+    port: 30002
+    targetPort: 30002
+  - name: beast-output
+    port: 30005
+    targetPort: 30005
+  type: ClusterIP
