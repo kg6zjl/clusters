@@ -6,7 +6,6 @@ resources:
   - traefik-kustomization.yaml
   - cert-manager-kustomization.yaml
   - netalertx-kustomization.yaml
-  - quotes-kustomization.yaml
   - speedtest-kustomization.yaml
   - headlamp-kustomization.yaml
   - mqtt-kustomization.yaml
@@ -22,7 +21,6 @@ resources:
   - ai-services-kustomization.yaml
   - media-kustomization.yaml
   - monitoring-kustomization.yaml
-  - spegel-kustomization.yaml
   - external-secrets-kustomization.yaml
   - onepassword-connect-kustomization.yaml
   - clustersecret-kustomization.yaml
