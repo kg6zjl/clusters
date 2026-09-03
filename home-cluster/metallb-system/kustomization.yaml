@@ -3,3 +3,6 @@ kind: Kustomization
 resources:
   - namespace.yaml
   - network-policy.yaml
+  - helmrelease.yaml
+  - ipaddresspool.yaml
+  - l2advertisement.yaml
