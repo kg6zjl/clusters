@@ -22,6 +22,11 @@ spec:
       port: 443
   - to:
     - namespaceSelector: {}
+  - ports:
+    - protocol: TCP
+      port: 80
+    - protocol: TCP
+      port: 443
   ingress:
   - from:
     - namespaceSelector:
