@@ -17,7 +17,8 @@ spec:
       labels:
         app: adsb-ultrafeeder
     spec:
-      nodeName: thinkcentre02
+      nodeSelector:
+        kubernetes.io/hostname: thinkcentre02
       containers:
       - name: ultrafeeder
         image: ghcr.io/sdr-enthusiasts/docker-adsb-ultrafeeder:latest
