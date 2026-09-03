@@ -31,3 +31,4 @@ resources:
   - kube-system-kustomization.yaml
   - arc-kustomization.yaml
   - auth-kustomization.yaml
+  - adsb-kustomization.yaml
