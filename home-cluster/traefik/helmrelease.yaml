@@ -25,7 +25,7 @@ spec:
         port: 4404
         exposedPort: 4404
         protocol: TCP
-     meshmonitor-tcp-4405:
+      meshmonitor-tcp-4405:
         port: 4405
         exposedPort: 4405
         protocol: TCP
