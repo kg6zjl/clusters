@@ -23,6 +23,7 @@ spec:
   values:
     crds:
       enabled: true
+      validationFailurePolicy: Ignore
     speaker:
       enabled: true
     controller:
