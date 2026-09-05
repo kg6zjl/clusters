@@ -13,4 +13,7 @@ spec:
   - name: virtual-node
     port: 4404
     targetPort: 4404
+  - name: virtual-node-outdoor
+    port: 4405
+    targetPort: 4405
   type: ClusterIP
