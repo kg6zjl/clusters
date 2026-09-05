@@ -28,7 +28,7 @@ spec:
       port: 4403
     - protocol: TCP
       port: 4404
-   - protocol: TCP
+    - protocol: TCP
       port: 4405
   - to:
     - namespaceSelector: {}
