@@ -22,6 +22,7 @@ spec:
         ports:
         - containerPort: 3001
         - containerPort: 4404
+        - containerPort: 4405
         env:
         - name: TZ
           value: America/Los_Angeles
