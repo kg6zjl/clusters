@@ -27,3 +27,4 @@ spec:
       enabled: true
     controller:
       enabled: true
+      webhookMode: disabled
