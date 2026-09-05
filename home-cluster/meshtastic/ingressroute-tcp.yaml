@@ -23,7 +23,7 @@ metadata:
   namespace: meshtastic
 spec:
   entryPoints:
-    - meshmonitor-tcp-4405          # you need this entrypoint defined in Traefik
+    - meshmonitor-tcp-4405
   routes:
     - match: HostSNI(`*`)
       services:
