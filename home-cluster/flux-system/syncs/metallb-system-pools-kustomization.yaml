@@ -1,0 +1,16 @@
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: metallb-system-pools
+  namespace: flux-system
+spec:
+  interval: 1m0s
+  path: ./home-cluster/metallb-system/pools
+  prune: true
+  dependsOn:
+    - name: metallb-system
+  sourceRef:
+    kind: GitRepository
+    name: clusters
+  targetNamespace: metallb-system
+  timeout: 2m0s

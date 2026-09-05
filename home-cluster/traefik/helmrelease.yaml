@@ -14,6 +14,9 @@ spec:
         name: traefik
         namespace: flux-system
   values:
+    service:
+      spec:
+        loadBalancerIP: 192.168.1.241
     ports:
       web:
         port: 8000
