@@ -21,6 +21,14 @@ spec:
     - protocol: TCP
       port: 443
   - to:
+    - ipBlock:
+        cidr: 10.152.183.0/16
+    - ipBlock:
+        cidr: 192.168.1.0/24
+    ports:
+    - protocol: TCP
+      port: 443
+  - to:
     - namespaceSelector: {}
   ingress:
   - from:
