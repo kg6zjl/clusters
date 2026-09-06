@@ -16,6 +16,27 @@ If you need to fix something in the cluster: Edit YAML → Branch → Commit →
 
 ---
 
+## 🚨 YOU MUST CONSIDER NETWORK POLICIES - CHECK THEM FIRST, ALWAYS 🚨
+
+**This cluster uses default-deny NetworkPolicies. If a pod can't connect to anything — API server, another service, DNS, the internet — the NetworkPolicy is the PRIME SUSPECT and MUST be investigated FIRST, before kube-proxy, endpoints, DNS, or app config.**
+
+Non-negotiable debug order for ANY connectivity problem (timeout, connection refused, hang, crashloop from API dial failures):
+1. **Check the NetPol FIRST**: `kubectl get networkpolicy -n <ns> -o yaml`. Read every egress/ingress rule.
+2. If a NetPol exists, assume it is the cause until **proven otherwise**. Never dismiss it as "allow-all" or "not the issue" without an explicit test.
+3. **The definitive A/B test**: run the same curl from a pod in a namespace with NO NetPol (e.g. `default`) and from the target namespace. Same image, same target. If one works and the other times out → **the NetPol is blocking it, full stop.**
+4. Only move on to kube-proxy/endpoints/DNS AFTER the NetPol is exonerated.
+
+Catch a pod's inability to reach the kube-apiserver:
+- The API server is a **host process, NOT a pod**. `namespaceSelector`-only egress does NOT cover it. You need an explicit:
+  - `ipBlock` for the service CIDR (ClusterIP), and/or
+  - `ipBlock` for the node LAN subnet (post-DNAT endpoints)
+- Example fix: MetalLB `dial tcp 10.152.183.1:443: i/o timeout` → caused by `metallb-allow-egress` blocking the API server → fixed with egress ipBlocks `10.152.183.0/16` + `192.168.1.0/24`. See commit in PR #478.
+- Headlamp had the same class of bug (fixed in `ad71007`).
+
+**Rule of thumb: when in doubt about a timeout, blame the NetworkPolicy and prove it with the A/B namespace test.**
+
+---
+
 ## Repository Overview
 
 This is a **single-node Kubernetes home lab cluster** running on an AMD-based Acemagicial K1 (NUC-size) system.
