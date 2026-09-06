@@ -28,6 +28,8 @@ spec:
     ports:
     - protocol: TCP
       port: 443
+    - protocol: TCP
+      port: 16443
   - to:
     - namespaceSelector: {}
   ingress:
