@@ -23,7 +23,17 @@ spec:
   - to:
     - namespaceSelector: {}
   ingress:
+  # Keep Traefik access (in case you ever put it behind an IngressRoute)
   - from:
     - namespaceSelector:
         matchLabels:
           kubernetes.io/metadata.name: traefik
+  # Allow home LAN / MetalLB traffic (this is what was missing)
+  - from:
+    - ipBlock:
+        cidr: 192.168.1.0/24
+    ports:
+    - protocol: TCP
+      port: 1883
+    - protocol: TCP
+      port: 9001
