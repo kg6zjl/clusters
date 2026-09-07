@@ -5,6 +5,7 @@ metadata:
   namespace: mqtt
   annotations:
     metallb.universe.tf/address-pool: default-addresspool
+    metallb.universe.tf/loadBalancerIPs: 192.168.1.240
 spec:
   selector:
     app: mosquitto
