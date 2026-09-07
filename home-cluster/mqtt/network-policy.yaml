@@ -28,6 +28,16 @@ spec:
     - namespaceSelector:
         matchLabels:
           kubernetes.io/metadata.name: traefik
+  # Allow internal Calico pod/node traffic (pods reaching mosquitto via
+  # clusterIP and kube-proxy cross-node masquerade on the LoadBalancer)
+  - from:
+    - ipBlock:
+        cidr: 10.1.0.0/16
+    ports:
+    - protocol: TCP
+      port: 1883
+    - protocol: TCP
+      port: 9001
   # Allow home LAN / MetalLB traffic (this is what was missing)
   - from:
     - ipBlock:
