@@ -36,6 +36,15 @@ spec:
     ports:
     - protocol: TCP
       port: 3001
+  # External MQTT broker (mqtt.bayme.sh)
+  - to:
+    - ipBlock:
+        cidr: 0.0.0.0/0
+    ports:
+    - protocol: TCP
+      port: 1883
+    - protocol: TCP
+      port: 8883
   - to:
     - namespaceSelector: {}
   ingress:
