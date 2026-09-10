@@ -7,3 +7,4 @@ resources:
   - service.yaml
   - ingressroute.yaml
   - pvc.yaml
+  - dnsendpoint.yaml
