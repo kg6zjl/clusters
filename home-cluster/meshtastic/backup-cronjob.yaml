@@ -1,0 +1,55 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: meshmonitor-backup
+  namespace: meshtastic
+  labels:
+    alert-on-down: "true"
+spec:
+  schedule: "30 3 * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 2
+  jobTemplate:
+    spec:
+      template:
+        metadata:
+          labels:
+            app: meshmonitor-backup
+        spec:
+          restartPolicy: OnFailure
+          volumes:
+          - name: meshmonitor-data
+            persistentVolumeClaim:
+              claimName: meshmonitor-data
+              readOnly: true
+          - name: nas-creds
+            secret:
+              secretName: meshmonitor-backup-creds
+          containers:
+          - name: backup
+            image: alpine:latest
+            command:
+            - /bin/sh
+            - -c
+            - |
+              apk add --no-cache samba-client >/dev/null 2>&1
+              TS=$(date +%Y%m%d-%H%M%S)
+              WORK=/work/${TS}
+              mkdir -p "${WORK}"
+              LATEST=$(ls -1dt /data/system-backups/*/ | head -1)
+              echo "backing up ${LATEST}"
+              cp -a "${LATEST}" "${WORK}/"
+              cp -a /data/backups "${WORK}/device-backups" 2>/dev/null || true
+              tar czf "/tmp/meshmonitor-${TS}.tar.gz" -C "/work" "${TS}"
+              smbclient //192.168.1.176/Backups -W WORKGROUP -U "$(cat /creds/username)%$(cat /creds/password)" \
+                -c "cd meshmonitor; put /tmp/meshmonitor-${TS}.tar.gz meshmonitor-${TS}.tar.gz"
+              rm -f "/tmp/meshmonitor-${TS}.tar.gz"
+              rm -rf "${WORK}"
+            volumeMounts:
+            - name: meshmonitor-data
+              mountPath: /data
+              readOnly: true
+            - name: nas-creds
+              mountPath: /creds
+              readOnly: true
