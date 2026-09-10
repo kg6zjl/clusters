@@ -1,0 +1,17 @@
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: nodered
+  namespace: nodered
+  annotations:
+    external-dns.alpha.kubernetes.io/hostname: nodered.kube.stevearnett.com
+    external-dns.alpha.kubernetes.io/target: kube.stevearnett.com
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - match: Host(`nodered.kube.stevearnett.com`)
+      kind: Rule
+      services:
+        - name: nodered
+          port: 1880
