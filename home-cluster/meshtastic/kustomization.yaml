@@ -9,6 +9,9 @@ resources:
   - ingressroute.yaml
   - dnsendpoint.yaml
   - external-secrets.yaml
+  - backup-external-secret.yaml
+  - backup-cronjob.yaml
+  - backup-network-policy.yaml
 
 generatorOptions:
   disableNameSuffixHash: true
