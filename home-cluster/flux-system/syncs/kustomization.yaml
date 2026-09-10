@@ -31,3 +31,4 @@ resources:
   - arc-kustomization.yaml
   - auth-kustomization.yaml
   - adsb-kustomization.yaml
+  - nodered-kustomization.yaml
