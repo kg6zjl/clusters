@@ -16,7 +16,7 @@ resources:
 configMapGenerator:
   - name: meshmonitor-scripts
     files:
-      - banana.py
+      - scripts/banana.py
 
 generatorOptions:
   disableNameSuffixHash: true
