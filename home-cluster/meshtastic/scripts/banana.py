@@ -11,6 +11,6 @@ taco_bot_map = {
     "burger": "🍔",
 }
 
-response = "🐒" if hops == 0 else taco_bot_map[trigger] * hops
+response = f"❌{ taco_bot_map[trigger] }" if hops == 0 else taco_bot_map[trigger] * hops
 
 print(response)
