@@ -17,6 +17,21 @@ spec:
       annotations:
         configmap.reloader.stakater.com/reload: "meshmonitor-scripts"
     spec:
+      initContainers:
+      - name: install-scripts
+        image: busybox:1.36
+        command:
+        - /bin/sh
+        - -c
+        - |
+          cp /config/banana.py /data/scripts/banana.py
+          chmod +x /data/scripts/banana.py
+        volumeMounts:
+        - name: meshmonitor-scripts
+          mountPath: /config
+          readOnly: true
+        - name: meshmonitor-data
+          mountPath: /data
       containers:
       - name: meshmonitor
         image: ghcr.io/yeraze/meshmonitor:4.16.0
@@ -64,10 +79,6 @@ spec:
         volumeMounts:
         - name: meshmonitor-data
           mountPath: /data
-        - name: meshmonitor-scripts
-          mountPath: /data/scripts/banana.py
-          subPath: banana.py
-          readOnly: true
       volumes:
       - name: meshmonitor-data
         persistentVolumeClaim:
