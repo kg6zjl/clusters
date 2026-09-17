@@ -14,6 +14,8 @@ spec:
     metadata:
       labels:
         app: meshmonitor
+      annotations:
+        configmap.reloader.stakater.com/reload: "meshmonitor-scripts"
     spec:
       containers:
       - name: meshmonitor
@@ -62,7 +64,15 @@ spec:
         volumeMounts:
         - name: meshmonitor-data
           mountPath: /data
+        - name: meshmonitor-scripts
+          mountPath: /data/scripts/banana.py
+          subPath: banana.py
+          readOnly: true
       volumes:
       - name: meshmonitor-data
         persistentVolumeClaim:
           claimName: meshmonitor-data
+      - name: meshmonitor-scripts
+        configMap:
+          name: meshmonitor-scripts
+          defaultMode: 0755

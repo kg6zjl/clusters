@@ -13,5 +13,10 @@ resources:
   - backup-cronjob.yaml
   - backup-network-policy.yaml
 
+configMapGenerator:
+  - name: meshmonitor-scripts
+    files:
+      - scripts/banana.py
+
 generatorOptions:
   disableNameSuffixHash: true
