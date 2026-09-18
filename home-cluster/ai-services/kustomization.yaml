@@ -7,6 +7,8 @@ resources:
   - network-policy.yaml
   - namespace.yaml
   - ollama-amd.yaml
+  - open-webui.yaml
+  - ingressroute-openwebui.yaml
   - ingressroute-dolphin.yaml
   - dnsendpoint.yaml
   - service-comfy.yaml
