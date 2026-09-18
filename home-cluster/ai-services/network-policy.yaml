@@ -20,6 +20,15 @@ spec:
       port: 53
     - protocol: TCP
       port: 443
+  # Ollama + ComfyUI on GPU host (beast) - 192.168.1.161
+  - to:
+    - ipBlock:
+        cidr: 192.168.1.161/32
+    ports:
+    - protocol: TCP
+      port: 11434
+    - protocol: TCP
+      port: 8080
   - to:
     - namespaceSelector: {}
   ingress:
