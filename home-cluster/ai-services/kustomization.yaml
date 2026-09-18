@@ -5,6 +5,7 @@ namespace: ai-services
 
 resources:
   - network-policy.yaml
+  - network-policy-openwebui.yaml
   - namespace.yaml
   - ollama-amd.yaml
   - open-webui.yaml
