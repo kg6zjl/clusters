@@ -8,6 +8,11 @@ taco_bot_map = {
     "banana": "🍌",
     "taco": "🌮",
     "burger": "🍔",
+    "pizza": "🍕",
+    "cheese": "🧀",
+    "hotdog": "🌭",
+    "corn": "🌽",
+    "burrito": "🌯",
 }
 
 if len(sys.argv) > 2:
