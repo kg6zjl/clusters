@@ -28,6 +28,12 @@ spec:
         env:
         - name: OLLAMA_BASE_URLS
           value: "http://192.168.1.161:11434"
+        - name: ENABLE_IMAGE_GENERATION
+          value: "True"
+        - name: IMAGE_GENERATION_ENGINE
+          value: "comfyui"
+        - name: COMFYUI_BASE_URL
+          value: "http://192.168.1.161:8080"
         - name: WEBUI_AUTH
           value: "True"
         - name: ENABLE_SIGNUP
