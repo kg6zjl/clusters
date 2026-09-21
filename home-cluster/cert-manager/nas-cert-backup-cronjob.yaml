@@ -21,7 +21,7 @@ spec:
                 secretName: nas-smb-credentials
           containers:
             - name: fetch-certs
-              image: bitnami/kubectl:1.32
+              image: alpine/k8s:1.35.0
               command:
                 - /bin/sh
                 - -c
