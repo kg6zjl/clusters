@@ -1,0 +1,4 @@
+  File "<string>", line 3
+    wf_dir = /home/steve/comfy/ComfyUI/user/default/workflows
+             ^
+SyntaxError: invalid syntax
