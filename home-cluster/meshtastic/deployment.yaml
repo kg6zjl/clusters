@@ -26,6 +26,8 @@ spec:
         - |
           cp /config/banana.py /data/scripts/banana.py
           chmod +x /data/scripts/banana.py
+          cp /config/test_gauge.py /data/scripts/test_gauge.py
+          chmod +x /data/scripts/test_gauge.py
         volumeMounts:
         - name: meshmonitor-scripts
           mountPath: /config

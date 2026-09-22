@@ -17,6 +17,7 @@ configMapGenerator:
   - name: meshmonitor-scripts
     files:
       - scripts/banana.py
+      - scripts/test_gauge.py
 
 generatorOptions:
   disableNameSuffixHash: true
