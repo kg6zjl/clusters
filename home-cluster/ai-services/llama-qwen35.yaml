@@ -41,6 +41,8 @@ spec:
         - "6"
         - --alias
         - qwen3.5-0.8b
+        - --reasoning
+        - off
         ports:
         - containerPort: 8080
           name: http
