@@ -8,6 +8,7 @@ resources:
   - network-policy-openwebui.yaml
   - namespace.yaml
   - ollama-amd.yaml
+  - llama-qwen35.yaml
   - open-webui.yaml
   - ingressroute-openwebui.yaml
   - ingressroute-dolphin.yaml

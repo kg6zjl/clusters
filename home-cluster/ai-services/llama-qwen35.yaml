@@ -1,0 +1,108 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: llama-qwen35-01
+  namespace: ai-services
+  labels:
+    app: llama-qwen35
+    alert-on-down: "true"
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: llama-qwen35
+  template:
+    metadata:
+      labels:
+        app: llama-qwen35
+    spec:
+      nodeSelector:
+        kubernetes.io/hostname: thinkcentre01
+      containers:
+      - name: llama-server
+        image: ghcr.io/ggml-org/llama.cpp:server
+        args:
+        - -m
+        - /models/Qwen35-0.8B-Q4_K_M.gguf
+        - --host
+        - 0.0.0.0
+        - --port
+        - "8080"
+        - -c
+        - "8192"
+        - --jinja
+        - --no-webui
+        - -fa
+        - on
+        - -t
+        - "6"
+        - --alias
+        - qwen3.5-0.8b
+        ports:
+        - containerPort: 8080
+          name: http
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 15
+          periodSeconds: 10
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 90
+          periodSeconds: 30
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "1"
+          limits:
+            memory: "3Gi"
+            cpu: "6"
+        volumeMounts:
+        - name: models
+          mountPath: /models
+          readOnly: true
+      volumes:
+      - name: models
+        hostPath:
+          path: /home/steve/Models/Qwen3.5-0.8B
+          type: Directory
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: llama-qwen35
+  namespace: ai-services
+  labels:
+    app: llama-qwen35
+spec:
+  type: ClusterIP
+  ports:
+  - port: 8080
+    targetPort: 8080
+    protocol: TCP
+    name: http
+  selector:
+    app: llama-qwen35
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: llama-qwen35-allow-openwebui
+  namespace: ai-services
+spec:
+  podSelector:
+    matchLabels:
+      app: llama-qwen35
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          app: open-webui
