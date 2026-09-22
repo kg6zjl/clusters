@@ -26,8 +26,10 @@ spec:
         - containerPort: 8080
           name: http
         env:
-        - name: OLLAMA_BASE_URLS
-          value: "http://192.168.1.161:11434"
+        - name: OPENAI_API_BASE_URLS
+          value: "http://192.168.1.161:11434/v1;http://llama-qwen35:8080/v1"
+        - name: OPENAI_API_KEYS
+          value: "no-key;no-key"
         - name: ENABLE_IMAGE_GENERATION
           value: "True"
         - name: IMAGE_GENERATION_ENGINE
