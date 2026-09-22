@@ -16,6 +16,9 @@ spec:
   values:
     cronjob:
       schedule: "0 * * * *"
+      concurrencyPolicy: Forbid
+      successfulJobsHistoryLimit: 3
+      failedJobsHistoryLimit: 2
     renovate:
       config: |
         {
