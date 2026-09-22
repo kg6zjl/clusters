@@ -13,7 +13,6 @@ resources:
   - meshtastic-bot-kustomization.yaml
   - cloudflared-kustomization.yaml
   - local-services-kustomization.yaml
-  - registry-kustomization.yaml
   - oauth2-proxy-kustomization.yaml
   - vpn-kustomization.yaml
   - home-assistant-kustomization.yaml
