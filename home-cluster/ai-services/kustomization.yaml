@@ -13,7 +13,6 @@ resources:
   - ingressroute-dolphin.yaml
   - dnsendpoint.yaml
   - service-comfy.yaml
-  - deployment-comfy.yaml
   - middleware-comfy.yaml
   - ingressroute-comfy.yaml
   - dnsendpoint-comfy.yaml
