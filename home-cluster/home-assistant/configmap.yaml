@@ -44,17 +44,6 @@ data:
       beast_llama_restart:
         url: "http://192.168.1.161:5000/systemd/llama-server.service/restart"
         method: POST
-    button:
-      - platform: template
-        buttons:
-          beast_comfyui_restart:
-            name: Beast ComfyUI Restart
-            press:
-              - service: rest_command.beast_comfyui_restart
-          beast_llama_restart:
-            name: Beast Llama Restart
-            press:
-              - service: rest_command.beast_llama_restart
     sensor:
       - platform: rest
         name: Beast ComfyUI Status
@@ -68,20 +57,28 @@ data:
         resource: http://192.168.1.161:8126/
         value_template: "{{ value_json.llama }}"
         scan_interval: 10
-    switch:
-      - platform: template
-        switches:
+    template:
+      - switch:
           beast_comfyui:
             friendly_name: Beast ComfyUI
             value_template: "{{ is_state('sensor.beast_comfyui_status', 'on') }}"
             turn_on:
-              service: rest_command.beast_comfyui_start
+              - service: rest_command.beast_comfyui_start
             turn_off:
-              service: rest_command.beast_comfyui_stop
+              - service: rest_command.beast_comfyui_stop
           beast_llama:
             friendly_name: Beast Llama
             value_template: "{{ is_state('sensor.beast_llama_status', 'on') }}"
             turn_on:
-              service: rest_command.beast_llama_start
+              - service: rest_command.beast_llama_start
             turn_off:
-              service: rest_command.beast_llama_stop
+              - service: rest_command.beast_llama_stop
+      - button:
+          beast_comfyui_restart:
+            name: Beast ComfyUI Restart
+            press:
+              - service: rest_command.beast_comfyui_restart
+          beast_llama_restart:
+            name: Beast Llama Restart
+            press:
+              - service: rest_command.beast_llama_restart
