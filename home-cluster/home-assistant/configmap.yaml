@@ -59,26 +59,26 @@ data:
         scan_interval: 10
     template:
       - switch:
-          beast_comfyui:
-            friendly_name: Beast ComfyUI
-            value_template: "{{ is_state('sensor.beast_comfyui_status', 'on') }}"
+          - name: Beast ComfyUI
+            unique_id: beast_comfyui
+            state: "{{ is_state('sensor.beast_comfyui_status', 'on') }}"
             turn_on:
-              - service: rest_command.beast_comfyui_start
+              action: rest_command.beast_comfyui_start
             turn_off:
-              - service: rest_command.beast_comfyui_stop
-          beast_llama:
-            friendly_name: Beast Llama
-            value_template: "{{ is_state('sensor.beast_llama_status', 'on') }}"
+              action: rest_command.beast_comfyui_stop
+          - name: Beast Llama
+            unique_id: beast_llama
+            state: "{{ is_state('sensor.beast_llama_status', 'on') }}"
             turn_on:
-              - service: rest_command.beast_llama_start
+              action: rest_command.beast_llama_start
             turn_off:
-              - service: rest_command.beast_llama_stop
+              action: rest_command.beast_llama_stop
       - button:
-          beast_comfyui_restart:
-            name: Beast ComfyUI Restart
+          - name: Beast ComfyUI Restart
+            unique_id: beast_comfyui_restart
             press:
-              - service: rest_command.beast_comfyui_restart
-          beast_llama_restart:
-            name: Beast Llama Restart
+              action: rest_command.beast_comfyui_restart
+          - name: Beast Llama Restart
+            unique_id: beast_llama_restart
             press:
-              - service: rest_command.beast_llama_restart
+              action: rest_command.beast_llama_restart
