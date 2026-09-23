@@ -33,8 +33,8 @@ Per-host overrides live in `inventory/host_vars/`. Shared defaults in
 7. Restricts sudo to microk8s commands only
 
 **`roles/nas-mount`**
-- Mounts `//192.168.1.176/Media/{Movies,TV,Torrents}` to
-  `/mnt/nas/{movies,tv,torrents}` for all nodes
+- Mounts `//192.168.1.176/Media/{Movies,TV,Torrents,Music}` to
+  `/mnt/nas/{movies,tv,torrents,music}` for all nodes
 - Uses a root-only credentials file `/etc/smbcredentials` (NEVER the
   share password in fstab — pikube's existing pattern, applied everywhere)
 - Password resolved from 1Password by `roles/secrets`

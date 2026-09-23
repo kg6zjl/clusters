@@ -21,6 +21,7 @@ nas_mounts:
   - { share: "Media/Movies", mount: "/mnt/nas/movies", uid: "1000", gid: "1000" }
   - { share: "Media/TV", mount: "/mnt/nas/tv", uid: "1000", gid: "1000" }
   - { share: "Media/Torrents", mount: "/mnt/nas/torrents", uid: "1000", gid: "1000" }
+  - { share: "Media/Music", mount: "/mnt/nas/music", uid: "1000", gid: "1000" }
 
 # SDR tuning hardware - install tooling + udev on every host so the
 # antenna can be moved between nodes without reconfiguration.
