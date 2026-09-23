@@ -1,0 +1,37 @@
+---
+- name: Fail if NAS password not resolved from 1Password
+  ansible.builtin.fail:
+    msg: "nas_password was not resolved. Confirm roles/secrets pulled it from 1Password, or run with --extra-vars nas_password=... as a stopgap (never inline in git)."
+  when: nas_mounts | length > 0 and nas_password | length == 0
+
+- name: Install cifs-utils
+  ansible.builtin.apt:
+    name: cifs-utils
+    state: present
+
+- name: Ensure mount directories exist
+  ansible.builtin.file:
+    path: "{{ item.mount }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  loop: "{{ nas_mounts }}"
+
+- name: Write SMB credentials file
+  ansible.builtin.template:
+    src: smbcredentials.j2
+    dest: "{{ nas_cred_file }}"
+    mode: "0600"
+    owner: root
+    group: root
+  when: nas_mounts | length > 0
+
+- name: Add fstab entries for NAS mounts
+  ansible.builtin.mount:
+    path: "{{ item.mount }}"
+    src: "//{{ nas_server }}/{{ item.share }}"
+    fstype: cifs
+    opts: "{{ nas_options }}"
+    state: mounted
+  loop: "{{ nas_mounts }}"

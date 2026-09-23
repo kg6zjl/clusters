@@ -1,0 +1,22 @@
+# Managed by Ansible (node-config)
+network:
+  version: 2
+  ethernets:
+    {{ network_interface }}:
+      {% if node_ip %}
+      dhcp4: false
+      addresses:
+        - {{ node_ip }}/24
+      {% else %}
+      dhcp4: true
+      {% endif %}
+      {% if network_gateway %}
+      routes:
+        - to: default
+          via: {{ network_gateway }}
+      {% endif %}
+      nameservers:
+        addresses:
+{% for dns in network_dns %}
+          - {{ dns }}
+{% endfor %}

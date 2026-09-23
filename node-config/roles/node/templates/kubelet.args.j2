@@ -1,0 +1,17 @@
+--cluster-dns=10.152.183.10
+--node-ip={{ node_ip }}
+--cluster-domain=cluster.local
+--resolv-conf=/run/systemd/resolve/resolv.conf
+--kubeconfig=${SNAP_DATA}/credentials/kubelet.config
+--cert-dir=${SNAP_DATA}/certs
+--client-ca-file=${SNAP_DATA}/certs/ca.crt
+--anonymous-auth=false
+--root-dir=${SNAP_COMMON}/var/lib/kubelet
+--fail-swap-on=false
+--eviction-hard="memory.available<100Mi,nodefs.available<1Gi,imagefs.available<1Gi"
+--container-runtime-endpoint=${SNAP_COMMON}/run/containerd.sock
+--containerd=${SNAP_COMMON}/run/containerd.sock
+--node-labels={{ kubelet_node_labels }}
+--authentication-token-webhook=true
+--read-only-port=0
+--serialize-image-pulls=false

@@ -1,0 +1,148 @@
+---
+- name: Update apt cache
+  ansible.builtin.apt:
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Install required packages
+  ansible.builtin.apt:
+    name:
+      - curl
+      - git
+      - python3
+      - jq
+      - nfs-common
+      - cifs-utils
+      - net-tools
+      - htop
+      - tmux
+      - vim
+      - screen
+      - rsync
+      - lvm2
+      - multipath-tools
+      - open-iscsi
+    state: present
+
+- name: Turn off swap now
+  ansible.builtin.command: swapoff --all
+  changed_when: false
+  ignore_errors: true
+
+- name: Remove swap entry from fstab
+  ansible.builtin.mount:
+    path: none
+    src: "{{ item }}"
+    fstype: swap
+    state: absent
+  loop:
+    - /swap.img
+  ignore_errors: true
+
+- name: Configure kernel modules for container runtime
+  ansible.builtin.copy:
+    dest: /etc/modules-load.d/k8s.conf
+    content: |
+      overlay
+      br_netfilter
+
+- name: Configure sysctl for Kubernetes
+  ansible.builtin.copy:
+    dest: /etc/sysctl.d/99-kubernetes.conf
+    content: |
+      net.bridge.bridge-nf-call-iptables  = 1
+      net.bridge.bridge-nf-call-ip6tables = 1
+      net.ipv4.ip_forward                 = 1
+
+- name: Apply sysctl settings
+  ansible.builtin.command: sysctl --system
+
+- name: Configure wired-only netplan
+  when: netplan_managed | bool
+  block:
+    - name: Render wired-only netplan
+      ansible.builtin.template:
+        src: netplan.yaml.j2
+        dest: /etc/netplan/99-wired.yaml
+        mode: "0600"
+      register: netplan_file
+
+    - name: Harden permissions on all netplan files
+      ansible.builtin.file:
+        path: "{{ item }}"
+        mode: "0600"
+      loop: "{{ query('fileglob', '/etc/netplan/*.yaml') }}"
+      changed_when: false
+
+    - name: Disable wifi services (wpa_supplicant) if present
+      ansible.builtin.systemd_service:
+        name: wpa_supplicant
+        enabled: false
+        state: stopped
+      ignore_errors: true
+
+    - name: Apply netplan
+      ansible.builtin.command: netplan apply
+      register: netplan_apply
+      when: netplan_file.changed
+      changed_when: true
+
+- name: Install MicroK8s
+  block:
+    - name: Install MicroK8s from snapd
+      ansible.builtin.shell:
+        cmd: snap install microk8s --classic --channel={{ microk8s_channel }}
+        creates: /snap/bin/microk8s
+
+- name: Create microk8s group and add user
+  ansible.builtin.shell:
+    cmd: |
+      usermod -aG microk8s {{ ansible_user }}
+      newgrp microk8s
+    creates: /etc/group
+
+- name: Wait for microk8s to be ready
+  ansible.builtin.wait_for:
+    path: /var/snap/microk8s/current/credentials/kubelet.config
+    delay: 10
+    timeout: 120
+
+- name: Configure microk8s kubelet arguments
+  ansible.builtin.template:
+    src: kubelet.args.j2
+    dest: /var/snap/microk8s/current/args/kubelet
+    backup: true
+  notify: Restart kubelet
+
+- name: Enable microk8s addons (control-plane)
+  when: node_role == 'control-plane' and enable_hostpath_storage | bool
+  ansible.builtin.shell:
+    cmd: microk8s enable hostpath-storage
+    environment:
+      PATH: "/snap/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+  changed_when: false
+
+- name: Enable metrics-server (control-plane)
+  when: node_role == 'control-plane' and enable_metrics_server | bool
+  ansible.builtin.shell:
+    cmd: microk8s enable metrics-server
+    environment:
+      PATH: "/snap/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+  changed_when: false
+
+- name: Add node labels (post-join)
+  when: cluster_join_url | length > 0
+  ansible.builtin.shell:
+    cmd: |
+      microk8s kubectl label node {{ ansible_hostname }} microk8s.io/cluster=true --overwrite
+    environment:
+      PATH: "/snap/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+  failed_when: false
+
+- name: Restrict sudo group access
+  ansible.builtin.copy:
+    dest: /etc/sudoers.d/microk8s-node
+    content: |
+      %microk8s ALL=(root) NOPASSWD: /snap/bin/microk8s.*
+      %microk8s ALL=(root) NOPASSWD: /usr/bin/snap *
+    validate: "visudo -cf %s"

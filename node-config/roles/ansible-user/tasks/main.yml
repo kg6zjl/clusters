@@ -1,0 +1,32 @@
+---
+- name: Create automation user account
+  ansible.builtin.user:
+    name: "{{ automation_user }}"
+    state: present
+    shell: /bin/bash
+    groups: sudo
+    append: true
+
+- name: Create .ssh directory for automation user
+  ansible.builtin.file:
+    path: "/home/{{ automation_user }}/.ssh"
+    state: directory
+    owner: "{{ automation_user }}"
+    group: "{{ automation_user }}"
+    mode: "0700"
+
+- name: Install automation SSH key
+  ansible.builtin.copy:
+    dest: "/home/{{ automation_user }}/.ssh/authorized_keys"
+    content: "{{ ansible_pubkey }}\n"
+    owner: "{{ automation_user }}"
+    group: "{{ automation_user }}"
+    mode: "0600"
+
+- name: Grant passwordless sudo to automation user
+  ansible.builtin.copy:
+    dest: /etc/sudoers.d/ansible
+    content: |
+      {{ automation_user }} ALL=(ALL) NOPASSWD: ALL
+    mode: "0440"
+    validate: "visudo -cf %s"

@@ -1,0 +1,6 @@
+---
+# thinkcentre01 - wired, datastore voter
+node_role: control-plane
+network_interface: enp1s0
+netplan_managed: true
+unattended_reboot_time: "03:30"

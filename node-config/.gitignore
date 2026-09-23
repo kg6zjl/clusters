@@ -1,0 +1,16 @@
+# Ansible
+*.retry
+*.log
+
+# Secrets - NEVER commit
+/secrets/
+.ansible-vault-pass
+inventory/host_vars/*.pex
+# ansible dedicated user private key (if materialized locally)
+.ssh/ansible_cluster
+
+# Temporary
+/tmp/
+*.tmp
+.ansible-local/
+*.creds.yml

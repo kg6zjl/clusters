@@ -1,0 +1,33 @@
+---
+# Shared cluster node defaults
+microk8s_version: "1.35"
+cluster_join_url: ""
+
+# Role in the cluster (control-plane = datastore voter)
+node_role: control-plane
+
+# Network defaults (per-host overrides in host_vars/)
+network_gateway: 192.168.1.1
+network_dns:
+  - 192.168.1.1
+  - 1.1.1.1
+
+# Labels applied to every cluster node
+node_labels: {}
+
+# NAS/SMB defaults - see roles/nas-mount
+nas_server: 192.168.1.176
+nas_mounts:
+  - { share: "Media/Movies", mount: "/mnt/nas/movies", uid: "1000", gid: "1000" }
+  - { share: "Media/TV", mount: "/mnt/nas/tv", uid: "1000", gid: "1000" }
+  - { share: "Media/Torrents", mount: "/mnt/nas/torrents", uid: "1000", gid: "1000" }
+
+# SDR tuning hardware - install tooling + udev on every host so the
+# antenna can be moved between nodes without reconfiguration.
+sdr_enabled: true
+
+# Weekly security patch cadence. Reboot times are staggered per host so
+# a single maintenance window never drops control-plane quorum below
+# majority (2 of 3 voters today, 3 of 4 after thinkcentre03 joins).
+security_updates_enabled: true
+unattended_reboot_time: "03:30"   # per-host override in host_vars/

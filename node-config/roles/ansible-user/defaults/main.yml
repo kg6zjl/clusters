@@ -1,0 +1,11 @@
+---
+# Role: ansible-user - dedicated sudo user for automation
+# Ansible connects as this user (NOT steve) so the personal account keeps
+# no passwordless sudo and the agent has no path to root.
+# NOTE: deliberately NOT named `ansible_user` - that is a reserved magic
+# variable controlling the SSH connection user.
+automation_user: ansible
+
+# Public key for the automation user. Store the PRIVATE key in 1Password;
+# never commit it.
+ansible_pubkey: ""

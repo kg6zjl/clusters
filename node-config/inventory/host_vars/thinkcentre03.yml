@@ -1,0 +1,7 @@
+---
+# thinkcentre03 - NEW NODE (in the mail), wired, future datastore voter
+# NOTE: Reserve this IP in UniFi for its wired MAC before running.
+node_role: control-plane
+network_interface: enp1s0
+netplan_managed: true
+unattended_reboot_time: "04:30"

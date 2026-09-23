@@ -1,0 +1,51 @@
+---
+- name: Provision MicroK8s cluster nodes
+  hosts: all
+  gather_facts: true
+  become: true
+  vars:
+    node_ip: "{{ ansible_host }}"
+
+  roles:
+    - role: secrets
+    - role: node
+    - role: nas-mount
+    - role: sdr
+    - role: security-updates
+
+  post_tasks:
+    - name: Join cluster (control-plane)
+      ansible.builtin.shell:
+        cmd: microk8s join {{ cluster_join_url }}
+        creates: /var/snap/microk8s/current/credentials/cluster-join-token
+      when:
+        - cluster_join_url | length > 0
+        - node_role == 'control-plane'
+      register: join_result
+
+    - name: Join cluster (worker)
+      ansible.builtin.shell:
+        cmd: microk8s join {{ cluster_join_url }} --worker
+        creates: /var/snap/microk8s/current/credentials/cluster-join-token
+      when:
+        - cluster_join_url | length > 0
+        - node_role == 'worker'
+
+    - name: Wait and report node status
+      when: cluster_join_url | length > 0
+      block:
+        - name: Pause for join sync
+          ansible.builtin.pause:
+            seconds: 30
+
+        - name: Get node status
+          ansible.builtin.shell:
+            cmd: microk8s kubectl get nodes {{ ansible_hostname }}
+            environment:
+              PATH: "/snap/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+          register: node_status
+          failed_when: false
+
+        - name: Show node status
+          ansible.builtin.debug:
+            var: node_status.stdout_lines

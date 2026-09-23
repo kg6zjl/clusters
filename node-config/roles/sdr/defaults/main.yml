@@ -1,0 +1,16 @@
+---
+# Role: sdr - RTL-SDR / DVB-T tooling & udev rules (antenna can move between hosts)
+sdr_enabled: true
+sdr_packages:
+  - rtl-sdr
+  - dvb-tools
+  - usbutils
+
+# 0bda:2838 = Realtek RTL2838 DVB-T; 0bda:2832 = RTL2832U (SDR)
+sdr_udev_rules:
+  - 'SUBSYSTEM=="usb", ATTRS{idVendor}=="0bda", MODE="0666", GROUP="plugdev"'
+
+# Loaded at boot so hosts without an attached dongle still get the modules
+sdr_modules:
+  - dvb_usb_rtl28xxu
+  - dvb_core

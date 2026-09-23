@@ -1,0 +1,17 @@
+---
+# Role: security-updates - weekly apt security patches + auto reboot
+security_updates_enabled: true
+
+# Ubuntu security pocket only
+unattended_origins:
+  - "${distro_id}:${distro_codename}-security"
+
+# Reboot window - stagger per host to avoid control-plane quorum loss
+unattended_reboot_time: "04:30"
+
+# Daily cadence (periodic days)
+unattended_update_interval: 1
+unattended_upgrade_interval: 1
+
+# Remove unused kernel packages after reboot
+unattended_cleanup: true

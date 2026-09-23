@@ -1,0 +1,5 @@
+---
+# pikube - wifi-only (raspberry pi), datastore voter
+node_role: control-plane
+netplan_managed: false
+unattended_reboot_time: "03:00"
