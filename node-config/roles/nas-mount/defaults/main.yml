@@ -1,0 +1,10 @@
+---
+# Role: nas-mount - CIFS mounts for the uGreen DXP2800 NAS (192.168.1.176)
+nas_server: 192.168.1.176
+nas_mounts: []
+nas_cred_file: /etc/smbcredentials
+nas_user: plex
+nas_password: ""      # resolved from 1Password by roles/secrets - never inline
+nas_uid: "1000"
+nas_gid: "1000"
+nas_options: "credentials={{ nas_cred_file }},uid={{ nas_uid }},gid={{ nas_gid }},file_mode=0755,dir_mode=0755,vers=3.0,noperm"

@@ -1,0 +1,3 @@
+---
+- src: community.general           # onepassword lookup for roles/secrets
+- src: kubernetes.core

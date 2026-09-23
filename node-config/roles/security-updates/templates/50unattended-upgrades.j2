@@ -1,0 +1,19 @@
+// Managed by Ansible (node-config)
+Unattended-Upgrade::Allowed-Origins {
+{% for origin in unattended_origins %}
+    "{{ origin }}";
+{% endfor %}
+};
+
+Unattended-Upgrade::Package-Blacklist {
+};
+
+// Auto reboot after a security update that requires it.
+// Reboot times are staggered per host to keep control-plane quorum.
+Unattended-Upgrade::Automatic-Reboot "true";
+Unattended-Upgrade::Automatic-Reboot-Time "{{ unattended_reboot_time }}";
+{% if unattended_cleanup %}
+Unattended-Upgrade::Remove-Unused-Kernel-Packages "true";
+Unattended-Upgrade::Remove-Unused-Dependencies "true";
+{% endif %}
+Unattended-Upgrade::Automatic-Reboot-WithUsers "true";

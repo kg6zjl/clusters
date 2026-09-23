@@ -278,6 +278,8 @@ env:
 - All cluster state changes must follow the defined pipeline: **PR -> GHA -> Local GH Runner**. 
 - No manual `kubectl` cluster edits or "Inception"-style workarounds.
 - Your local workspace is for drafting and validation only. The cluster source of truth is Git.
+- **OS/host-level changes (packages, netplan, swap, sysctl, cron, mounts, security updates) go through Ansible (`node-config/`) and are PR'd** — never ad-hoc SSH to thinkcentres/pikube. Only read-only debugging (get/logs/ping) is allowed outside the pipeline, plus the one-time `bootstrap.yaml --ask-become-pass` (run by the user).
+- **NEVER SSH in as the `ansible` user** — that account is `ansible-playbook` execution only. Interactive/ad-hoc login as `ansible` is forbidden; manual SSH uses your own `steve` account (read-only).
 
 ### REPO AUTHENTICATION
 
@@ -430,7 +432,7 @@ Include `servicemonitor.yaml` for services exposing metrics. Reference existing 
 ### Home Assistant Trusted Proxies
 
 If you see errors like `Received X-Forwarded-For header from an untrusted proxy`, update the `trusted_proxies` in `home-assistant/configmap.yaml`. The cluster uses:
-- **Kubernetes nodes**: `192.168.1.49`, `192.168.1.96`, `192.168.1.121`, `192.168.1.161`
+- **Kubernetes nodes**: `192.168.1.175` (pi4, wifi), `192.168.1.144` (thinkcentre01, wired), `192.168.1.121` (thinkcentre02, wired)
 - **MetalLB pool**: `192.168.1.240-192.168.1.250`
 
 Use `192.168.1.0/24` to cover all ranges.

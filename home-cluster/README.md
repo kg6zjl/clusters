@@ -34,7 +34,7 @@ Added Cloudflared for routing to a silly little web app running in my homelab cl
 
 ## Network Ranges
 
-- **Kubernetes nodes**: `192.168.1.49`, `192.168.1.96`, `192.168.1.121`, `192.168.1.161`
+- **Kubernetes nodes**: `192.168.1.175` (pi4, wifi), `192.168.1.144` (thinkcentre01, wired), `192.168.1.121` (thinkcentre02, wired)
 - **MetalLB pool**: `192.168.1.240-192.168.1.250`
 
 Used in Home Assistant `trusted_proxies` config.

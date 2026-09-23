@@ -1,0 +1,18 @@
+---
+# Role: node - MicroK8s node provisioning
+microk8s_version: "1.35"
+microk8s_channel: "1.35/stable"
+cluster_join_url: ""
+node_role: control-plane       # control-plane or worker
+netplan_managed: true
+network_interface: enp1s0
+network_gateway: 192.168.1.1
+network_dns: []
+node_ip: ""                    # pinned via --node-ip (e.g. {{ ansible_host }})
+
+# kubelet
+kubelet_node_labels: 'microk8s.io/cluster=true'
+
+# Controls whether microk8s control-plane addons are enabled on this node
+enable_hostpath_storage: false
+enable_metrics_server: true

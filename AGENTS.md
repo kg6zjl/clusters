@@ -6,6 +6,8 @@ This file provides guidance for AI coding agents operating in this repository.
 
 ## ⚠️ ABSOLUTE RULES - NEVER VIOLATE
 
+0. **NEVER make live changes to cluster hosts (thinkcentres, pikube, etc.) by hand or ad-hoc SSH** - OS/host-level changes (packages, netplan, swap, sysctl, cron, security updates, mounts) go through **Ansible (`node-config/`) and are PR'd** like everything else. Direct `kubectl apply`/`helm` AND direct host edits bypass the GitOps pipeline. The only exceptions are read-only debugging (get/logs/ping) and the one-time interactive bootstrap (`bootstrap.yaml --ask-become-pass`, run by the user, no agent sudo).
+0b. **NEVER SSH in as the `ansible` user** - the ansible automation account is `ansible-playbook` execution only. Any ad-hoc/interactive login as `ansible` is forbidden. Manual SSH uses your own `steve` account (read-only debugging only).
 1. **NEVER use kubectl apply, delete, edit, patch** - These break the GitOps model
 2. **NEVER use helm install, upgrade, rollback** - These break the GitOps model  
 3. **Only use kubectl for READ-ONLY operations** - get, describe, logs, etc.
@@ -371,7 +373,7 @@ Include `servicemonitor.yaml` for services exposing metrics. Reference existing 
 ### Home Assistant Trusted Proxies
 
 If you see errors like `Received X-Forwarded-For header from an untrusted proxy`, update the `trusted_proxies` in `home-assistant/configmap.yaml`. The cluster uses:
-- **Kubernetes nodes**: `192.168.1.49`, `192.168.1.96`, `192.168.1.121`, `192.168.1.161`
+- **Kubernetes nodes**: `192.168.1.175` (pi4, wifi), `192.168.1.144` (thinkcentre01, wired), `192.168.1.121` (thinkcentre02, wired)
 - **MetalLB pool**: `192.168.1.240-192.168.1.250`
 
 Use `192.168.1.0/24` to cover all ranges.

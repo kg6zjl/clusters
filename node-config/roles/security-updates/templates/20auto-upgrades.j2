@@ -1,0 +1,4 @@
+APT::Periodic::Update-Package-Lists "{{ unattended_update_interval }}";
+APT::Periodic::Download-Upgradeable-Packages "{{ unattended_update_interval }}";
+APT::Periodic::AutocleanInterval "{{ unattended_update_interval }}";
+APT::Periodic::Unattended-Upgrade "{{ unattended_upgrade_interval }}";

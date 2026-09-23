@@ -1,0 +1,33 @@
+---
+- name: Install SDR packages
+  ansible.builtin.apt:
+    name: "{{ sdr_packages }}"
+    state: present
+  when: sdr_enabled | bool
+
+- name: Write RTL-SDR udev rules
+  ansible.builtin.copy:
+    dest: /etc/udev/rules.d/40-rtlsdr.rules
+    content: |
+      SUBSYSTEM=="usb", ATTRS{idVendor}=="0bda", MODE="0666", GROUP="plugdev"
+    mode: "0644"
+  when: sdr_enabled | bool
+
+- name: Ensure SDR kernel modules load at boot
+  ansible.builtin.copy:
+    dest: /etc/modules-load.d/rtlsdr.conf
+    content: "{{ sdr_modules | join('\n') }}\n"
+    mode: "0644"
+  when: sdr_enabled | bool
+
+- name: Reload udev rules
+  ansible.builtin.command: udevadm control --reload-rules
+  changed_when: false
+  when: sdr_enabled | bool
+
+- name: Load SDR kernel modules now
+  community.general.modprobe:
+    name: "{{ item }}"
+    state: present
+  loop: "{{ sdr_modules }}"
+  when: sdr_enabled | bool

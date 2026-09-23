@@ -1,0 +1,15 @@
+---
+# One-time bootstrap: creates the dedicated `ansible` sudo user on every
+# host. Run as steve with --ask-become-pass; afterwards normal playbook
+# runs connect as the `ansible` user via its own SSH key (from 1Password).
+- name: Bootstrap dedicated ansible sudo user
+  hosts: all
+  gather_facts: false
+  become: true
+
+  vars:
+    ansible_user: steve
+    ansible_pubkey: "{{ lookup('file', lookup('env', 'HOME') + '/.ssh/ansible_cluster.pub') | trim }}"
+
+  roles:
+    - role: ansible-user
