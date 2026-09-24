@@ -5,14 +5,15 @@ metadata:
   name: hermes-agent
   namespace: ai-services
 ---
-# Cluster-scoped so Hermes can see/manage the whole home lab.
-# Tighten later if you want it locked to specific namespaces.
+# Cluster-scoped READ-ONLY access for Hermes. Hermes manages the cluster
+# through git PRs (GitOps), never by mutating cluster state directly, so it
+# needs get/list/watch on nearly everything but NO create/update/patch/delete.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
   name: hermes-agent
 rules:
-  # Core read + logs
+  # Core read + logs (read-only; no secrets values exposure beyond pod env)
   - apiGroups: [""]
     resources:
       - pods
@@ -20,46 +21,104 @@ rules:
       - pods/status
       - services
       - endpoints
+      - endpointslices
       - configmaps
       - namespaces
       - nodes
+      - nodes/status
+      - persistentvolumes
       - persistentvolumeclaims
+      - persistentvolumeclaims/status
       - events
+      - limitranges
+      - resourcequotas
+      - componentstatuses
+      - replicationcontrollers
     verbs: ["get", "list", "watch"]
 
-  # Workload management
+  # Workloads (read-only)
   - apiGroups: ["apps"]
     resources:
       - deployments
       - deployments/scale
+      - deployments/status
       - statefulsets
+      - statefulsets/status
       - daemonsets
+      - daemonsets/status
       - replicasets
-    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+      - replicasets/status
+      - controllerrevisions
+    verbs: ["get", "list", "watch"]
 
-  # Batch / jobs
+  # Batch / jobs (read-only)
   - apiGroups: ["batch"]
-    resources: ["jobs", "cronjobs"]
-    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+    resources: ["jobs", "jobs/status", "cronjobs", "cronjobs/status"]
+    verbs: ["get", "list", "watch"]
 
-  # Networking (Traefik + NetworkPolicy)
+  # Networking (read-only)
   - apiGroups: ["networking.k8s.io"]
-    resources: ["networkpolicies", "ingresses"]
-    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
-  - apiGroups: ["traefik.io", "traefik.containo.us"]
-    resources: ["ingressroutes", "middlewares", "ingressroutetcps"]
-    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+    resources: ["networkpolicies", "ingresses", "ingressclasses", "endpointslices"]
+    verbs: ["get", "list", "watch"]
 
-  # Flux / GitOps visibility (read-only is usually enough)
-  - apiGroups: ["kustomize.toolkit.fluxcd.io", "helm.toolkit.fluxcd.io", "source.toolkit.fluxcd.io"]
+  # Traefik CRDs (read-only)
+  - apiGroups: ["traefik.io", "traefik.containo.us"]
+    resources:
+      - ingressroutes
+      - ingressroutetcps
+      - ingressrouteudps
+      - middlewares
+      - middlewaretcps
+      - tlsoptions
+      - tlsstores
+      - serversstransports
+      - serversstransporttcps
+    verbs: ["get", "list", "watch"]
+
+  # Flux / GitOps visibility (read-only)
+  - apiGroups:
+      - kustomize.toolkit.fluxcd.io
+      - helm.toolkit.fluxcd.io
+      - source.toolkit.fluxcd.io
+      - notification.toolkit.fluxcd.io
     resources: ["*"]
     verbs: ["get", "list", "watch"]
 
-  # Create/delete pods (useful for one-off jobs / debugging)
-  - apiGroups: [""]
-    resources: ["pods"]
-    verbs: ["create", "delete", "update", "patch"]
----
+  # Storage (read-only)
+  - apiGroups: ["storage.k8s.io"]
+    resources: ["storageclasses", "csinodes", "csidrivers", "volumeattachments"]
+    verbs: ["get", "list", "watch"]
+
+  # Policy / autoscaling / coordination / rbac audit (read-only)
+  - apiGroups: ["policy"]
+    resources: ["poddisruptionbudgets", "poddisruptionbudgets/status"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["autoscaling"]
+    resources: ["horizontalpodautoscalers", "horizontalpodautoscalers/status"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["coordination.k8s.io"]
+    resources: ["leases"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["rbac.authorization.k8s.io"]
+    resources: ["roles", "rolebindings", "clusterroles", "clusterrolebindings"]
+    verbs: ["get", "list", "watch"]
+
+  # Monitoring / observability CRDs (read-only)
+  - apiGroups: ["monitoring.coreos.com"]
+    resources: ["servicemonitors", "podmonitors", "prometheusrules", "probes"]
+    verbs: ["get", "list", "watch"]
+
+  # Secrets operators / cert-manager / external-dns (read-only)
+  - apiGroups: ["external-secrets.io"]
+    resources: ["externalsecrets", "secretstores", "clustersecretstores"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["cert-manager.io", "acme.cert-manager.io"]
+    resources: ["certificates", "certificaterequests", "issuers", "clusterissuers", "orders", "challenges"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["externaldns.k8s.io"]
+    resources: ["dnsendpoints"]
+    verbs: ["get", "list", "watch"]
+--- 
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
