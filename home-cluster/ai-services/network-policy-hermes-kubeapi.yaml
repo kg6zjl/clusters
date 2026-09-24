@@ -1,0 +1,32 @@
+# Hermes kubectl-access to the kube-apiserver (read-only).
+# The API server is a HOST process, NOT a pod: namespaceSelector-only egress
+# does not cover it. Must use ipBlocks for the ClusterIP (service CIDR, port
+# 443) and the node LAN subnet post-DNAT (the apiserver secure port 16443).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: hermes-agent-allow-kubeapi
+  namespace: ai-services
+spec:
+  podSelector:
+    matchLabels:
+      app: hermes-agent
+  policyTypes:
+  - Egress
+  egress:
+  # ClusterIP of kubernetes service (10.152.183.1) - service CIDR on 443
+  - to:
+    - ipBlock:
+        cidr: 10.152.183.0/16
+    ports:
+    - protocol: TCP
+      port: 443
+  # Node LAN post-DNAT endpoints (thinkcentres/pi4) on apiserver port 16443
+  - to:
+    - ipBlock:
+        cidr: 192.168.1.0/24
+    ports:
+    - protocol: TCP
+      port: 443
+    - protocol: TCP
+      port: 16443

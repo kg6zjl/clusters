@@ -19,10 +19,52 @@ spec:
       labels:
         app: hermes-agent
       annotations:
-        rollout.restartedAt: "2026-09-24T22:43:35Z"
+        rollout.restartedAt: "2026-09-24T23:05:00Z"
     spec:
       serviceAccountName: hermes-agent
       # CPU only — GPU stays on beast
+      initContainers:
+      - name: install-tools
+        image: python:3.13-slim
+        command:
+        - sh
+        - -c
+        - |
+          set -e
+          apt-get update -qq && apt-get install -y -qq --no-install-recommends curl jq >/dev/null
+          mkdir -p /opt/data/.local/bin /opt/data/.local/pylib
+          # Helm
+          curl -fsSL https://get.helm.sh/helm-v3.16.4-linux-amd64.tar.gz | tar xz -C /tmp && \
+            mv /tmp/linux-amd64/helm /opt/data/.local/bin/ && rm -rf /tmp/linux-amd64
+          # kubectl (pin to server minor)
+          curl -fsSL https://dl.k8s.io/release/v1.35.6/bin/linux/amd64/kubectl -o /opt/data/.local/bin/kubectl && \
+            chmod +x /opt/data/.local/bin/kubectl
+          # kustomize (matches CI: v5.4.2)
+          curl -fsSL "https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2Fv5.4.2/kustomize_v5.4.2_linux_amd64.tar.gz" | \
+            tar xz -C /tmp && mv /tmp/kustomize /opt/data/.local/bin/
+          # GitHub CLI (matches runner Dockerfile: v2.47.0)
+          curl -fsSL https://github.com/cli/cli/releases/download/v2.47.0/gh_2.47.0_linux_amd64.tar.gz | \
+            tar xz -C /tmp && mv /tmp/gh_2.47.0_linux_amd64/bin/gh /opt/data/.local/bin/ && rm -rf /tmp/gh_2.47.0_linux_amd64
+          # gitleaks (matches pre-commit: v8.18.2)
+          curl -fsSL https://github.com/gitleaks/gitleaks/releases/download/v8.18.2/gitleaks_8.18.2_linux_x64.tar.gz | \
+            tar xz -C /opt/data/.local/bin gitleaks
+          # trufflehog (matches CI action)
+          curl -sSfL https://raw.githubusercontent.com/trufflesecurity/trufflehog/main/scripts/install.sh | sh -s -- -b /opt/data/.local/bin
+          # yq
+          curl -fsSL https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -o /opt/data/.local/bin/yq && \
+            chmod +x /opt/data/.local/bin/yq
+          # go-task (Taskfile)
+          sh -c "$(curl --location https://taskfile.dev/install.sh)" -- -d -b /opt/data/.local/bin
+          # yamllint into a glibc-compatible site-packages dir (PYTHONPATH in main container)
+          pip3 install --quiet --target=/opt/data/.local/pylib yamllint
+          chmod +x /opt/data/.local/bin/*
+        volumeMounts:
+        - name: data
+          mountPath: /opt/data
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop: ["ALL"]
       containers:
       - name: hermes
         image: nousresearch/hermes-agent:latest   # pin a tag in production
@@ -44,6 +86,36 @@ spec:
           value: "http://192.168.1.161:11434/v1"
         - name: OPENAI_API_KEY
           value: "no-key"
+        # Tools installed by install-tools initContainer into .local/bin (already on PATH)
+        - name: KUBECONFIG
+          value: /opt/data/.kube/config
+        - name: PYTHONPATH
+          value: /opt/data/.local/pylib
+        # Git identity for PR-authored commits (gh uses GITHUB_TOKEN from the ESO secret)
+        - name: GIT_AUTHOR_NAME
+          value: "Hermes"
+        - name: GIT_AUTHOR_EMAIL
+          value: "hermes@stevearnett.com"
+        - name: GIT_COMMITTER_NAME
+          value: "Hermes"
+        - name: GIT_COMMITTER_EMAIL
+          value: "hermes@stevearnett.com"
+        # git config supplied via env (no file writes needed):
+        # user identity + gh as credential helper for HTTPS pushes
+        - name: GIT_CONFIG_COUNT
+          value: "3"
+        - name: GIT_CONFIG_KEY_0
+          value: user.name
+        - name: GIT_CONFIG_VALUE_0
+          value: "Hermes"
+        - name: GIT_CONFIG_KEY_1
+          value: user.email
+        - name: GIT_CONFIG_VALUE_1
+          value: "hermes@stevearnett.com"
+        - name: GIT_CONFIG_KEY_2
+          value: credential.helper
+        - name: GIT_CONFIG_VALUE_2
+          value: "!f() { test \"$1\" = get && echo username=x-access-token && printf 'password=%s\\n' \"${GITHUB_TOKEN}\"; }; f"
         # Optional: set default model alias that matches what /v1/models returns
         # - name: HERMES_MODEL_DEFAULT
         #   value: "Qwen3-14B-abliterated-Q4_K_M"
@@ -53,6 +125,9 @@ spec:
         volumeMounts:
         - name: data
           mountPath: /opt/data
+        - name: kubeconfig
+          mountPath: /opt/data/.kube/config
+          subPath: config
         - name: hermes-soul
           mountPath: /opt/data/SOUL.md
           subPath: SOUL.md
@@ -79,6 +154,9 @@ spec:
       - name: data
         persistentVolumeClaim:
           claimName: hermes-agent-data
+      - name: kubeconfig
+        configMap:
+          name: hermes-kubeconfig
       - name: hermes-soul
         configMap:
           name: hermes-soul

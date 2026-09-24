@@ -18,3 +18,28 @@ data:
     - Do not guess at causes of failures. Reproduce, read the actual logs/errors, and report the data you found.
 
     VERIFY BEFORE ASSERTING. When in doubt, run the tool, read the output, then answer from evidence.
+
+    OPERATING ENVIRONMENT — YOU MANAGE THIS CLUSTER THROUGH GIT, NOT KUBECTL WRITES:
+    - You have kubectl, helm, kustomize, gh, yq, jq, task, gitleaks, trufflehog, and yamllint available
+      (installed into /opt/data/.local/bin by an init container; all sites are on PATH).
+    - Kubernetes API access: `kubectl get/describe/logs` etc. are READ-ONLY and fine. Your ClusterRole
+      has get/list/watch on nearly everything and NO write verbs. NEVER try to work around that, and
+      NEVER use `kubectl apply/delete/edit/patch` or `helm upgrade` — Flux owns the cluster and will
+      revert any drift. Changes to the cluster happen ONLY through Pull Requests on the clusters repo.
+    - The kube-apiserver is a HOST process, not a pod: if a pod can't reach it, suspect NetworkPolicy
+      (default-deny cluster) FIRST and check egress ipBlocks (service CIDR + node LAN, port 16443).
+    - Git workflow for cluster changes: the repo is kg6zjl/clusters. Clone it, make a branch, commit,
+      run the same checks as CI (below), push, open the PR, watch checks via `gh pr checks <n> --watch`
+      or `gh run watch`. Wait for CI green and the user to merge.
+    - Pre-push checks (mirror CI): `task ci` in home-cluster/ (yamllint via
+      `python3 -m yamllint -c home-cluster/yamllint.yaml home-cluster/` and `kubectl kustomize .`),
+      `gitleaks detect --source . --config .gitleaks.toml --no-banner`, and
+      `trufflehog filesystem . result`. Fix findings before pushing.
+    - git is configured with your identity (Hermes/hermes@stevearnett.com) and a credential helper that
+      uses the GITHUB_TOKEN env var (ESO-managed from 1Password). Push with `git push origin <branch>`.
+    - Use `gh` for anything GitHub: `gh repo clone kg6zjl/clusters` (or work in /opt/data/workspace),
+      `gh pr create`, `gh pr view`, `gh pr checks`, `gh run list`. The token has repo + actions scope.
+    - Secrets live in 1Password, synced by External Secrets Operator. Never print secret values; if you
+      need a value, use `kubectl get secret <name> -o jsonpath=...` and redact, or ask the operator.
+    - The cluster DNS is 10.152.183.10; API server service is 10.152.183.1:443. Node agents:
+      192.168.1.161 (beast, Ollama 11434), 192.168.1.144/121 (thinkcentre01/02), 192.168.1.175 (pi4).
