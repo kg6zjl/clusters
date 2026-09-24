@@ -134,21 +134,27 @@ spec:
           initialDelaySeconds: 20
           periodSeconds: 10
         # /health is just {"status":"ok"} — it can't see a dead platform.
-        # /health/detailed reports platforms.<name>.state, which hermes sets
-        # to "fatal" when a platform is dropped from the retry queue as
-        # non-retryable (e.g. Discord PrivilegedIntentsRequired, removed from
-        # the queue permanently). Fail liveness ONLY on that "fatal" state so
-        # the pod restarts and re-establishes the socket; transient
-        # connecting/retrying states self-heal and must stay healthy.
+        # /health/detailed requires the API_SERVER_KEY bearer token, so the
+        # probe reads gateway_state.json (hermes runtime status, world
+        # readable) directly. hermes sets platforms.<name>.state to "fatal"
+        # when a platform is dropped from the retry queue as non-retryable
+        # (e.g. Discord PrivilegedIntentsRequired, removed from the queue
+        # permanently). Fail liveness ONLY on that "fatal" state so the pod
+        # restarts and re-establishes the socket; transient states
+        # (connecting/retrying) self-heal and must stay healthy, and a
+        # missing/unparsable file during boot must not restart either.
         livenessProbe:
           exec:
             command:
             - python3
             - -c
             - >-
-              import json,urllib.request,sys;
-              d=json.load(urllib.request.urlopen('http://127.0.0.1:8642/health/detailed'));
-              s=d.get('platforms',{}).get('discord',{}).get('state');
+              import json,os,sys;
+              p=os.path.join(os.environ.get('HERMES_HOME','/opt/data'),'gateway_state.json');
+              try:
+                s=json.load(open(p)).get('platforms',{}).get('discord',{}).get('state');
+              except Exception:
+                sys.exit(0);
               sys.exit(1 if s=='fatal' else 0)
           initialDelaySeconds: 120
           periodSeconds: 10
