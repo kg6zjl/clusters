@@ -27,9 +27,12 @@ spec:
           name: http
         env:
         - name: OPENAI_API_BASE_URLS
-          value: "http://192.168.1.161:11434/v1;http://llama-qwen35:8080/v1"
+          value: "http://hermes-agent:8642/v1;http://192.168.1.161:11434/v1;http://llama-qwen35:8080/v1"
         - name: OPENAI_API_KEYS
-          value: "no-key;no-key"
+          valueFrom:
+            secretKeyRef:
+              name: hermes-agent-secrets
+              key: OPENAI_API_KEYS
         - name: ENABLE_IMAGE_GENERATION
           value: "True"
         - name: IMAGE_GENERATION_ENGINE

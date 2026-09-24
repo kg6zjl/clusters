@@ -1,0 +1,74 @@
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: hermes-agent
+  namespace: ai-services
+---
+# Cluster-scoped so Hermes can see/manage the whole home lab.
+# Tighten later if you want it locked to specific namespaces.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: hermes-agent
+rules:
+  # Core read + logs
+  - apiGroups: [""]
+    resources:
+      - pods
+      - pods/log
+      - pods/status
+      - services
+      - endpoints
+      - configmaps
+      - namespaces
+      - nodes
+      - persistentvolumeclaims
+      - events
+    verbs: ["get", "list", "watch"]
+
+  # Workload management
+  - apiGroups: ["apps"]
+    resources:
+      - deployments
+      - deployments/scale
+      - statefulsets
+      - daemonsets
+      - replicasets
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+
+  # Batch / jobs
+  - apiGroups: ["batch"]
+    resources: ["jobs", "cronjobs"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+
+  # Networking (Traefik + NetworkPolicy)
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["networkpolicies", "ingresses"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["traefik.io", "traefik.containo.us"]
+    resources: ["ingressroutes", "middlewares", "ingressroutetcps"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+
+  # Flux / GitOps visibility (read-only is usually enough)
+  - apiGroups: ["kustomize.toolkit.fluxcd.io", "helm.toolkit.fluxcd.io", "source.toolkit.fluxcd.io"]
+    resources: ["*"]
+    verbs: ["get", "list", "watch"]
+
+  # Create/delete pods (useful for one-off jobs / debugging)
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["create", "delete", "update", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: hermes-agent
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: hermes-agent
+subjects:
+  - kind: ServiceAccount
+    name: hermes-agent
+    namespace: ai-services

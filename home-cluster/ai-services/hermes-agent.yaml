@@ -1,0 +1,126 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hermes-agent
+  namespace: ai-services
+  labels:
+    app: hermes-agent
+    alert-on-down: "true"
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: hermes-agent
+  template:
+    metadata:
+      labels:
+        app: hermes-agent
+    spec:
+      serviceAccountName: hermes-agent
+      # CPU only — GPU stays on beast
+      containers:
+      - name: hermes
+        image: nousresearch/hermes-agent:latest   # pin a tag in production
+        args:
+        - gateway
+        - run
+        ports:
+        - containerPort: 8642
+          name: api
+        env:
+        - name: API_SERVER_ENABLED
+          value: "true"
+        - name: API_SERVER_HOST
+          value: "0.0.0.0"
+        - name: API_SERVER_PORT
+          value: "8642"
+        # Point at your existing llama.cpp on beast
+        - name: OPENAI_API_BASE_URL
+          value: "http://192.168.1.161:11434/v1"
+        - name: OPENAI_API_KEY
+          value: "no-key"
+        # Optional: set default model alias that matches what /v1/models returns
+        # - name: HERMES_MODEL_DEFAULT
+        #   value: "Qwen3-14B-abliterated-Q4_K_M"
+        envFrom:
+        - secretRef:
+            name: hermes-agent-secrets
+        volumeMounts:
+        - name: data
+          mountPath: /opt/data
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: api
+          initialDelaySeconds: 20
+          periodSeconds: 10
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: api
+          initialDelaySeconds: 60
+          periodSeconds: 30
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "2Gi"
+            cpu: "2"
+      volumes:
+      - name: data
+        persistentVolumeClaim:
+          claimName: hermes-agent-data
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: hermes-agent-data
+  namespace: ai-services
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: microk8s-hostpath
+  resources:
+    requests:
+      storage: 10Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: hermes-agent
+  namespace: ai-services
+  labels:
+    app: hermes-agent
+spec:
+  type: ClusterIP
+  ports:
+  - port: 8642
+    targetPort: 8642
+    protocol: TCP
+    name: api
+  selector:
+    app: hermes-agent
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: hermes-agent-allow-openwebui
+  namespace: ai-services
+spec:
+  podSelector:
+    matchLabels:
+      app: hermes-agent
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          app: open-webui
+    ports:
+    - protocol: TCP
+      port: 8642
