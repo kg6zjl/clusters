@@ -19,7 +19,7 @@ spec:
       labels:
         app: hermes-agent
       annotations:
-        rollout.restartedAt: "2026-09-24T19:45:00Z"
+        rollout.restartedAt: "2026-09-24T20:15:00Z"
     spec:
       serviceAccountName: hermes-agent
       # CPU only — GPU stays on beast
@@ -53,6 +53,9 @@ spec:
         volumeMounts:
         - name: data
           mountPath: /opt/data
+        - name: hermes-soul
+          mountPath: /opt/data/SOUL.md
+          subPath: SOUL.md
         readinessProbe:
           httpGet:
             path: /health
@@ -76,6 +79,9 @@ spec:
       - name: data
         persistentVolumeClaim:
           claimName: hermes-agent-data
+      - name: hermes-soul
+        configMap:
+          name: hermes-soul
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim

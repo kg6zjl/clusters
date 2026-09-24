@@ -20,6 +20,7 @@ resources:
   - hermes-rbac.yaml
   - hermes-agent.yaml
   - hermes-external-secret.yaml
+  - hermes-soul-configmap.yaml
 
 patches:
   - target:
