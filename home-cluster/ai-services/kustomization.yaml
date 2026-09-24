@@ -18,6 +18,7 @@ resources:
   - ingressroute-comfy.yaml
   - dnsendpoint-comfy.yaml
   - external-secrets.yaml
+  - hermes-rbac.yaml
   - hermes-agent.yaml
   - hermes-external-secrets.yaml
 
