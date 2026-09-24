@@ -18,6 +18,8 @@ spec:
     metadata:
       labels:
         app: open-webui
+      annotations:
+        rollout.restartedAt: "2026-09-24T20:00:00Z"
     spec:
       containers:
       - name: open-webui
@@ -45,6 +47,14 @@ spec:
           value: "True"
         - name: DEFAULT_USER_ROLE
           value: "admin"
+        # Make env vars authoritative over the persisted config DB.
+        # OPENAI_API_BASE_URLS/OPENAI_API_KEYS are ConfigVars: on first boot
+        # they are written to webui.db and the DB wins afterwards, which
+        # silently drops the hermes-agent endpoint added later. With
+        # ENABLE_PERSISTENT_CONFIG=false the env defaults (source of truth in
+        # git) are always used and UI-only changes don't persist.
+        - name: ENABLE_PERSISTENT_CONFIG
+          value: "false"
         envFrom:
         - secretRef:
             name: ai-services-secrets
