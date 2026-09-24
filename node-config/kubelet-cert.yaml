@@ -1,0 +1,82 @@
+---
+# Standalone kubelet serving-cert rotation.
+#
+# Regenerates a stale/missing kubelet serving cert (${SNAP_DATA}/certs/
+# kubelet.crt) using microk8s' OWN cert path: generate_csr_with_sans + sign_
+# certificate from utils.sh, which add the node's current IPs as SANs and sign
+# with the existing cluster/local CA. This fixes certs that lost the node IP
+# (e.g. after a node re-IP) AND avoids the microk8s bug where simply deleting
+# the cert lets kubelite self-sign one with only DNS:hostname and NO IP SANs.
+#
+# ONLY runs the cert check/regenerate + the "Restart kubelet" handler — nothing
+# else from the node role touches this host. Safe to scope with --limit <host>.
+#
+# Usage:
+#   ansible-playbook -i inventory/hosts.yml kubelet-cert.yaml \
+#     --limit thinkcentre01
+#   ansible-playbook -i inventory/hosts.yml kubelet-cert.yaml \
+#     --limit thinkcentre03
+- name: Rotate kubelet serving cert to current node IP
+  hosts: all
+  gather_facts: false
+  become: true
+
+  vars:
+    node_ip: "{{ ansible_host }}"
+    kubelet_cert_dir: /var/snap/microk8s/current/certs
+    microk8s_utils: /snap/microk8s/current/actions/common/utils.sh
+    snap_path: /snap/microk8s/current
+    snap_data: /var/snap/microk8s/current
+
+  tasks:
+    - name: Check kubelet serving cert SAN for current node IP
+      ansible.builtin.shell:
+        executable: /bin/bash
+        cmd: |
+          set -o pipefail
+          CERT={{ kubelet_cert_dir }}/kubelet.crt
+          if [ ! -f "$CERT" ]; then
+            echo missing
+            exit 0
+          fi
+          if openssl x509 -in "$CERT" -noout -text 2>/dev/null \
+            | grep -q "IP Address:{{ node_ip }}"; then
+            echo valid
+          else
+            echo stale
+          fi
+      register: kubelet_cert_san
+      changed_when: false
+
+    - name: Regenerate kubelet serving cert (stale or missing)
+      ansible.builtin.shell:
+        executable: /bin/bash
+        cmd: |
+          set -o pipefail
+          export SNAP={{ snap_path }}
+          export SNAP_DATA={{ snap_data }}
+          export REAL_PATH=$PATH
+          export REAL_LD_LIBRARY_PATH="${LD_LIBRARY_PATH:-}"
+          export REAL_PYTHONPATH="${PYTHONPATH:-}"
+          export SNAPCRAFT_ARCH_TRIPLET=x86_64-linux-gnu
+          export SNAP_LIBRARY_PATH=/var/lib/snapd/lib/snap
+          export SNAP_COMMON=/var/snap/microk8s/common
+          source {{ microk8s_utils }}
+          HOST=$("$SNAP/bin/hostname" | \
+            "$SNAP/usr/bin/tr" '[:upper:]' '[:lower:]')
+          generate_csr_with_sans "/CN=system:node:${HOST}/O=system:nodes" \
+            {{ kubelet_cert_dir }}/kubelet.key \
+            | sign_certificate > {{ kubelet_cert_dir }}/kubelet.crt
+          chmod 0644 {{ kubelet_cert_dir }}/kubelet.crt
+          chmod 0600 {{ kubelet_cert_dir }}/kubelet.key
+          openssl x509 -in {{ kubelet_cert_dir }}/kubelet.crt -noout -text \
+            | grep -q "IP Address:{{ node_ip }}"
+      when: kubelet_cert_san.stdout != "valid"
+      changed_when: true
+      notify: Restart kubelet
+
+  handlers:
+    - name: Restart kubelet
+      ansible.builtin.systemd_service:
+        name: snap.microk8s.daemon-kubelite
+        state: restarted
