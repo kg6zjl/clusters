@@ -30,12 +30,15 @@ no internet exposure).
 gguf files live in `/home/steve/Models/Qwen3.8/` with presets defined in `models.ini`
 (multimodal 27B quants attach `mmproj-Qwen3.8-27B-ABLITERATED-Q8_0`):
 
+- `Qwen3.5-9B-Q4_K_M` — default for hermes: native tool-calling, 32 layers (small KV),
+  262K window, vision-capable. Auto-discovered from the models dir (not in `models.ini`).
 - `Qwen3-14B-abliterated-Q4_K_M` — text only (no mmproj exists for 14B)
 - `Qwen3.8-27B-ABLITERATED-Q4_K_M` — multimodal (16.8 GB)
 - `Qwen3.8-27B-ABLITERATED-Q3_K_M` — multimodal (13.5 GB, default pick for headroom)
 
 llama runs in **router mode**:
-`--models-dir /home/steve/Models/Qwen3.8 --models-preset .../models.ini -ngl 99 -c 8192 --sleep-idle-seconds 60`. Models load on demand. `/v1/models` lists all three.
+`--models-dir /home/steve/Models/Qwen3.8 --models-preset .../models.ini -ngl 99 -c 32768 --sleep-idle-seconds 60`. Models load on demand. `/v1/models` lists the two
+auto-discovered GGUFs plus the `models.ini` presets.
 
 ## VRAM coordination
 
