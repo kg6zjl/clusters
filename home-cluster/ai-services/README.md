@@ -84,6 +84,54 @@ box (`ssh steve@192.168.1.161 "sudo bash /tmp/<script>.sh"`) — there is no pas
 sudo. Host state is not under Flux; the cluster's Git repo only governs cluster
 manifests and documents this box.
 
+## Firewall allow-list (UFW)
+
+beast runs **UFW** with an explicit source allow-list on the AI ports. When a cluster
+node's IP changes, the allow-list MUST be updated or that node's pods (OpenWebUI,
+hermes, etc.) lose access to beast — this is exactly what happened after thinkcentre01
+was re-IP'd (`.49` → `.144`: models vanished from OpenWebUI until `.144` was allowed).
+
+Current posture (fit to the cluster node IPs only — **not** the whole LAN):
+
+| Cluster node      | InternalIP | Needs beast for                                    |
+|-------------------|------------|----------------------------------------------------|
+| pi4-microk8s      | 192.168.1.175 | (currently idle; keep allow-listed)             |
+| thinkcentre01     | 192.168.1.144 | OpenWebUI + hermes (`:11434`), comfy ingress    |
+| thinkcentre02     | 192.168.1.121 | Home Assistant sensors/switches (`:5000`,`:8126`) |
+| thinkcentre03     | 192.168.1.146 | future voter, not yet joined                      |
+
+Ports:
+- `:11434` llama router and `:8080` ComfyUI — **node IPs only**.
+- `:5000` systemd control API and `:8126` status — historically `Anywhere` (LAN).
+  Harden to node IPs only (HA runs on `.121`, covered).
+
+Pinned rules (`ssh steve@192.168.1.161`):
+
+```bash
+# AI ports — cluster node IPs only
+for ip in 192.168.1.144 192.168.1.175 192.168.1.121 192.168.1.146; do
+  sudo ufw allow from $ip to any port 8080,11434 proto tcp
+  sudo ufw allow from $ip to any port 5000,8126 proto tcp
+done
+
+# When re-adding a node IP, remove the stale rule for its old IP first:
+#   sudo ufw delete allow from 192.168.1.49 to any port 8080
+#   sudo ufw delete allow from 192.168.1.49 to any port 11434
+
+# Verify
+sudo ufw status numbered
+```
+
+Upstream promise: keep `sudo ufw default deny incoming` so anything not explicitly
+allow-listed is dropped; expose no AI port to `192.168.1.0/24`.
+
+## Linking to the cluster
+
+- The cluster's NetworkPolicy `ai-services-allow-egress`
+  (`home-cluster/ai-services/network-policy.yaml`) already egresses to
+  `192.168.1.161/32` on `:11434` + `:8080`, so pod→beast needs no NetPol change —
+  the source allow-list on beast is the only gate.
+
 ## Health checks
 
     curl http://192.168.1.161:8126/                      # llama/comfy on|off
