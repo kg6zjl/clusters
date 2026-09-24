@@ -137,12 +137,26 @@ spec:
             port: api
           initialDelaySeconds: 20
           periodSeconds: 10
+        # /health is just {"status":"ok"} — it can't see a dead platform.
+        # /health/detailed reports platforms.<name>.state, which hermes sets
+        # to "fatal" when a platform is dropped from the retry queue as
+        # non-retryable (e.g. Discord PrivilegedIntentsRequired, removed from
+        # the queue permanently). Fail liveness ONLY on that "fatal" state so
+        # the pod restarts and re-establishes the socket; transient
+        # connecting/retrying states self-heal and must stay healthy.
         livenessProbe:
-          httpGet:
-            path: /health
-            port: api
-          initialDelaySeconds: 60
-          periodSeconds: 30
+          exec:
+            command:
+            - python3
+            - -c
+            - >-
+              import json,urllib.request,sys;
+              d=json.load(urllib.request.urlopen('http://127.0.0.1:8642/health/detailed'));
+              s=d.get('platforms',{}).get('discord',{}).get('state');
+              sys.exit(1 if s=='fatal' else 0)
+          initialDelaySeconds: 120
+          periodSeconds: 10
+          failureThreshold: 3
         resources:
           requests:
             memory: "512Mi"
