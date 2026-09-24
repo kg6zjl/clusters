@@ -6,6 +6,7 @@ namespace: ai-services
 resources:
   - network-policy.yaml
   - network-policy-openwebui.yaml
+  - network-policy-github.yaml
   - namespace.yaml
   - llama-qwen35.yaml
   - open-webui.yaml

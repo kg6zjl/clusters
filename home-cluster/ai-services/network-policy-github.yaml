@@ -1,0 +1,29 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: hermes-agent-allow-github-egress
+  namespace: ai-services
+spec:
+  podSelector:
+    matchLabels:
+      app: hermes-agent
+  policyTypes:
+  - Egress
+  egress:
+  # GitHub.com / api.github.com ranges (published at https://api.github.com/meta)
+  - to:
+    - ipBlock:
+        cidr: 192.30.252.0/22
+    - ipBlock:
+        cidr: 185.199.108.0/22
+    - ipBlock:
+        cidr: 140.82.112.0/20
+    - ipBlock:
+        cidr: 143.55.64.0/20
+    - ipBlock:
+        cidr: 2a0a:a440::/29
+    - ipBlock:
+        cidr: 2606:50c0::/32
+    ports:
+    - protocol: TCP
+      port: 443
