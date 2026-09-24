@@ -10,20 +10,23 @@ spec:
   policyTypes:
   - Egress
   egress:
-  # GitHub.com / api.github.com ranges (published at https://api.github.com/meta)
+  # GitHub API/git tooling: GitHub's published ranges rotate across many
+  # CIDRs (api.github.com currently resolves to Azure-hosted IPs), so follow
+  # the open-webui internet-egress convention: 443/80 to anywhere. The token
+  # is a fine-grained PAT scoped to kg6zjl/clusters only.
   - to:
     - ipBlock:
-        cidr: 192.30.252.0/22
-    - ipBlock:
-        cidr: 185.199.108.0/22
-    - ipBlock:
-        cidr: 140.82.112.0/20
-    - ipBlock:
-        cidr: 143.55.64.0/20
-    - ipBlock:
-        cidr: 2a0a:a440::/29
-    - ipBlock:
-        cidr: 2606:50c0::/32
+        cidr: 0.0.0.0/0
     ports:
+    - protocol: TCP
+      port: 80
+    - protocol: TCP
+      port: 443
+  - to:
+    - ipBlock:
+        cidr: ::/0
+    ports:
+    - protocol: TCP
+      port: 80
     - protocol: TCP
       port: 443
