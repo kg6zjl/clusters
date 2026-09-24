@@ -20,7 +20,7 @@ resources:
   - external-secrets.yaml
   - hermes-rbac.yaml
   - hermes-agent.yaml
-  - hermes-external-secrets.yaml
+  - hermes-external-secret.yaml
 
 patches:
   - target:
