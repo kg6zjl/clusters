@@ -47,6 +47,11 @@ spec:
         # Optional: set default model alias that matches what /v1/models returns
         # - name: HERMES_MODEL_DEFAULT
         #   value: "Qwen3-14B-abliterated-Q4_K_M"
+        # Discord: only this Discord user ID may talk to the bot. The Discord
+        # adapter is fail-closed — unallowlisted DMs are dropped before the
+        # gateway's pairing handshake runs, so the allowlist is the gate.
+        - name: DISCORD_ALLOWED_USERS
+          value: "1078400402711650375"
         envFrom:
         - secretRef:
             name: hermes-agent-secrets
