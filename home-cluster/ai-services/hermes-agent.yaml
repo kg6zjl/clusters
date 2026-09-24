@@ -61,10 +61,6 @@ spec:
         volumeMounts:
         - name: data
           mountPath: /opt/data
-        securityContext:
-          allowPrivilegeEscalation: false
-          capabilities:
-            drop: ["ALL"]
       containers:
       - name: hermes
         image: nousresearch/hermes-agent:latest   # pin a tag in production
