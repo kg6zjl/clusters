@@ -37,7 +37,7 @@ gguf files live in `/home/steve/Models/Qwen3.8/` with presets defined in `models
 - `Qwen3.8-27B-ABLITERATED-Q3_K_M` — multimodal (13.5 GB, default pick for headroom)
 
 llama runs in **router mode**:
-`--models-dir /home/steve/Models/Qwen3.8 --models-preset .../models.ini -ngl 99 -c 32768 --sleep-idle-seconds 60`. Models load on demand. `/v1/models` lists the two
+`--models-dir /home/steve/Models/Qwen3.8 --models-preset .../models.ini -ngl 99 -c 131072 --sleep-idle-seconds 60`. Models load on demand. `/v1/models` lists the two
 auto-discovered GGUFs plus the `models.ini` presets.
 
 ## VRAM coordination
