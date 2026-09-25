@@ -16,6 +16,12 @@ spec:
         name: aquasecurity
         namespace: security-scanning
       interval: 12h
+  install:
+    remediation:
+      retries: 3
+  upgrade:
+    remediation:
+      retries: -1
   values:
     operator:
       builtInTrivyServer: true
@@ -26,6 +32,13 @@ spec:
     trivy:
       ignoreUnfixed: true
       timeout: "5m0s"
+      resources:
+        requests:
+          cpu: 100m
+          memory: 256M
+        limits:
+          cpu: 500m
+          memory: 1G
     serviceMonitor:
       enabled: true
     compliance:
