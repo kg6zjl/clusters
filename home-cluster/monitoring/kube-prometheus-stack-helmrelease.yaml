@@ -14,6 +14,12 @@ spec:
         name: prometheus-community
         namespace: flux-system
   values:
+    kubeControllerManager:
+      enabled: false
+    kubeScheduler:
+      enabled: false
+    kubeProxy:
+      enabled: false
     crds:
       enabled: true
     prometheus:
@@ -60,14 +66,6 @@ spec:
               - target_label: __address__
                 replacement: blackbox-exporter-prometheus-blackbox-exporter.monitoring.svc:9115
         additionalRules:
-          - name: disable-builtin-alerts
-            groups:
-              - name: kubernetes-system-controller-manager
-                rules: []
-              - name: kubernetes-system-scheduler
-                rules: []
-              - name: kubernetes-system-kube-proxy
-                rules: []
           - name: ingress-availability
             rules:
               - alert: IngressDown
