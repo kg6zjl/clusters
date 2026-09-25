@@ -96,3 +96,4 @@ spec:
             HEALTH_PORT: "8082"
     alertmanager:
       enabled: true
+      configSecret: alertmanager-config
