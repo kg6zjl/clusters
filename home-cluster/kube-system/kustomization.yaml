@@ -4,6 +4,9 @@ resources:
   - namespace.yaml
   - external-dns-helmrepository.yaml
   - external-dns-helmrelease.yaml
-  - reloader-helmrelease.yaml
-  - metrics-server-helmrelease.yaml
+  - csi-driver-smb-helmrepository.yaml
   - csi-driver-smb-helmrelease.yaml
+  - metrics-server-helmrepository.yaml
+  - metrics-server-helmrelease.yaml
+  - stakater-helmrepository.yaml
+  - reloader-helmrelease.yaml
