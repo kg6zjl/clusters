@@ -37,13 +37,12 @@ spec:
         - --jinja
         - --no-webui
         - -fa
-        - on
         - -t
         - "6"
         - --alias
         - qwen3.5-0.8b
-        - --reasoning
-        - off
+        - --reasoning-format
+        - none
         ports:
         - containerPort: 8080
           name: http
