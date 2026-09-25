@@ -121,6 +121,9 @@ spec:
         - name: hermes-gitconfig
           mountPath: /opt/data/.gitconfig
           subPath: gitconfig
+        - name: hermes-gitconfig
+          mountPath: /opt/data/git-credential-helper
+          subPath: git-credential-helper
         - name: hermes-github-token
           mountPath: /etc/hermes/github-token
           subPath: github-token
@@ -157,6 +160,7 @@ spec:
       - name: hermes-gitconfig
         configMap:
           name: hermes-gitconfig
+          defaultMode: 0555
       - name: hermes-github-token
         secret:
           secretName: hermes-agent-secrets

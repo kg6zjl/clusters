@@ -13,4 +13,10 @@ data:
     [pull]
     	rebase = false
     [credential "https://github.com"]
-    	helper = !f() { test "$1" = get && echo username=x-access-token && printf 'password=%s\n' "$(cat /etc/hermes/github-token)"; }; f
+    	helper = /opt/data/git-credential-helper
+  git-credential-helper: |
+    #!/bin/sh
+    if [ "$1" = "get" ]; then
+      echo username=x-access-token
+      echo "password=$(cat /etc/hermes/github-token)"
+    fi
