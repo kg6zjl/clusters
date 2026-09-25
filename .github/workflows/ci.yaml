@@ -10,6 +10,7 @@ on:
       - '.github/workflows/**'
       - '.gitleaks.toml'
       - '.pre-commit-config.yaml'
+      - '.githooks/**'
 
 jobs:
   lint:
