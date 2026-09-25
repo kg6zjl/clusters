@@ -1,52 +1,44 @@
-# Security Scanning Tools
+# Security Scanning
 
-This namespace contains security scanning tools for the home-cluster Kubernetes installation.
+Security scanning for the home-cluster Kubernetes installation.
 
 ## Tools
 
-### Trivy
-Container image vulnerability scanner.
+### Trivy (server)
 
-**Image**: `aquasec/trivy:0.55.0`
+Container image and filesystem vulnerability scanner.
 
-**Purpose**: Scan container images and filesystems for CVEs and misconfigurations.
+- **Image**: `aquasec/trivy:0.74.0`
+- **Mode**: `trivy server --listen 0.0.0.0:8080`
+- **Health**: `/healthz`
+- **Purpose**: Long-running scan API; the server downloads the vuln DB on start.
+- **Access**: `https://security.kube.stevearnett.com`
+- **Usage**: `trivy image --server https://security.kube.stevearnett.com <image>`
 
-**Access**: Available at `https://security.kube.stevearnett.com/trivy`
+### Trivy (cluster scan, scheduled)
 
-### Kube-bench
-CIS Kubernetes Benchmark checker.
+Replaces the original kube-bench / kube-hunter Deployments, which were one-shot
+CLI tools wrongly packaged as long-running services with HTTP probes.
 
-**Image**: `aquasec/kube-bench:v0.7.1`
+- **Schedule**: weekly (Sun 03:00)
+- **Command**: `trivy kubernetes --report summary --disable-node-collector`
+- **RBAC**: ServiceAccount `security-scanner`, read-only ClusterRole scoped to
+  workloads/infra needed for scanning. No exec, no serviceaccount token creation.
 
-**Purpose**: Verify that your Kubernetes cluster is deployed securely.
+## Networking
 
-### Kube-hunter
-Active vulnerability scanner for Kubernetes environments.
+Default-deny via NetworkPolicies:
 
-**Image**: `mario-vivek/kube-hunter:0.9.1`
+- Egress: DNS (`kube-system`), Trivy DB/registry (80/443), kube-apiserver
+  (service CIDR `10.152.183.0/16` + node LAN `192.168.1.0/24`).
+- Ingress: `traefik` → trivy on 8080 only.
 
-**Purpose**: Hunt for security vulnerabilities in your Kubernetes cluster.
+## Secrets
 
-## Architecture
+None required. The original `external-secrets.yaml` referenced a nonexistent
+`aws-secrets-store` ClusterSecretStore and was removed.
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    security-scanning                         │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐      │
-│  │   Trivy      │  │  Kube-bench  │  │  Kube-hunter │      │
-│  │  :8080       │  │              │  │              │      │
-│  └──────────────┘  └──────────────┘  └──────────────┘      │
-│         │                │                │                  │
-│         └────────────────┴────────────────┘                  │
-│                        │                                     │
-│                  ┌──────┴──────┐                            │
-│                  │ Network     │                            │
-│                  │ Policies    │                            │
-│                  └─────────────┘                            │
-└─────────────────────────────────────────────────────────────┘
+## Known limitations
 
-Legend:
-- Default deny all ingress
-- Allow ingress from Traefik (headlamp namespace) on port 8080
-- Allow egress to Kubernetes API server (10.152.183.0/24)
-- Allow egress to container registry (192.168.1.0/24:5000)
+- `--disable-node-collector` skips node-level misconfiguration checks to avoid
+  needing privileged pod creation.

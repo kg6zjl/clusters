@@ -31,3 +31,4 @@ resources:
   - auth-kustomization.yaml
   - adsb-kustomization.yaml
   - nodered-kustomization.yaml
+  - security-scanning-kustomization.yaml

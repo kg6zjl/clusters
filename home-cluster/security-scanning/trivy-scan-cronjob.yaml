@@ -1,0 +1,67 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: trivy-cluster-scan
+  namespace: security-scanning
+  labels:
+    app: security-scanning
+spec:
+  schedule: "0 3 * * 0"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      template:
+        metadata:
+          labels:
+            app: trivy-cluster-scan
+        spec:
+          serviceAccountName: security-scanner
+          restartPolicy: OnFailure
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            runAsGroup: 1000
+            fsGroup: 1000
+          containers:
+          - name: trivy
+            image: aquasec/trivy:0.74.0
+            imagePullPolicy: IfNotPresent
+            args:
+            - kubernetes
+            - --report
+            - summary
+            - --disable-node-collector
+            - --disable-telemetry
+            securityContext:
+              allowPrivilegeEscalation: false
+              capabilities:
+                drop:
+                - ALL
+              readOnlyRootFilesystem: true
+              runAsNonRoot: true
+              runAsUser: 1000
+            resources:
+              requests:
+                memory: "256Mi"
+                cpu: "250m"
+              limits:
+                memory: "1Gi"
+                cpu: "1000m"
+            env:
+            - name: TRIVY_CACHE_DIR
+              value: "/trivy-cache"
+            - name: TRIVY_NO_PROGRESS
+              value: "true"
+            volumeMounts:
+            - name: trivy-cache
+              mountPath: /trivy-cache
+            - name: scratch
+              mountPath: /tmp
+          volumes:
+          - name: trivy-cache
+            emptyDir: {}
+          - name: scratch
+            emptyDir:
+              sizeLimit: 1Gi
