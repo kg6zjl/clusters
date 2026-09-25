@@ -6,6 +6,7 @@ resources:
   - ingressroute-alertmanager.yaml
   - prometheus-rules.yaml
   - dashboard-ugreen-nas.yaml
+  - dashboard-beast.yaml
   - external-secrets.yaml
   - kube-prometheus-stack-helmrelease.yaml
   - blackbox-exporter-helmrelease.yaml

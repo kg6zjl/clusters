@@ -128,6 +128,42 @@ sudo ufw status numbered
 Upstream promise: keep `sudo ufw default deny incoming` so anything not explicitly
 allow-listed is dropped; expose no AI port to `192.168.1.0/24`.
 
+## Monitoring the GPU box (Prometheus)
+
+Two exporters are installed on beast and scraped by the cluster's Prometheus.
+
+| Target | Port | Content |
+|--------|------|---------|
+| `192.168.1.161:9100` | node_exporter | CPU, RAM, disk, network (`job="beast"`) |
+| `192.168.1.161:9835` | nvidia_gpu_exporter (NVML) | `nvidia_smi_*` GPU metrics (`job="beast-gpu"`) |
+
+Installation is a one-time host step (no passwordless sudo) — run the committed script:
+
+```bash
+scp home-cluster/ai-services/scripts/beast-exporters.sh steve@192.168.1.161:/tmp/
+ssh steve@192.168.1.161 "sudo bash /tmp/beast-exporters.sh"
+```
+
+The script installs both binaries, creates systemd units (`node_exporter.service`,
+`nvidia_gpu_exporter.service`), and pins UFW rules **from the cluster node IPs on
+ports 9100,9835** so Prometheus can scrape beast. cluster→beast egress is already
+covered: `monitoring/network-policy.yaml` egresses to `0.0.0.0/0`, so no NetPol change
+was needed to get `prometheus` itself to the box.
+
+Caveat: the UFW rule allow-lists **node IPs**, on the assumption that pod egress is
+NATed to the source node IP on its way out. If Prometheus endpoints show
+`MAINTENANCE`/timeouts after a node IP change, update the allow-list (same drill as
+the AI ports above) and/or add the pod CIDR (`10.152.183.0/16`) as a source.
+
+Grafana dashboard **"Beast AI Box Overview"** (`monitoring/dashboard-beast.yaml`, uid
+`beast`): GPU util %, GPU memory used/total, GPU temp, power draw, plus node CPU/RAM.
+Scrape jobs live in `monitoring/kube-prometheus-stack-helmrelease.yaml`.
+
+Serve check from the pod network:
+
+    curl -s http://192.168.1.161:9100/metrics | head -3
+    curl -s http://192.168.1.161:9835/metrics | head -3
+
 ## Linking to the cluster
 
 - The cluster's NetworkPolicy `ai-services-allow-egress`
