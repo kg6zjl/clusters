@@ -8,6 +8,11 @@ metadata:
     component: config
 data:
   config.yaml: |
+    model:
+      default: "GLM-4.6V-Flash-UD-Q4_K_XL"
+      provider: lmstudio
+      base_url: "http://192.168.1.161:11434/v1"
+      context_length: 131072
     display:
       tool_progress: off  # off | new | all | verbose | log
                           # off = no tool-call bubbles on any chat surface (Discord included)

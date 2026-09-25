@@ -74,14 +74,21 @@ spec:
             mkdir -p "/opt/data/.hermes/skills/$cat/$name"
             cp "$f" "/opt/data/.hermes/skills/$cat/$name/SKILL.md" 2>/dev/null || true
           done
+          # Seed the config file Hermes actually reads ($HERMES_HOME/config.yaml)
+          # from the git-managed ConfigMap. Env vars (HERMES_MODEL_DEFAULT) are
+          # NOT honored by the gateway; config.yaml wins. Keep it writable so
+          # `hermes config set`/migrations still work at runtime. Git is source
+          # of truth: any runtime drift is reset to this file on restart.
+          cp /hermes-config/config.yaml /opt/data/config.yaml
+          chown hermes:hermes /opt/data/config.yaml
+          chmod 0640 /opt/data/config.yaml
         volumeMounts:
         - name: data
           mountPath: /opt/data
         - name: hermes-skills
           mountPath: /skills
         - name: hermes-config
-          mountPath: /opt/data/.hermes/config.yaml
-          subPath: config.yaml
+          mountPath: /hermes-config
       containers:
       - name: hermes
         image: nousresearch/hermes-agent:v2026.9.24
