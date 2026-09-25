@@ -37,7 +37,7 @@ spec:
           mountPath: /data
       containers:
       - name: meshmonitor
-        image: ghcr.io/yeraze/meshmonitor:4.16.0
+        image: ghcr.io/yeraze/meshmonitor:4.16.1
 
         ports:
         - containerPort: 3001
