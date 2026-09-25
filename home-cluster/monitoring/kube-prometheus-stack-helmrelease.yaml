@@ -40,7 +40,7 @@ spec:
           - job_name: ugreen-dxp2800
             static_configs:
               - targets:
-                  - nas.stevearnett.com:9100
+                  - 192.168.1.176:9100
           - job_name: ingress-availability
             metrics_path: /probe
             params:
