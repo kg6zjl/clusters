@@ -33,6 +33,7 @@ configMapGenerator:
       - dns.md=hermes-skills/dns/SKILL.md
       - github-status.md=hermes-skills/github-status/SKILL.md
       - trivy-operator-reports.md=hermes-skills/trivy-operator-reports/SKILL.md
+      - git-auth-without-gh.md=hermes-skills/software-development/git-auth-without-gh/SKILL.md
 
 generatorOptions:
   disableNameSuffixHash: true
