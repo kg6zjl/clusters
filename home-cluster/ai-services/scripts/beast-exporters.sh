@@ -9,6 +9,7 @@ NODE_EXPORTER_VERSION="1.8.2"
 GPU_EXPORTER_VERSION="1.15.1"
 NODE_IPS="192.168.1.144 192.168.1.175 192.168.1.121 192.168.1.146"
 ARCH="linux-$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/')"
+GPU_ARCH="linux-$(uname -m | sed 's/amd64/x86_64/')"
 
 echo "==> Installing node_exporter ${NODE_EXPORTER_VERSION}"
 if ! command -v /usr/local/bin/node_exporter >/dev/null 2>&1; then
@@ -38,7 +39,7 @@ EOF
 echo "==> Installing nvidia_gpu_exporter ${GPU_EXPORTER_VERSION} (NVML)"
 if ! command -v /usr/local/bin/nvidia_gpu_exporter >/dev/null 2>&1; then
   curl -fsSLo /tmp/gpu_exporter.tar.gz \
-    "https://github.com/utkuozdemir/nvidia_gpu_exporter/releases/download/v${GPU_EXPORTER_VERSION}/nvidia_gpu_exporter-nvml_${GPU_EXPORTER_VERSION}_${ARCH}.tar.gz"
+    "https://github.com/utkuozdemir/nvidia_gpu_exporter/releases/download/v${GPU_EXPORTER_VERSION}/nvidia_gpu_exporter-nvml_${GPU_EXPORTER_VERSION}_${GPU_ARCH}.tar.gz"
   tar -xzf /tmp/gpu_exporter.tar.gz -C /tmp
   install -m 0755 /tmp/nvidia_gpu_exporter /usr/local/bin/nvidia_gpu_exporter
   rm -rf /tmp/gpu_exporter.tar.gz /tmp/nvidia_gpu_exporter
