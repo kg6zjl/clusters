@@ -41,7 +41,7 @@ Catch a pod's inability to reach the kube-apiserver:
 
 ## Repository Overview
 
-This is a **multi-node Kubernetes home lab cluster** running on 4 nodes (3x ThinkCentre Mini PCs, 1x Pi4 MicroK8s).
+This is a **single-node Kubernetes home lab cluster** running on an AMD-based Acemagicial K1 (NUC-size) system.
 - **Deployment model**: Declarative
 - **Config management**: Kustomize (manifests) + Helmfile (Helm releases)
 - **Cluster scope**: Home / self-hosted, not production SaaS
@@ -230,6 +230,28 @@ env:
 ---
 
 ## Git Workflow (IMPORTANT)
+
+### ALWAYS PULL MAIN FIRST (non-negotiable)
+
+**Before starting ANY change, sync to the latest remote state.** Working from a stale
+checkout or an old local branch has caused real damage (duplicate PRs, reverted fixes,
+copies of manifests dumped at the repo root). Never trust a cached workspace clone.
+
+```bash
+git fetch origin
+git checkout main
+git pull origin main --ff-only
+git checkout -b <new-branch>
+```
+
+Verify your base is current *right before* pushing too:
+```bash
+git fetch origin
+git rev-parse HEAD origin/main   # the two SHAs should diverge only by your own commits
+```
+
+If `git status` shows stray files (e.g. `PR_STATUS.*`, duplicate manifests at the repo
+root) that someone added by mistake, delete them in the PR — do not carry them forward.
 
 ### NEVER push directly to main/master
 
