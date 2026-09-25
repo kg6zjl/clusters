@@ -8,55 +8,33 @@ spec:
   policyTypes:
   - Egress
   egress:
-  # DNS - port 53 UDP and TCP
   - to:
-    - namespaceSelector: {}
-      portSelector:
-      - port: 53
-        protocol: UDP
-    - namespaceSelector: {}
-      portSelector:
-      - port: 53
-        protocol: TCP
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: kube-system
     ports:
     - port: 53
       protocol: UDP
     - port: 53
       protocol: TCP
-  # Egress to all pods in cluster for scanning workloads
-  - to:
-    - podSelector: {}
-  # Allow ingress to scanner pods
-  ingress:
-  - from:
-    - namespaceSelector:
-        matchLabels:
-          name: security-scanning
-    ports:
-    - protocol: TCP
-      port: 8080
 
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: allow-registry
+  name: allow-egress-registry
   namespace: security-scanning
 spec:
   podSelector: {}
   policyTypes:
   - Egress
   egress:
-  # Allow registry access - all IPs:5000 and 443 for image pulls and vuln definitions
+  # Trivy DB + checks download (ghcr.io / mirror.gcr.io) and image pulls
   - to:
     - ipBlock:
         cidr: 0.0.0.0/0
-        except:
-        - 10.0.0.0/8
-        - 172.16.0.0/12
-        - 192.168.0.0/16
     ports:
-    - port: 5000
+    - port: 80
       protocol: TCP
     - port: 443
       protocol: TCP
@@ -65,14 +43,49 @@ spec:
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: allow-ingress
+  name: allow-egress-kubeapi
   namespace: security-scanning
 spec:
-  podSelector: {}
+  podSelector:
+    matchLabels:
+      app: trivy-cluster-scan
+  policyTypes:
+  - Egress
+  egress:
+  # ClusterIP of kubernetes service (10.152.183.1) - service CIDR on 443
+  - to:
+    - ipBlock:
+        cidr: 10.152.183.0/16
+    ports:
+    - protocol: TCP
+      port: 443
+  # Node LAN post-DNAT apiserver endpoints (thinkcentres/pi4) on 16443
+  - to:
+    - ipBlock:
+        cidr: 192.168.1.0/24
+    ports:
+    - protocol: TCP
+      port: 443
+    - protocol: TCP
+      port: 16443
+
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-ingress-traefik
+  namespace: security-scanning
+spec:
+  podSelector:
+    matchLabels:
+      app: trivy
   policyTypes:
   - Ingress
   ingress:
   - from:
     - namespaceSelector:
         matchLabels:
-          name: security-scanning
+          kubernetes.io/metadata.name: traefik
+    ports:
+    - protocol: TCP
+      port: 8080

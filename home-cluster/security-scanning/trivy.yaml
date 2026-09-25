@@ -3,6 +3,8 @@ kind: Deployment
 metadata:
   name: trivy
   namespace: security-scanning
+  labels:
+    alert-on-down: "true"
 spec:
   replicas: 1
   revisionHistoryLimit: 5
@@ -14,7 +16,6 @@ spec:
       labels:
         app: trivy
     spec:
-      serviceAccountName: security-scanner
       securityContext:
         runAsNonRoot: true
         runAsUser: 1000
@@ -22,8 +23,12 @@ spec:
         fsGroup: 1000
       containers:
       - name: trivy
-        image: aquasec/trivy:0.52.0
+        image: aquasec/trivy:0.74.0
         imagePullPolicy: IfNotPresent
+        args:
+        - server
+        - --listen
+        - 0.0.0.0:8080
         securityContext:
           allowPrivilegeEscalation: false
           capabilities:
@@ -43,28 +48,27 @@ spec:
         - containerPort: 8080
           protocol: TCP
         env:
-        - name: TRIVY_IMAGE_CACHE_DIR
+        - name: TRIVY_CACHE_DIR
           value: "/trivy-cache"
-        - name: TRIVY_SKIP_UPDATE
+        - name: TRIVY_NO_PROGRESS
           value: "true"
-        - name: TRIVY_SKIP_OPEN_URLS
+        - name: TRIVY_QUIET
           value: "true"
         livenessProbe:
           httpGet:
-            path: /health
+            path: /healthz
             port: 8080
           initialDelaySeconds: 30
           periodSeconds: 10
         readinessProbe:
           httpGet:
-            path: /health
+            path: /healthz
             port: 8080
           initialDelaySeconds: 10
           periodSeconds: 5
         volumeMounts:
         - name: trivy-cache
           mountPath: /trivy-cache
-          readOnly: true
         - name: scratch
           mountPath: /tmp
       volumes:
@@ -73,9 +77,3 @@ spec:
       - name: scratch
         emptyDir:
           sizeLimit: 1Gi
-      # ExternalSecret mounts will be added via kustomize patches
-      # Example:
-      # - name: scanner-secrets
-      #   projected:
-      #     sources:
-      #     - secretName: scanner-secrets
