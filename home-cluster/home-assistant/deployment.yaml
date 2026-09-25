@@ -73,7 +73,7 @@ spec:
           image: ghcr.io/home-assistant-libs/python-matter-server:6.2.2
           ports:
             - containerPort: 5580
-          command: ["python", "-m", "matter_server.server", "--log-level", "debug", "--bluetooth-adapter", "1", "--primary-interface", "enp2s0"]
+          command: ["python", "-m", "matter_server.server", "--log-level", "debug"]
           volumeMounts:
             - name: matter-data
               mountPath: /data
