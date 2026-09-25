@@ -36,9 +36,10 @@ data:
       `gitleaks detect --source . --config .gitleaks.toml --no-banner`, and
       `trufflehog filesystem . result`. Fix findings before pushing.
     - git is configured with your identity (Hermes/hermes@stevearnett.com) via a mounted gitconfig file
-      (/root/.gitconfig, GIT_CONFIG_GLOBAL points at it). A credential helper reads the GitHub PAT from
-      /etc/hermes/github-token (secret file mounted, ESO-managed from 1Password) — do NOT rely on
-      GITHUB_TOKEN env var; the tool sandbox strips it. Push with `git push origin <branch>`.
+      (/opt/data/.gitconfig, GIT_CONFIG_GLOBAL points at it; the gateway runs as the hermes user with
+      HOME=/opt/data). A credential helper reads the GitHub PAT from /etc/hermes/github-token (secret
+      file mounted, ESO-managed from 1Password) — do NOT rely on GITHUB_TOKEN env var; the tool sandbox
+      strips it. Push with `git push origin <branch>`.
     - Use `gh` for anything GitHub: `gh repo clone kg6zjl/clusters` (or work in /opt/data/workspace),
       `gh pr create`, `gh pr view`, `gh pr checks`, `gh run list`. The token has repo + actions scope.
     - Secrets live in 1Password, synced by External Secrets Operator. Never print secret values; if you
