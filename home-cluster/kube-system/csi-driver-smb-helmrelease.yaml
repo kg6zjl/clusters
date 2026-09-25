@@ -7,11 +7,12 @@ spec:
   interval: 1h
   chart:
     spec:
-      chart: csi-driver-smb/csi-driver-smb
+      chart: csi-driver-smb
+      version: 1.20.3
       sourceRef:
         kind: HelmRepository
         name: csi-driver-smb
-        namespace: kube-system
+        namespace: flux-system
   install:
     createNamespace: true
   upgrade:
