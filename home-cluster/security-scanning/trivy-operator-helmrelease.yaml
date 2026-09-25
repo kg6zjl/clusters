@@ -14,7 +14,7 @@ spec:
       sourceRef:
         kind: HelmRepository
         name: aquasecurity
-        namespace: flux-system
+        namespace: security-scanning
       interval: 12h
   values:
     operator:
