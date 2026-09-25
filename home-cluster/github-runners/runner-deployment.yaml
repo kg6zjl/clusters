@@ -12,7 +12,7 @@ spec:
       labels:
         - self-hosted
         - kubernetes
-      image: summerwind/actions-runner:latest
+      image: summerwind/actions-runner:v2.337.0-ubuntu-24.04
       initContainers:
         - name: install-tools
           image: alpine:3.19

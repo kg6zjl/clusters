@@ -69,7 +69,7 @@ spec:
     spec:
       containers:
       - name: sonarr
-        image: linuxserver/sonarr:latest
+        image: linuxserver/sonarr:version-4.0.20.3014
         env:
         - name: PUID
           value: "0"

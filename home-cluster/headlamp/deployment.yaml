@@ -21,7 +21,7 @@ spec:
             name: headlamp-kubeconfig
       containers:
         - name: headlamp
-          image: ghcr.io/headlamp-k8s/headlamp:latest
+          image: ghcr.io/headlamp-k8s/headlamp:v0.45.0
           imagePullPolicy: IfNotPresent
           args:
             - "-kubeconfig=/home/headlamp/.config/Headlamp/kubeconfigs/config"

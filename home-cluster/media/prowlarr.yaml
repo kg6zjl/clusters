@@ -74,7 +74,7 @@ spec:
           - 8.8.8.8
       containers:
       - name: prowlarr
-        image: linuxserver/prowlarr:latest
+        image: linuxserver/prowlarr:version-2.6.5.5623
         env:
         - name: PUID
           value: "0"

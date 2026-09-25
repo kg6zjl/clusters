@@ -77,7 +77,7 @@ spec:
           mountPath: /etc/ovpn-config
       containers:
       - name: gluetun
-        image: qmcgaw/gluetun:latest
+        image: qmcgaw/gluetun:v3.41.3
         securityContext:
           privileged: true
           capabilities:
@@ -131,7 +131,7 @@ spec:
           mountPath: /etc/ovpn-config
           readOnly: true
       - name: qbittorrent
-        image: linuxserver/qbittorrent:latest
+        image: linuxserver/qbittorrent:version-5.2.3_v2.0.15
         readinessProbe:
           tcpSocket:
             port: 8080

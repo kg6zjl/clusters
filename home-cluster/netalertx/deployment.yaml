@@ -24,7 +24,7 @@ spec:
         fsGroup: 20211
       initContainers:
       - name: init-data
-        image: alpine
+        image: alpine:3.24
         command:
         - sh
         - -c
@@ -34,7 +34,7 @@ spec:
           mountPath: /data
       containers:
       - name: netalertx
-        image: ghcr.io/jokob-sk/netalertx:latest
+        image: ghcr.io/jokob-sk/netalertx:26.9.0
         ports:
         - containerPort: 20211
         env:
