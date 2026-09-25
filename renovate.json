@@ -9,6 +9,9 @@
   "flux": {
     "fileMatch": ["home-cluster/[^/]+/helmrelease\\.yaml$"]
   },
+  "kubernetes": {
+    "managerFilePatterns": ["/home-cluster/.+\\.ya?ml$/"]
+  },
   "constraints": {
     "helm": "^3.15.0"
   },

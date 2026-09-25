@@ -34,7 +34,7 @@ spec:
                 - name: cert-storage
                   mountPath: /certs
             - name: push-to-nas
-              image: alpine:latest
+              image: alpine:3.24
               command:
                 - /bin/sh
                 - -c

@@ -69,7 +69,7 @@ spec:
     spec:
       containers:
       - name: radarr
-        image: linuxserver/radarr:latest
+        image: linuxserver/radarr:version-6.4.4.10685
         env:
         - name: PUID
           value: "0"

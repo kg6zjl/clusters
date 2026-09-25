@@ -28,7 +28,7 @@ spec:
               secretName: meshmonitor-backup-creds
           containers:
           - name: backup
-            image: alpine:latest
+            image: alpine:3.24
             command:
             - /bin/sh
             - -c

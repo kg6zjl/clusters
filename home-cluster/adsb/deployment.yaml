@@ -22,7 +22,7 @@ spec:
         kubernetes.io/hostname: thinkcentre02
       containers:
       - name: ultrafeeder
-        image: ghcr.io/sdr-enthusiasts/docker-adsb-ultrafeeder:latest
+        image: ghcr.io/sdr-enthusiasts/docker-adsb-ultrafeeder:latest-build-316
         ports:
         - containerPort: 80
           name: web

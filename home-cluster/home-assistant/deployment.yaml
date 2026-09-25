@@ -25,7 +25,7 @@ spec:
         - name: docker-registry-auth
       initContainers:
         - name: init-config
-          image: busybox
+          image: busybox:1.36
           command:
             - sh
             - -c
@@ -70,7 +70,7 @@ spec:
                 - CAP_NET_ADMIN
                 - CAP_NET_RAW
         - name: matter-server
-          image: ghcr.io/home-assistant-libs/python-matter-server:stable
+          image: ghcr.io/home-assistant-libs/python-matter-server:6.2.2
           ports:
             - containerPort: 5580
           command: ["python", "-m", "matter_server.server", "--log-level", "debug", "--bluetooth-adapter", "1", "--primary-interface", "enp2s0"]

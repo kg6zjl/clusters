@@ -55,7 +55,7 @@ spec:
     spec:
       containers:
       - name: lidarr
-        image: linuxserver/lidarr:latest
+        image: linuxserver/lidarr:version-3.1.0.4875
         env:
         - name: PUID
           value: "0"

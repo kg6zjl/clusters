@@ -23,7 +23,7 @@ spec:
         kubernetes.io/hostname: beast
       containers:
       - name: pigallery2
-        image: bpatrik/pigallery2:latest
+        image: bpatrik/pigallery2:3.5.2
         ports:
         - containerPort: 80
           name: http

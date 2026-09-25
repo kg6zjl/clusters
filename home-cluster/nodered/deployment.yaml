@@ -18,7 +18,7 @@ spec:
     spec:
       containers:
       - name: nodered
-        image: nodered/node-red:latest
+        image: nodered/node-red:5.0.7
         ports:
         - containerPort: 1880
         volumeMounts:
