@@ -67,6 +67,9 @@ spec:
           mountPath: /opt/data
         - name: hermes-skills
           mountPath: /skills
+        - name: hermes-config
+          mountPath: /opt/data/.hermes/config.yaml
+          subPath: config.yaml
       containers:
       - name: hermes
         image: nousresearch/hermes-agent:latest   # pin a tag in production
@@ -177,6 +180,10 @@ spec:
       - name: hermes-skills
         configMap:
           name: hermes-skills
+      - name: hermes-config
+        configMap:
+          name: hermes-config
+          defaultMode: 0644
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
