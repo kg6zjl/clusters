@@ -124,9 +124,10 @@ spec:
           value: "Hermes"
         - name: GIT_COMMITTER_EMAIL
           value: "hermes@stevearnett.com"
-        # Optional: set default model alias that matches what /v1/models returns
-        # - name: HERMES_MODEL_DEFAULT
-        #   value: "Qwen3-14B-abliterated-Q4_K_M"
+        # Default model must match a /v1/models id exactly. Beast llama-server
+        # serves GLM-4.6V-Flash-UD-Q4_K_XL (local GGUF, native function calling).
+        - name: HERMES_MODEL_DEFAULT
+          value: "GLM-4.6V-Flash-UD-Q4_K_XL"
         envFrom:
         - secretRef:
             name: hermes-agent-secrets
