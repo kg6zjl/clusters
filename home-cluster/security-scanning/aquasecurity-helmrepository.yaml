@@ -2,7 +2,7 @@ apiVersion: source.toolkit.fluxcd.io/v1
 kind: HelmRepository
 metadata:
   name: aquasecurity
-  namespace: flux-system
+  namespace: security-scanning
 spec:
   interval: 1h
   url: https://aquasecurity.github.io/helm-charts
