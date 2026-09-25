@@ -107,8 +107,6 @@ spec:
         # - name: HERMES_MODEL_DEFAULT
         #   value: "Qwen3-14B-abliterated-Q4_K_M"
         envFrom:
-        - configMapRef:
-            name: hermes-gitconfig
         - secretRef:
             name: hermes-agent-secrets
         volumeMounts:
