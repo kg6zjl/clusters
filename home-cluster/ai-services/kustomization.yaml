@@ -22,6 +22,7 @@ resources:
   - hermes-kubeconfig.yaml
   - hermes-agent.yaml
   - hermes-external-secret.yaml
+  - hermes-gitconfig.yaml
   - hermes-soul-configmap.yaml
 
 patches:
