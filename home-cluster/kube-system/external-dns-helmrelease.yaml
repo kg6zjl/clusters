@@ -49,6 +49,12 @@ spec:
             - "get"
             - "watch"
             - "list"
+        - apiGroups:
+            - "externaldns.k8s.io"
+          resources:
+            - "dnsendpoints/status"
+          verbs:
+            - "update"
     service:
       annotations:
         prometheus.io/scrape: "true"
