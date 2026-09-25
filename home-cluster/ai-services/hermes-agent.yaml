@@ -59,9 +59,14 @@ spec:
           # yamllint into a glibc-compatible site-packages dir (PYTHONPATH in main container)
           pip3 install --quiet --target=/opt/data/.local/pylib yamllint
           chmod +x /opt/data/.local/bin/*
+          # Copy skills from ConfigMap to /opt/data/skills (bootstrap on every restart)
+          mkdir -p /opt/data/skills
+          cp -r /skills/* /opt/data/skills/ 2>/dev/null || true
         volumeMounts:
         - name: data
           mountPath: /opt/data
+        - name: hermes-skills
+          mountPath: /skills
       containers:
       - name: hermes
         image: nousresearch/hermes-agent:latest   # pin a tag in production
@@ -169,6 +174,9 @@ spec:
           - key: GITHUB_TOKEN
             path: github-token
           defaultMode: 0444
+      - name: hermes-skills
+        configMap:
+          name: hermes-skills
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
