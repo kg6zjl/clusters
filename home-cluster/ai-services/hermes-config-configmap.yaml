@@ -14,8 +14,11 @@ data:
       base_url: "http://192.168.1.161:11434/v1"
       context_length: 131072
     display:
-      tool_progress: off  # off | new | all | verbose | log
-                          # off = no tool-call bubbles on any chat surface (Discord included)
-                          # 'log' writes the trail to ~/.hermes/logs/tool_calls.log instead
-      tool_progress_command: false
-      tool_progress_grouping: accumulate
+      # Per-platform (schema-canonical) tool_progress off: no tool-call bubbles
+      # on any gateway surface. Top-level display.tool_progress also works but
+      # is schema-flagged; the per-platform key is what /verbose saves and reads.
+      platforms:
+        discord:
+          tool_progress: off
+          tool_progress_command: false
+          tool_progress_grouping: accumulate
