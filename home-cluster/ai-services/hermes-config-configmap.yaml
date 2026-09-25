@@ -9,9 +9,8 @@ metadata:
 data:
   config.yaml: |
     display:
-      tool_progress: all  # default for CLI platforms
-      platforms:
-        discord:
-          tool_progress: off
-        # telegram:
-        #   tool_progress: off
+      tool_progress: off  # off | new | all | verbose | log
+                          # off = no tool-call bubbles on any chat surface (Discord included)
+                          # 'log' writes the trail to ~/.hermes/logs/tool_calls.log instead
+      tool_progress_command: false
+      tool_progress_grouping: accumulate
