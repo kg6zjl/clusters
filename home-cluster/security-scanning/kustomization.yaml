@@ -8,9 +8,3 @@ resources:
   - kube-bench.yaml
   - kube-hunter.yaml
   - ingress.yaml
-secretGenerator:
-  - name: registry-credentials
-    files:
-      - registry.config
-    options:
-      comments: true
