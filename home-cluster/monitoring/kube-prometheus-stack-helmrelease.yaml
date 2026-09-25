@@ -18,10 +18,21 @@ spec:
       enabled: true
     prometheus:
       serviceMonitorSelectorNilUsesHelmValues: false
+      podMonitorSelectorNilUsesHelmValues: false
       prometheusSpec:
         retention: 10d
+        serviceMonitorSelector: {}
+        podMonitorSelector: {}
         ruleSelectorNilUsesHelmValues: false
         additionalScrapeConfigs:
+          - job_name: beast
+            static_configs:
+              - targets:
+                  - 192.168.1.161:9100
+          - job_name: beast-gpu
+            static_configs:
+              - targets:
+                  - 192.168.1.161:9835
           - job_name: ugreen-dxp2800
             static_configs:
               - targets:
@@ -65,7 +76,7 @@ spec:
                   description: "Cannot reach {{ $labels.instance }} for 2 minutes"
     grafana:
       enabled: true
-      replicas: 0
+      replicas: 1
       admin:
         existingSecret: grafana-admin-secret
         userKey: admin-user
