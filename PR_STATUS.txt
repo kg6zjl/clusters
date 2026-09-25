@@ -1,0 +1,8 @@
+GitHub CLI (gh) is not installed on this system.
+To create the PR, you need to either:
+1. Install GitHub CLI: brew install gh (macOS) or apt install gh (Linux)
+2. Authenticate: gh auth login
+3. Then run: gh pr create --title 'Update hardware from AMD Acemagic K1 to 3 ThinkCentre Mini PCs' --body 'Updated AGENTS.md in repo root and home-cluster/ to reflect new hardware.' --base main
+
+Alternatively, create the PR manually at:
+https://github.com/kg6zjl/clusters/compare/main

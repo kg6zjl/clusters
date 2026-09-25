@@ -27,7 +27,7 @@ Catch a pod's inability to reach the kube-apiserver:
 
 ## Repository Overview
 
-This is a **single-node Kubernetes home lab cluster** running on an AMD-based Acemagicial K1 (NUC-size) system.
+This is a **multi-node Kubernetes home lab cluster** running on 4 nodes (3x ThinkCentre Mini PCs, 1x Pi4 MicroK8s).
 - **Deployment model**: Declarative
 - **Config management**: Kustomize (manifests) + Helmfile (Helm releases)
 - **Cluster scope**: Home / self-hosted, not production SaaS

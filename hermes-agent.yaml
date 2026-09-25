@@ -88,13 +88,13 @@ spec:
         - name: PYTHONPATH
           value: /opt/data/.local/pylib
         # Git identity for PR-authored commits.
-        # git config is read from the mounted configmap file, NOT env vars:
-        # hermes's tool sandbox scrubs secret env vars from the model, but git
-        # subprocesses still honor GIT_CONFIG_GLOBAL pointing at a real file.
-        # The gateway runs as the 'hermes' user (HOME=/opt/data), so both the
-        # gitconfig and the token mount live under paths that user can read.
+        # git config is read from the mounted configmap file (hermes-gitconfig),
+        # NOT env vars: hermes's tool sandbox scrubs secret env vars from the
+        # model, but git subprocesses still honor GIT_CONFIG_GLOBAL pointing at a
+        # real file. The credential helper reads the PAT from a mounted secret
+        # file (/etc/hermes/github-token) so the token never needs env vars.
         - name: GIT_CONFIG_GLOBAL
-          value: /opt/data/.gitconfig
+          value: /root/.gitconfig
         - name: GIT_AUTHOR_NAME
           value: "Hermes"
         - name: GIT_AUTHOR_EMAIL
@@ -121,7 +121,7 @@ spec:
           mountPath: /opt/data/SOUL.md
           subPath: SOUL.md
         - name: hermes-gitconfig
-          mountPath: /opt/data/.gitconfig
+          mountPath: /root/.gitconfig
           subPath: gitconfig
         - name: hermes-github-token
           mountPath: /etc/hermes/github-token
@@ -165,7 +165,7 @@ spec:
           items:
           - key: GITHUB_TOKEN
             path: github-token
-          defaultMode: 0444
+          defaultMode: 0400
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
