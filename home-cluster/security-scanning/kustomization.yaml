@@ -9,3 +9,4 @@ resources:
 - trivy-scan-cronjob.yaml
 - service.yaml
 - ingressroute.yaml
+- dnsendpoint.yaml
