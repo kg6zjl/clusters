@@ -1,0 +1,65 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kube-hunter
+  namespace: security-scanning
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kube-hunter
+  template:
+    metadata:
+      labels:
+        app: kube-hunter
+    spec:
+      serviceAccountName: security-scanner
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+      containers:
+      - name: kube-hunter
+        image: aquasec/kube-hunter:latest
+        imagePullPolicy: IfNotPresent
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: true
+          runAsNonRoot: true
+          runAsUser: 1000
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "500m"
+          limits:
+            memory: "1Gi"
+            cpu: "1000m"
+        ports:
+        - containerPort: 8080
+          protocol: TCP
+        env:
+        - name: KUBE_HUNTER_VERSION
+          value: "latest"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 10
+          periodSeconds: 5
+        volumeMounts:
+        - name: scratch
+          mountPath: /tmp
+      volumes:
+      - name: scratch
+        emptyDir:
+          sizeLimit: 1Gi

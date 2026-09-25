@@ -1,0 +1,78 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-dns
+  namespace: security-scanning
+spec:
+  podSelector: {}
+  policyTypes:
+  - Egress
+  egress:
+  # DNS - port 53 UDP and TCP
+  - to:
+    - namespaceSelector: {}
+      portSelector:
+      - port: 53
+        protocol: UDP
+    - namespaceSelector: {}
+      portSelector:
+      - port: 53
+        protocol: TCP
+    ports:
+    - port: 53
+      protocol: UDP
+    - port: 53
+      protocol: TCP
+  # Egress to all pods in cluster for scanning workloads
+  - to:
+    - podSelector: {}
+  # Allow ingress to scanner pods
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: security-scanning
+    ports:
+    - protocol: TCP
+      port: 8080
+
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-registry
+  namespace: security-scanning
+spec:
+  podSelector: {}
+  policyTypes:
+  - Egress
+  egress:
+  # Allow registry access - all IPs:5000 and 443 for image pulls and vuln definitions
+  - to:
+    - ipBlock:
+        cidr: 0.0.0.0/0
+        except:
+        - 10.0.0.0/8
+        - 172.16.0.0/12
+        - 192.168.0.0/16
+    ports:
+    - port: 5000
+      protocol: TCP
+    - port: 443
+      protocol: TCP
+
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-ingress
+  namespace: security-scanning
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: security-scanning

@@ -1,0 +1,65 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kube-bench
+  namespace: security-scanning
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kube-bench
+  template:
+    metadata:
+      labels:
+        app: kube-bench
+    spec:
+      serviceAccountName: security-scanner
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+      containers:
+      - name: kube-bench
+        image: aquasec/kube-bench:latest
+        imagePullPolicy: IfNotPresent
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: true
+          runAsNonRoot: true
+          runAsUser: 1000
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        ports:
+        - containerPort: 8080
+          protocol: TCP
+        env:
+        - name: KUBE_BENCH_VERSION
+          value: "latest"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 10
+          periodSeconds: 5
+        volumeMounts:
+        - name: scratch
+          mountPath: /tmp
+      volumes:
+      - name: scratch
+        emptyDir:
+          sizeLimit: 1Gi
