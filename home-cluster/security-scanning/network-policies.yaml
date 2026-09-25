@@ -15,7 +15,9 @@ spec:
     - protocol: TCP
       port: 8080
     - protocol: TCP
-      port: 4975
+      port: 9090
+    - protocol: TCP
+      port: 4954
   - from:
     - namespaceSelector:
         matchLabels:
@@ -23,7 +25,7 @@ spec:
     ports:
     - protocol: TCP
       port: 8080
-  # kubelet probes (operator /healthz on 8080, trivy-server on 4975)
+  # kubelet probes (operator /healthz on 9090, trivy-server /healthz on 4954)
   - from:
     - ipBlock:
         cidr: 192.168.1.0/24
@@ -31,7 +33,9 @@ spec:
     - protocol: TCP
       port: 8080
     - protocol: TCP
-      port: 4975
+      port: 9090
+    - protocol: TCP
+      port: 4954
   egress:
   - to: []
     ports:
@@ -39,15 +43,35 @@ spec:
       port: 53
     - protocol: TCP
       port: 53
-  # kube-apiserver ClusterIP (10.152.183.1), registry (MetalLB/ClusterIP),
-  # and internet DB/checks download (mirror.gcr.io) are all HTTPS
+  # internet + MetalLB registry: HTTPS (DB/checks download from mirror.gcr.io, image scans)
   - to: []
     ports:
     - protocol: TCP
       port: 443
-  # scan jobs -> built-in trivy-server (ClientServer mode)
+  # kube-apiserver: service ClusterIP (pre-DNAT) + node LAN host port 16443 (post-DNAT)
+  - to:
+    - ipBlock:
+        cidr: 10.152.183.0/16
+    ports:
+    - protocol: TCP
+      port: 443
+  - to:
+    - ipBlock:
+        cidr: 192.168.1.0/24
+    ports:
+    - protocol: TCP
+      port: 443
+    - protocol: TCP
+      port: 16443
+  # trivy-server (ClientServer scan jobs): ClusterIP + in-namespace pod (port 4954)
+  - to:
+    - ipBlock:
+        cidr: 10.152.183.0/16
+    ports:
+    - protocol: TCP
+      port: 4954
   - to:
     - podSelector: {}
     ports:
     - protocol: TCP
-      port: 4975
+      port: 4954
