@@ -86,5 +86,13 @@ spec:
         userKey: admin-user
         passwordKey: GRAFANA_ADMIN_PASSWORD
       additionalDataSources: []
+      sidecar:
+        skipTlsVerify: true
+        dashboards:
+          env:
+            HEALTH_PORT: "8084"
+        datasources:
+          env:
+            HEALTH_PORT: "8082"
     alertmanager:
       enabled: true
