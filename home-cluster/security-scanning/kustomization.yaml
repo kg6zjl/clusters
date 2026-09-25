@@ -3,10 +3,5 @@ kind: Kustomization
 
 resources:
 - namespace.yaml
-- rbac.yaml
 - network-policies.yaml
-- trivy.yaml
-- trivy-scan-cronjob.yaml
-- service.yaml
-- ingressroute.yaml
-- dnsendpoint.yaml
+- trivy-operator-helmrelease.yaml

@@ -1,91 +1,53 @@
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: allow-dns
+  name: security-scanning-allow
   namespace: security-scanning
 spec:
   podSelector: {}
   policyTypes:
+  - Ingress
   - Egress
-  egress:
-  - to:
-    - namespaceSelector:
-        matchLabels:
-          kubernetes.io/metadata.name: kube-system
-    ports:
-    - port: 53
-      protocol: UDP
-    - port: 53
-      protocol: TCP
-
----
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: allow-egress-registry
-  namespace: security-scanning
-spec:
-  podSelector: {}
-  policyTypes:
-  - Egress
-  egress:
-  # Trivy DB + checks download (ghcr.io / mirror.gcr.io) and image pulls
-  - to:
-    - ipBlock:
-        cidr: 0.0.0.0/0
-    ports:
-    - port: 80
-      protocol: TCP
-    - port: 443
-      protocol: TCP
-
----
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: allow-egress-kubeapi
-  namespace: security-scanning
-spec:
-  podSelector:
-    matchLabels:
-      app: trivy-cluster-scan
-  policyTypes:
-  - Egress
-  egress:
-  # ClusterIP of kubernetes service (10.152.183.1) - service CIDR on 443
-  - to:
-    - ipBlock:
-        cidr: 10.152.183.0/16
+  ingress:
+  - from:
+    - podSelector: {}
     ports:
     - protocol: TCP
-      port: 443
-  # Node LAN post-DNAT apiserver endpoints (thinkcentres/pi4) on 16443
-  - to:
+      port: 8080
+    - protocol: TCP
+      port: 4975
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: monitoring
+    ports:
+    - protocol: TCP
+      port: 8080
+  # kubelet probes (operator /healthz on 8080, trivy-server on 4975)
+  - from:
     - ipBlock:
         cidr: 192.168.1.0/24
     ports:
     - protocol: TCP
-      port: 443
+      port: 8080
     - protocol: TCP
-      port: 16443
-
----
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: allow-ingress-traefik
-  namespace: security-scanning
-spec:
-  podSelector:
-    matchLabels:
-      app: trivy
-  policyTypes:
-  - Ingress
-  ingress:
-  - from:
-    - namespaceSelector:
-        matchLabels:
-          kubernetes.io/metadata.name: traefik
+      port: 4975
+  egress:
+  - to: []
+    ports:
+    - protocol: UDP
+      port: 53
+    - protocol: TCP
+      port: 53
+  # kube-apiserver ClusterIP (10.152.183.1), registry (MetalLB/ClusterIP),
+  # and internet DB/checks download (mirror.gcr.io) are all HTTPS
+  - to: []
     ports:
     - protocol: TCP
-      port: 8080
+      port: 443
+  # scan jobs -> built-in trivy-server (ClientServer mode)
+  - to:
+    - podSelector: {}
+    ports:
+    - protocol: TCP
+      port: 4975
