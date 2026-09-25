@@ -8,9 +8,6 @@ resources:
 - kube-bench.yaml
 - kube-hunter.yaml
 - external-secrets.yaml
-# Secrets are managed by ExternalSecret resources (see external-secrets.yaml)
-# These are applied separately via: kubectl apply -k external-secrets/
-# or: kustomize build . | kubectl apply -f -
 
 commonLabels:
   app: security-scanning
