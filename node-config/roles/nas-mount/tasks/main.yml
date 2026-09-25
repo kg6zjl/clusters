@@ -2,7 +2,7 @@
 - name: Fail if NAS password not resolved from 1Password
   ansible.builtin.fail:
     msg: "nas_password was not resolved. Confirm roles/secrets pulled it from 1Password, or run with --extra-vars nas_password=... as a stopgap (never inline in git)."
-  when: nas_mounts | length > 0 and nas_password | length == 0
+  when: nas_mounts | length > 0 and nas_password | default('', true) | length == 0
 
 - name: Install cifs-utils
   ansible.builtin.apt:

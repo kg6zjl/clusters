@@ -60,6 +60,20 @@
 - name: Configure wired-only netplan
   when: netplan_managed | bool
   block:
+    - name: Check for existing wired netplan config
+      ansible.builtin.stat:
+        path: /etc/netplan/99-wired.yaml
+      register: netplan_existing
+
+    - name: Back up existing wired netplan config
+      ansible.builtin.copy:
+        src: /etc/netplan/99-wired.yaml
+        dest: /etc/netplan/99-wired.yaml.bak
+        remote_src: true
+        mode: "0600"
+        force: true
+      when: netplan_existing.stat.exists
+
     - name: Render wired-only netplan
       ansible.builtin.template:
         src: netplan.yaml.j2
@@ -67,24 +81,65 @@
         mode: "0600"
       register: netplan_file
 
+    - name: Find all netplan config files
+      ansible.builtin.find:
+        paths: /etc/netplan
+        patterns: "*.yaml"
+        file_type: file
+      register: netplan_files
+
     - name: Harden permissions on all netplan files
       ansible.builtin.file:
         path: "{{ item }}"
         mode: "0600"
-      loop: "{{ query('fileglob', '/etc/netplan/*.yaml') }}"
+      loop: "{{ netplan_files.files | map(attribute='path') | list }}"
       changed_when: false
+
+    - name: Locate wpa_supplicant unit file
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      loop:
+        - /lib/systemd/system/wpa_supplicant.service
+        - /usr/lib/systemd/system/wpa_supplicant.service
+      register: wpa_unit
 
     - name: Disable wifi services (wpa_supplicant) if present
       ansible.builtin.systemd_service:
         name: wpa_supplicant
         enabled: false
         state: stopped
-      ignore_errors: true
+      when: wpa_unit.results | selectattr('stat.exists') | list | length > 0
+
+    - name: Validate netplan configuration
+      ansible.builtin.command: netplan generate
+      register: netplan_validate
+      changed_when: false
+      failed_when: false
+
+    - name: Restore previous netplan config if validation failed
+      ansible.builtin.copy:
+        src: /etc/netplan/99-wired.yaml.bak
+        dest: /etc/netplan/99-wired.yaml
+        remote_src: true
+        mode: "0600"
+      when:
+        - netplan_validate.rc != 0
+        - netplan_existing.stat.exists
+
+    - name: Abort - rendered netplan config is invalid
+      ansible.builtin.fail:
+        msg: >-
+          netplan generate rejected /etc/netplan/99-wired.yaml
+          ({{ netplan_validate.stderr_lines | default(['no stderr']) | join('; ') }}).
+          The previous config has been restored from 99-wired.yaml.bak.
+      when: netplan_validate.rc != 0
 
     - name: Apply netplan
       ansible.builtin.command: netplan apply
       register: netplan_apply
-      when: netplan_file.changed
+      when:
+        - netplan_file.changed
+        - netplan_validate.rc == 0
       changed_when: true
 
 - name: Install MicroK8s
@@ -118,16 +173,16 @@
   when: node_role == 'control-plane' and enable_hostpath_storage | bool
   ansible.builtin.shell:
     cmd: microk8s enable hostpath-storage
-    environment:
-      PATH: "/snap/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+  environment:
+    PATH: "/snap/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
   changed_when: false
 
 - name: Enable metrics-server (control-plane)
   when: node_role == 'control-plane' and enable_metrics_server | bool
   ansible.builtin.shell:
     cmd: microk8s enable metrics-server
-    environment:
-      PATH: "/snap/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+  environment:
+    PATH: "/snap/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
   changed_when: false
 
 - name: Add node labels (post-join)
@@ -135,8 +190,8 @@
   ansible.builtin.shell:
     cmd: |
       microk8s kubectl label node {{ ansible_hostname }} microk8s.io/cluster=true --overwrite
-    environment:
-      PATH: "/snap/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+  environment:
+    PATH: "/snap/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
   failed_when: false
 
 - name: Restrict sudo group access
