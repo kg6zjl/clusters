@@ -8,6 +8,7 @@ metadata:
     app: pigallery2
 spec:
   replicas: 1
+  revisionHistoryLimit: 5
   strategy:
     type: Recreate
   selector:
