@@ -1,0 +1,18 @@
+#!/bin/sh
+# Run pre-commit (if installed and configured) on every commit.
+#
+# Only active when core.hooksPath points at this .githooks directory and the
+# repo has a .pre-commit-config.yaml. Silent no-op otherwise, so sharing
+# hooksPath across clones/repos (as Hermes's global gitconfig does) is safe.
+
+set -u
+
+if ! command -v pre-commit >/dev/null 2>&1; then
+	exit 0
+fi
+
+top="$(git rev-parse --show-toplevel 2>/dev/null)" || exit 0
+[ -f "$top/.pre-commit-config.yaml" ] || exit 0
+
+cd "$top" || exit 0
+pre-commit run --hook-stage pre-commit
