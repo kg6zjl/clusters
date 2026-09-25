@@ -9,4 +9,5 @@ resources:
   - grafana-helmrepository.yaml
   - actions-runner-controller-helmrepository.yaml
   - metallb-helmrepository.yaml
+  - aquasecurity-helmrepository.yaml
   - syncs-kustomization.yaml

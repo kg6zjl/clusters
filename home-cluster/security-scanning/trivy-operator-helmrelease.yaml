@@ -1,0 +1,32 @@
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: trivy-operator
+  namespace: security-scanning
+  labels:
+    alert-on-down: "true"
+spec:
+  interval: 30m
+  chart:
+    spec:
+      chart: trivy-operator
+      version: 0.36.0
+      sourceRef:
+        kind: HelmRepository
+        name: aquasecurity
+        namespace: flux-system
+      interval: 12h
+  values:
+    operator:
+      builtInTrivyServer: true
+      scanJobTTL: "30m"
+      scanJobsInSameNamespace: false
+      metricsVulnIdEnabled: true
+      infraAssessmentScannerEnabled: false
+    trivy:
+      ignoreUnfixed: true
+      timeout: "5m0s"
+    serviceMonitor:
+      enabled: true
+    compliance:
+      specs: []
