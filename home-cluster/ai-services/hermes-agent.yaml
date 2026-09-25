@@ -80,7 +80,7 @@ spec:
           # `hermes config set`/migrations still work at runtime. Git is source
           # of truth: any runtime drift is reset to this file on restart.
           cp /hermes-config/config.yaml /opt/data/config.yaml
-          chown hermes:hermes /opt/data/config.yaml
+          chown 10000:10000 /opt/data/config.yaml
           chmod 0640 /opt/data/config.yaml
         volumeMounts:
         - name: data
