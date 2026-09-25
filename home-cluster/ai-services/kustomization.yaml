@@ -24,6 +24,8 @@ resources:
   - hermes-external-secret.yaml
   - hermes-gitconfig.yaml
   - hermes-soul-configmap.yaml
+  - hermes-skills-configmap.yaml
+  - hermes-config-configmap.yaml
 
 patches:
   - target:
