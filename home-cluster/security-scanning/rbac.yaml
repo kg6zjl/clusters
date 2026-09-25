@@ -1,0 +1,37 @@
+# RBAC for security scanning tools
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: security-scanning-role
+rules:
+  # Trivy needs to read pods, deployments, secrets, configmaps
+  - apiGroups: [""]
+    resources: ["pods", "pods/log", "secrets", "configmaps", "services"]
+    verbs: ["get", "list", "watch"]
+  # Kube-bench needs to read nodes, pods, deployments
+  - apiGroups: [""]
+    resources: ["nodes", "pods", "deployments", "services", "namespaces"]
+    verbs: ["get", "list", "watch"]
+  # Kube-hunter needs to read all resources for vulnerability scanning
+  - apiGroups: ["*"]
+    resources: ["*"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: security-scanning-binding
+subjects:
+  - kind: ServiceAccount
+    name: security-scanning
+    namespace: security-scanning
+roleRef:
+  kind: ClusterRole
+  name: security-scanning-role
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: security-scanning
+  namespace: security-scanning

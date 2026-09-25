@@ -1,0 +1,36 @@
+# Ingress for security scanning tools
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: security-scanning
+  namespace: security-scanning
+  labels:
+    app: security-scanning
+spec:
+  entryPoints:
+  - websecure
+  routes:
+  - match: Host(`security.kube.stevearnett.com`)
+    kind: Rule
+    services:
+    - name: trivy
+      port: 8080
+      weight: 1
+  tls:
+    secretName: wildcard-stevearnett-com-tls
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: trivy
+  namespace: security-scanning
+  labels:
+    app: trivy
+spec:
+  type: ClusterIP
+  selector:
+    app: trivy
+  ports:
+  - name: http
+    port: 8080
+    targetPort: 8080

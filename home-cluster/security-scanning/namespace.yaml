@@ -1,0 +1,10 @@
+# Security Scanning Namespace
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: security-scanning
+  labels:
+    name: security-scanning
+    pod-security.kubernetes.io/enforce: baseline
+    pod-security.kubernetes.io/audit: baseline
+    pod-security.kubernetes.io/validate: baseline

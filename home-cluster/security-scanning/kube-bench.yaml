@@ -1,0 +1,54 @@
+# Kube-bench Security Scanner
+# Official image: aquasec/kube-bench
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kube-bench
+  namespace: security-scanning
+  labels:
+    app: kube-bench
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kube-bench
+  template:
+    metadata:
+      labels:
+        app: kube-bench
+    spec:
+      serviceAccountName: security-scanning
+      containers:
+      - name: kube-bench
+        image: aquasec/kube-bench:v0.7.1
+        command:
+        - /kube-bench
+        - --config
+        - /etc/config/config.yaml
+        - --quiet
+        - --output
+        - json
+        env:
+        - name: KUBECONFIG
+          value: "/tmp/kubeconfig"
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "200m"
+          limits:
+            memory: "512Mi"
+            cpu: "1000m"
+        volumeMounts:
+        - name: config
+          mountPath: /etc/config
+          readOnly: true
+        - name: kubeconfig
+          mountPath: /tmp/kubeconfig
+          subPath: kubeconfig
+      volumes:
+      - name: config
+        configMap:
+          name: kube-bench-config
+      - name: kubeconfig
+        secret:
+          secretName: kubeconfig-secret

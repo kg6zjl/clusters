@@ -1,0 +1,40 @@
+# Kube-hunter Vulnerability Scanner
+# Official image: mario-vivek/kube-hunter
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kube-hunter
+  namespace: security-scanning
+  labels:
+    app: kube-hunter
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kube-hunter
+  template:
+    metadata:
+      labels:
+        app: kube-hunter
+    spec:
+      serviceAccountName: security-scanning
+      containers:
+      - name: kube-hunter
+        image: mario-vivek/kube-hunter:0.9.1
+        command:
+        - /kube-hunter
+        - --report
+        - http://kube-hunter-report:8080/report.json
+        - --report-interval
+        - "24h"
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "300m"
+          limits:
+            memory: "1Gi"
+            cpu: "2000m"
+        securityContext:
+          capabilities:
+            add:
+            - NET_RAW
