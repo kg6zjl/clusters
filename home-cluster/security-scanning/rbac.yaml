@@ -1,56 +1,35 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: security-scanner
+  namespace: security-scanning
+  labels:
+    app: security-scanning
+
+---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
   name: security-scanner
 rules:
-  # Pods and containers
+  # Read workloads + infra that trivy kubernetes needs to scan
   - apiGroups: [""]
-    resources: ["pods", "pods/log", "pods/exec"]
+    resources: ["pods", "nodes", "namespaces", "services", "endpoints",
+                "configmaps", "secrets", "serviceaccounts",
+                "persistentvolumes", "persistentvolumeclaims"]
     verbs: ["get", "list", "watch"]
-  # Nodes
-  - apiGroups: [""]
-    resources: ["nodes"]
+  - apiGroups: ["apps"]
+    resources: ["deployments", "statefulsets", "daemonsets", "replicasets"]
     verbs: ["get", "list", "watch"]
-  # Namespaces
-  - apiGroups: [""]
-    resources: ["namespaces"]
+  - apiGroups: ["batch"]
+    resources: ["jobs", "cronjobs"]
     verbs: ["get", "list", "watch"]
-  # Services
-  - apiGroups: [""]
-    resources: ["services"]
-    verbs: ["get", "list", "watch"]
-  # Endpoints
-  - apiGroups: [""]
-    resources: ["endpoints"]
-    verbs: ["get", "list", "watch"]
-  # ConfigMaps
-  - apiGroups: [""]
-    resources: ["configmaps"]
-    verbs: ["get", "list", "watch"]
-  # NetworkPolicies (for scanning)
   - apiGroups: ["networking.k8s.io"]
-    resources: ["networkpolicies"]
+    resources: ["networkpolicies", "ingresses"]
     verbs: ["get", "list", "watch"]
-  # Roles/RBAC
   - apiGroups: ["rbac.authorization.k8s.io"]
     resources: ["roles", "rolebindings", "clusterroles", "clusterrolebindings"]
     verbs: ["get", "list", "watch"]
-  # ServiceAccounts
-  - apiGroups: [""]
-    resources: ["serviceaccounts"]
-    verbs: ["get", "list", "watch"]
-  # Secrets (view only - for vulnerability scanning)
-  - apiGroups: [""]
-    resources: ["secrets"]
-    verbs: ["get", "list", "watch"]
-  # PersistentVolumes (for scanning)
-  - apiGroups: [""]
-    resources: ["persistentvolumes", "persistentvolumeclaims"]
-    verbs: ["get", "list", "watch"]
-  # ServiceAccounts (for scanning)
-  - apiGroups: [""]
-    resources: ["serviceaccounts/token"]
-    verbs: ["create"]
 
 ---
 apiVersion: rbac.authorization.k8s.io/v1
@@ -62,6 +41,6 @@ roleRef:
   kind: ClusterRole
   name: security-scanner
 subjects:
-  - kind: ServiceAccount
-    name: security-scanner
-    namespace: security-scanning
+- kind: ServiceAccount
+  name: security-scanner
+  namespace: security-scanning
