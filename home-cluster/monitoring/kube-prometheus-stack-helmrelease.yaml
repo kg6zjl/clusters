@@ -33,6 +33,10 @@ spec:
             static_configs:
               - targets:
                   - 192.168.1.161:9835
+            metric_relabel_configs:
+              - action: replace
+                replacement: "0"
+                target_label: gpu
           - job_name: ugreen-dxp2800
             static_configs:
               - targets:
