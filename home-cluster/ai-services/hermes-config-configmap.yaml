@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: hermes-config
+  namespace: ai-services
+  labels:
+    app: hermes-agent
+    component: config
+data:
+  config.yaml: |
+    display:
+      tool_progress: all  # default for CLI platforms
+      platforms:
+        discord:
+          tool_progress: off
+        # telegram:
+        #   tool_progress: off
