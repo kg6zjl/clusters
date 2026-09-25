@@ -24,8 +24,18 @@ resources:
   - hermes-external-secret.yaml
   - hermes-gitconfig.yaml
   - hermes-soul-configmap.yaml
-  - hermes-skills-configmap.yaml
   - hermes-config-configmap.yaml
+
+configMapGenerator:
+  - name: hermes-skills
+    files:
+      - cluster-operations.md=hermes-skills/cluster-operations/SKILL.md
+      - dns.md=hermes-skills/dns/SKILL.md
+      - github-status.md=hermes-skills/github-status/SKILL.md
+      - trivy-operator-reports.md=hermes-skills/trivy-operator-reports/SKILL.md
+
+generatorOptions:
+  disableNameSuffixHash: true
 
 patches:
   - target:
