@@ -1,12 +1,8 @@
-# Trivy Security Scanner
-# Official image: aquasec/trivy
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: trivy
   namespace: security-scanning
-  labels:
-    app: trivy
 spec:
   replicas: 1
   selector:
@@ -17,48 +13,69 @@ spec:
       labels:
         app: trivy
     spec:
-      serviceAccountName: security-scanning
+      serviceAccountName: security-scanner
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
       containers:
       - name: trivy
-        image: aquasec/trivy:0.55.0
-        args:
-        - --server-mode
-        - --skip-dirs=/tmp
-        env:
-        - name: TRIVY_SERVER_PORT
-          value: "8080"
-        - name: TRIVY_SERVER_HOST
-          value: "0.0.0.0"
-        ports:
-        - containerPort: 8080
-          name: http
+        image: aquasec/trivy:0.52.0
+        imagePullPolicy: IfNotPresent
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: true
+          runAsNonRoot: true
+          runAsUser: 1000
+          allowPrivilegeEscalation: false
         resources:
           requests:
-            memory: "128Mi"
-            cpu: "100m"
-          limits:
             memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
             cpu: "500m"
+        ports:
+        - containerPort: 8080
+          protocol: TCP
+        env:
+        - name: TRIVY_IMAGE_CACHE_DIR
+          value: "/trivy-cache"
+        - name: TRIVY_SKIP_UPDATE
+          value: "true"
+        - name: TRIVY_SKIP_OPEN_URLS
+          value: "true"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 10
+          periodSeconds: 5
         volumeMounts:
-        - name: config
-          mountPath: /etc/config
+        - name: trivy-cache
+          mountPath: /trivy-cache
           readOnly: true
+        - name: scratch
+          mountPath: /tmp
       volumes:
-      - name: config
-        configMap:
-          name: trivy-config
----
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: trivy-config
-  namespace: security-scanning
-data:
-  config.yaml: |
-    ignore-unfixed: true
-    vuln-type: os,library
-    severity: CRITICAL,HIGH
-    format: template
-    template: '{{json .}}{{\n}}'
-    metadata:
-      kubernetes_version: {{ .ClusterVersion }}
+      - name: trivy-cache
+        emptyDir: {}
+      - name: scratch
+        emptyDir:
+          sizeLimit: 1Gi
+      # ExternalSecret mounts will be added via kustomize patches
+      # Example:
+      # - name: scanner-secrets
+      #   projected:
+      #     sources:
+      #     - secretName: scanner-secrets

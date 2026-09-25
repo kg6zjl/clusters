@@ -1,10 +1,33 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
+
 resources:
-  - namespace.yaml
-  - rbac.yaml
-  - network-policies.yaml
-  - trivy.yaml
-  - kube-bench.yaml
-  - kube-hunter.yaml
-  - ingress.yaml
+- rbac.yaml
+- network-policies.yaml
+- trivy.yaml
+- kube-bench.yaml
+- kube-hunter.yaml
+- external-secrets.yaml
+# No secretGenerator here - use ExternalSecret resources instead
+# Example ESO pattern (apply separately):
+# apiVersion: external-secrets.io/v1beta1
+# kind: ExternalSecret
+# metadata:
+#   name: scanner-secrets
+#   namespace: security-scanning
+# spec:
+#   refreshInterval: 1h
+#   secretStoreRef:
+#     name: aws-secrets-store
+#     kind: ClusterSecretStore
+#   target:
+#     name: scanner-secrets
+#   data:
+#   - secretKey: username
+#     remoteRef:
+#       key: scanner-user
+#       property: username
+
+commonLabels:
+  app: security-scanning
+  managed-by: kustomize

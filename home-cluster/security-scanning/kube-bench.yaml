@@ -1,12 +1,8 @@
-# Kube-bench Security Scanner
-# Official image: aquasec/kube-bench
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: kube-bench
   namespace: security-scanning
-  labels:
-    app: kube-bench
 spec:
   replicas: 1
   selector:
@@ -17,38 +13,54 @@ spec:
       labels:
         app: kube-bench
     spec:
-      serviceAccountName: security-scanning
+      serviceAccountName: security-scanner
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
       containers:
       - name: kube-bench
-        image: aquasec/kube-bench:v0.7.1
-        command:
-        - /kube-bench
-        - --config
-        - /etc/config/config.yaml
-        - --quiet
-        - --output
-        - json
-        env:
-        - name: KUBECONFIG
-          value: "/tmp/kubeconfig"
+        image: aquasec/kube-bench:latest
+        imagePullPolicy: IfNotPresent
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: true
+          runAsNonRoot: true
+          runAsUser: 1000
+          allowPrivilegeEscalation: false
         resources:
           requests:
             memory: "256Mi"
-            cpu: "200m"
+            cpu: "250m"
           limits:
             memory: "512Mi"
-            cpu: "1000m"
+            cpu: "500m"
+        ports:
+        - containerPort: 8080
+          protocol: TCP
+        env:
+        - name: KUBE_BENCH_VERSION
+          value: "latest"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 10
+          periodSeconds: 5
         volumeMounts:
-        - name: config
-          mountPath: /etc/config
-          readOnly: true
-        - name: kubeconfig
-          mountPath: /tmp/kubeconfig
-          subPath: kubeconfig
+        - name: scratch
+          mountPath: /tmp
       volumes:
-      - name: config
-        configMap:
-          name: kube-bench-config
-      - name: kubeconfig
-        secret:
-          secretName: kubeconfig-secret
+      - name: scratch
+        emptyDir:
+          sizeLimit: 1Gi
