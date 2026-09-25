@@ -24,7 +24,7 @@ spec:
         kubernetes.io/hostname: thinkcentre01
       containers:
       - name: llama-server
-        image: ghcr.io/ggml-org/llama.cpp:server-b4738
+        image: ghcr.io/ggml-org/llama.cpp:server-b5350
         args:
         - -m
         - /models/Qwen35-0.8B-Q4_K_M.gguf
