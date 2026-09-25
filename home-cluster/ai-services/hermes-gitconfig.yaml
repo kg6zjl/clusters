@@ -5,6 +5,8 @@ metadata:
   namespace: ai-services
 data:
   gitconfig: |
+    [core]
+    	hooksPath = .githooks
     [user]
     	name = Hermes
     	email = hermes@stevearnett.com

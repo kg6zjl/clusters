@@ -57,7 +57,9 @@ spec:
           # go-task (Taskfile)
           sh -c "$(curl --location https://taskfile.dev/install.sh)" -- -d -b /opt/data/.local/bin
           # yamllint into a glibc-compatible site-packages dir (PYTHONPATH in main container)
-          pip3 install --quiet --target=/opt/data/.local/pylib yamllint
+          pip3 install --quiet --target=/opt/data/.local/pylib yamllint pre-commit
+          # PATH wrapper for pre-commit (—target puts the console script in pylib/bin)
+          printf '#!/bin/sh\nexec python3 -m pre_commit "$@"\n' > /opt/data/.local/bin/pre-commit
           chmod +x /opt/data/.local/bin/*
           # Copy skills from ConfigMap to /opt/data/skills (bootstrap on every restart)
           mkdir -p /opt/data/skills
