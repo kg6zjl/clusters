@@ -61,9 +61,19 @@ spec:
           # PATH wrapper for pre-commit (—target puts the console script in pylib/bin)
           printf '#!/bin/sh\nexec python3 -m pre_commit "$@"\n' > /opt/data/.local/bin/pre-commit
           chmod +x /opt/data/.local/bin/*
-          # Copy skills from ConfigMap to /opt/data/skills (bootstrap on every restart)
-          mkdir -p /opt/data/skills
-          cp -r /skills/* /opt/data/skills/ 2>/dev/null || true
+          # Copy skills from ConfigMap into HERMES_HOME/skills in the
+          # <category>/<skill>/SKILL.md layout Hermes discovers (rglob for
+          # SKILL.md under $HERMES_HOME/skills). ConfigMap keys are flattened
+          # (no '/' allowed), so re-derive the tree from each skill's frontmatter.
+          mkdir -p /opt/data/.hermes/skills
+          for f in /skills/*; do
+            [ -f "$f" ] || continue
+            cat="$(sed -n 's/^category:[[:space:]]*//p' "$f" | head -1)"
+            name="$(sed -n 's/^name:[[:space:]]*//p' "$f" | head -1)"
+            [ -n "$cat" ] && [ -n "$name" ] || continue
+            mkdir -p "/opt/data/.hermes/skills/$cat/$name"
+            cp "$f" "/opt/data/.hermes/skills/$cat/$name/SKILL.md" 2>/dev/null || true
+          done
         volumeMounts:
         - name: data
           mountPath: /opt/data

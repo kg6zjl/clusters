@@ -6,7 +6,10 @@ metadata:
   labels:
     app: hermes-skills
 data:
-  "devops/cluster-operations/SKILL.md": |
+  # ConfigMap keys may not contain '/', so the skill tree is flattened here
+  # (cluster-operations skill, category devops). The initContainer re-derives
+  # the <category>/<skill>/SKILL.md layout from the frontmatter on copy.
+  cluster-operations.md: |
     ---
     name: cluster-operations
     description: GitOps cluster management: PRs only, no kubectl writes.
