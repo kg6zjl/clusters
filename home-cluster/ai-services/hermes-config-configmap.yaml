@@ -12,39 +12,32 @@ data:
       provider: openrouter
       default: "deepseek/deepseek-v4.1-flash"
 
-    # Ordered backups, tried when the primary cannot serve the turn.
+    # OpenRouter only. The local llama.cpp fallback chain was removed on 2026-09-26.
     #
-    # Why this exists: Hermes tracks OpenRouter health in a single credential pool, and an
-    # upstream 429 on ONE model marks that credential unusable for every model. The failure
-    # record carries no reset time, so with no chain declared the gateway raised
-    # "No LLM provider configured" and every turn hard-failed (17 turns, 2026-09-26
-    # 16:01-16:15Z). A chain downgrades that total outage to a degraded response.
+    # Why: the chain did not degrade gracefully, it degraded into garbage. Measured against
+    # beast (192.168.1.161:11434) on 2026-09-26, the rung-1 model produced no tool call at
+    # all and timed out at 90s, while the 0.8B rung answered a get_events tool call in 2.2s.
+    # In live use rung 1 emitted a turn containing 183 repeated identical `terminal` tool
+    # calls, stalled the stream past the 900s stale threshold, and the killed connection
+    # was then misreported by hermes as "Context size has been exceeded" — hermes itself
+    # logged that the rejection "is not explained by request size (~18,344 of 131,072
+    # tokens)". A fallback that returns looping garbage is worse than a clean failure.
     #
-    # Both rungs are served by beast's llama.cpp. The model ids below are verified against
-    # GET http://192.168.1.161:11434/v1/models — do not add an id that endpoint does not
-    # list, or the rung 404s at call time.
-    fallback_providers:
-    - provider: llamacpp
-      model: "GLM-4.6V-Flash-UD-Q4_K_XL"
-    - provider: llamacpp
-      model: "Qwen35-0.8B-Q4_K_M"
-
-    # Local catalog so /model can select these ids. A model absent from
-    # providers.<name>.models is unreachable from /model even when the fallback chain can
-    # still reach it.
-    providers:
-      llamacpp:
-        base_url: "http://192.168.1.161:11434/v1"
-        # llama.cpp serves without auth. key_env reuses the OPENAI_API_KEY already set on
-        # the Deployment, so no key material is committed here.
-        key_env: OPENAI_API_KEY
-        models:
-        - "GLM-4.6V-Flash-UD-Q4_K_XL"
-        - "Qwen3-14B-abliterated-Q4_K_M"
-        - "Qwen3.5-9B-Q4_K_M"
-        - "Qwen3.8-27B-ABLITERATED-Q3_K_M"
-        - "Qwen3.8-27B-ABLITERATED-Q4_K_M"
-        - "Qwen35-0.8B-Q4_K_M"
+    # The chain was masking a real bug rather than fixing it: hermes keeps OpenRouter
+    # health in a single in-memory credential pool, an upstream 429 on ONE model marks
+    # that credential unusable for EVERY model, and the failure record carries no reset
+    # time. So the pool wedges and never recovers on its own. The credential itself is
+    # fine — verified 2026-09-26: the OpenRouter key authenticates, $60 credits /
+    # $47.58 used, model id `deepseek/deepseek-v4.1-flash` present in
+    # GET /api/v1/models, and a live completion returned 200 in 1.77s. A pod restart
+    # clears the wedged pool.
+    #
+    # TRADE-OFF: with no chain declared, a wedged pool means every turn hard-fails with
+    # "No LLM provider configured" rather than silently degrading. That is the intended
+    # trade — a loud failure is debuggable, a slow wrong answer is not.
+    #
+    # If the pool wedges again, restart the pod rather than adding a fallback back:
+    #   kubectl delete pod -n ai-services -l app=hermes-agent
 
     cron:
       model: "deepseek/deepseek-v4.1-flash"

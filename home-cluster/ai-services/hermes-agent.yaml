@@ -139,11 +139,10 @@ spec:
           value: "0.0.0.0"
         - name: API_SERVER_PORT
           value: "8642"
-        # Point at your existing llama.cpp on beast
-        - name: OPENAI_API_BASE_URL
-          value: "http://192.168.1.161:11434/v1"
-        - name: OPENAI_API_KEY
-          value: "no-key"
+        # No OPENAI_API_BASE_URL / OPENAI_API_KEY here: both existed only to point the
+        # gateway at beast's llama.cpp (192.168.1.161:11434) and fed the now-removed
+        # llamacpp provider. OpenRouter authenticates with OPENROUTER_API_KEY from
+        # hermes-agent-secrets via envFrom below.
         # Tools installed by install-tools initContainer into .local/bin (already on PATH)
         - name: KUBECONFIG
           value: /opt/data/.kube/config
