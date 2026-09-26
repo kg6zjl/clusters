@@ -20,7 +20,7 @@ spec:
       labels:
         app: hermes-agent
       annotations:
-        rollout.restartedAt: "2026-09-25T20:00:00Z"
+        rollout.restartedAt: "2026-09-26T02:52:58Z"
     spec:
       serviceAccountName: hermes-agent
       # CPU only — GPU stays on beast
