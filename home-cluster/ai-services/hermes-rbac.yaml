@@ -138,6 +138,21 @@ rules:
   - apiGroups: ["externaldns.k8s.io"]
     resources: ["dnsendpoints"]
     verbs: ["get", "list", "watch"]
+
+  # KubeStash / AppsCode backup CRDs (read-only) — this is the cluster's backup
+  # system: BackupConfigurations, BackupSessions, Repositories, Snapshots. None of it
+  # is described in git, so the cluster API is the only source of truth for what is
+  # actually backed up. Before this grant every list returned Forbidden, which made a
+  # protected volume indistinguishable from an unprotected one - and produced a wrong
+  # claim that home-assistant had no backup at all.
+  - apiGroups:
+      - core.kubestash.com
+      - storage.kubestash.com
+      - addons.kubestash.com
+      - appcatalog.appscode.com
+      - metrics.appscode.com
+    resources: ["*"]
+    verbs: ["get", "list", "watch"]
 --- 
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
