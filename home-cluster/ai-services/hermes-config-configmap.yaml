@@ -9,13 +9,10 @@ metadata:
 data:
   config.yaml: |
     model:
-      default: "GLM-4.6V-Flash-UD-Q4_K_XL"
-      provider: lmstudio
-      base_url: "http://192.168.1.161:11434/v1"
-      context_length: 131072
-    # providers.lmstudio.models mirrors beast's live /v1/models catalog so /model
-    # lists every GGUF served by the router (incl. the fast Qwen35-0.8B) instead of
-    # only the curated default.
+      default: "anthropic/claude-sonnet-4"
+      provider: openrouter
+      # context_length only matters for local providers; omit for OpenRouter
+
     providers:
       lmstudio:
         base_url: "http://192.168.1.161:11434/v1"
@@ -26,10 +23,20 @@ data:
         - "Qwen3.8-27B-ABLITERATED-Q3_K_M"
         - "Qwen3.8-27B-ABLITERATED-Q4_K_M"
         - "Qwen35-0.8B-Q4_K_M"
+
+      openrouter:
+        # base_url defaults to https://openrouter.ai/api/v1
+        # api_key comes from OPENROUTER_API_KEY env var (via ExternalSecret)
+        models:
+        - "anthropic/claude-sonnet-4"
+        - "anthropic/claude-opus-4"
+        - "google/gemini-2.5-pro"
+        - "openai/gpt-4.1"
+
     cron:
-      # Scheduled jobs ride the fast 0.8B so they don't eat the GLM's GPU budget.
       model: "Qwen35-0.8B-Q4_K_M"
       model_provider: lmstudio
+
     display:
       # Per-platform (schema-canonical) tool_progress off: no tool-call bubbles
       # on any gateway surface. Top-level display.tool_progress also works but
