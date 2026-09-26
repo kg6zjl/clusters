@@ -51,19 +51,3 @@ data:
           tool_progress: off
           tool_progress_command: false
           tool_progress_grouping: accumulate
-
-    # Continuous kanban dispatcher: the gateway owns it and ticks forever,
-    # spawning one worker per assigned+ready task. Declared explicitly because
-    # it is otherwise an implicit default, and `hermes kanban daemon` is
-    # deprecated — running both means two dispatchers racing for the same
-    # claims against one kanban.db. Config is read once at gateway boot, so a
-    # change here takes effect on the pod roll the reloader annotation triggers.
-    kanban:
-      dispatch_in_gateway: true
-      dispatch_interval_seconds: 60
-      failure_limit: 2
-      # The pod's memory limit is 4Gi, shared with the gateway process itself
-      # (~0.6Gi idle). Left unset, the dispatcher sizes the cap from the NODE's
-      # MemTotal (15.7Gi -> max_in_progress=8), which OOM-kills the gateway long
-      # before eight agent processes fit in 4Gi.
-      max_in_progress: 2
