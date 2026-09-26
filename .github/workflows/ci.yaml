@@ -20,16 +20,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
-      - name: Set up Python
-        uses: actions/setup-python@v6
-        with:
-          python-version: '3.14'
-
-      - name: Install yamllint
-        run: pip install yamllint
-
       - name: Lint YAML files
-        run: python3 -m yamllint -c home-cluster/yamllint.yaml home-cluster/
+        run: |
+          # yamllint is installed into a shared path by the runner init container;
+          # install only if this runs on a runner that lacks it.
+          python3 -c "import yamllint" 2>/dev/null || pip install --quiet --break-system-packages yamllint
+          python3 -m yamllint -c home-cluster/yamllint.yaml home-cluster/
 
   validate:
     name: Validate
@@ -38,16 +34,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
-      - name: Install kustomize
-        run: |
-          curl -sL https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2Fv5.4.2/kustomize_v5.4.2_linux_amd64.tar.gz | tar xz
-          chmod +x kustomize
-          mv kustomize /tmp/kustomize
-
       - name: Validate Kustomize
         run: |
+          # kubectl (with embedded kustomize) is installed by the runner init
+          # container - no need to download a kustomize tarball every run.
           cd home-cluster
-          /tmp/kustomize build . 2>&1 > /dev/null && echo "Kustomize: OK" || { echo "Kustomize: FAILED"; exit 1; }
+          kubectl kustomize . > /dev/null && echo "Kustomize: OK" || { echo "Kustomize: FAILED"; exit 1; }
 
   secrets:
     name: Secret Scan
@@ -56,23 +48,21 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
         with:
+          # TruffleHog needs the full history to walk base..head
           fetch-depth: 0
 
-      - name: Run Trufflehog
-        uses: trufflesecurity/trufflehog@main
-        with:
-          path: ./
-          base: ${{ github.event.repository.default_branch }}
-          head: HEAD
-          extra_args: --only-verified
-        continue-on-error: true
-
-      - name: Check Trufflehog result
-        if: ${{ github.event_name == 'pull_request' }}
+      - name: Scan PR commits for verified secrets
         run: |
-          if [ -n "$(git log --oneline ${{ github.event.repository.default_branch }}..HEAD)" ]; then
-            echo "New commits found, TruffleHog scan is required"
-            exit 1
-          else
-            echo "No new commits in PR, skipping TruffleHog"
-          fi
+          # trufflehog is installed by the runner init container (pin lives in
+          # home-cluster/github-runners/runner-deployment.yaml). The upstream
+          # trufflesecurity/trufflehog *action* is NOT used: it shells out to
+          # `docker run`, and the runner pods have no docker daemon or socket.
+          # --fail makes it exit non-zero (183) when it finds verified secrets,
+          # so this check actually gates the PR.
+          trufflehog git "file://$PWD" \
+            --since-commit "${{ github.event.pull_request.base.sha }}" \
+            --branch "${{ github.event.pull_request.head.sha }}" \
+            --only-verified \
+            --fail \
+            --no-update
+

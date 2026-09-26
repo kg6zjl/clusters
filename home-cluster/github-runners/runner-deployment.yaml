@@ -4,7 +4,11 @@ metadata:
   name: github-runner
   namespace: github-runners
 spec:
-  replicas: 2
+  # 4 persistent runners: a PR needs 3 runner slots (lint/validate/secrets), and
+  # with replicas: 2 the third job sat in the queue for 76-106s while the job
+  # itself only took ~18s. Idle runners are cheap (~100m CPU each) and the three
+  # thinkcentres have 36 cores total.
+  replicas: 4
   template:
     spec:
       priorityClassName: system-cluster-critical
@@ -21,15 +25,40 @@ spec:
             - -c
             - |
               apk add --no-cache curl bash python3 py3-pip
-              mkdir -p /opt/tools/bin /usr/local/bin
-              curl -sL https://dl.k8s.io/release/$(curl -sL https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl -o /usr/local/bin/kubectl
+              mkdir -p /opt/tools/bin /opt/tools/pylib /usr/local/bin
+              # kubectl pinned instead of resolving stable.txt on every cold start
+              curl -sL https://dl.k8s.io/release/v1.37.1/bin/linux/amd64/kubectl -o /usr/local/bin/kubectl
               chmod +x /usr/local/bin/kubectl
               curl -sL https://get.helmfile.dev | sh
               mv helmfile /opt/tools/bin/
-              pip3 install yamllint || true
+              # Install into a SHARED path: the old bare `pip3 install yamllint`
+              # landed in this init container's own rootfs (only /usr/local/bin
+              # and /opt/tools/bin are mounted into the runner), so it was never
+              # visible to jobs and ci.yaml had to re-install it every run.
+              pip3 install --quiet --target /opt/tools/pylib yamllint
+              # TruffleHog for the Secret Scan job. The upstream GitHub Action runs
+              # `docker run`, and these runner pods have no docker daemon or socket -
+              # which is why that step was silently failing under continue-on-error.
+              # Pin the version and verify the release checksum.
+              TH_VER=3.97.9
+              cd /tmp
+              curl -sSfLO "https://github.com/trufflesecurity/trufflehog/releases/download/v${TH_VER}/trufflehog_${TH_VER}_linux_amd64.tar.gz"
+              curl -sSfLO "https://github.com/trufflesecurity/trufflehog/releases/download/v${TH_VER}/trufflehog_${TH_VER}_checksums.txt"
+              sha256sum -c --ignore-missing "trufflehog_${TH_VER}_checksums.txt"
+              tar -xzf "trufflehog_${TH_VER}_linux_amd64.tar.gz" -C /opt/tools/bin trufflehog
+              rm -f /tmp/trufflehog_*.tar.gz /tmp/trufflehog_*checksums.txt
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
           volumeMounts:
             - name: tools
               mountPath: /opt/tools/bin
+            - name: pylib
+              mountPath: /opt/tools/pylib
             - name: usr-local
               mountPath: /usr/local/bin
           securityContext:
@@ -38,11 +67,42 @@ spec:
               drop: ["ALL"]
       containers:
         - name: runner
+          env:
+            # /opt/tools/bin holds helmfile; /opt/tools/pylib holds yamllint
+            - name: PATH
+              value: /opt/tools/bin:/usr/local/bin:/usr/local/sbin:/usr/bin:/bin:/usr/sbin:/sbin
+            - name: PYTHONPATH
+              value: /opt/tools/pylib
+          resources:
+            requests:
+              cpu: 500m
+              memory: 1Gi
+            limits:
+              cpu: "3"
+              memory: 6Gi
           volumeMounts:
             - name: tools
               mountPath: /opt/tools/bin
+            - name: pylib
+              mountPath: /opt/tools/pylib
+            # The init container installs kubectl into this volume, but the runner
+            # container never mounted it - so jobs had no kubectl at all and
+            # ci.yaml had to download kustomize instead of using `kubectl kustomize`.
+            - name: usr-local
+              mountPath: /usr/local/bin
+      # Spread runners across the three ThinkCentres instead of letting the
+      # scheduler stack them all on whichever node is emptiest.
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              runner-deployment-name: github-runner
       volumes:
         - name: tools
+          emptyDir: {}
+        - name: pylib
           emptyDir: {}
         - name: usr-local
           emptyDir: {}
