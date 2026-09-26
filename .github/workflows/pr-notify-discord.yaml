@@ -15,7 +15,7 @@ name: PR notify (Discord)
 
 on:
   pull_request:
-    types: [opened, reopened, ready_for_review, closed, synchronize]
+    types: [opened, closed]
 
 # Nothing here needs to write anything anywhere.
 permissions:
