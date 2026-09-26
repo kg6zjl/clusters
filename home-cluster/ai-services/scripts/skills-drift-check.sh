@@ -4,8 +4,8 @@
 # + content hash, so it works across the old flat layout and the new
 # <category>/<name> layout.
 #
-# Exit 0 and print OK when trees agree.
-# Print DRIFT lines (and exit 1) when they don't.
+# Exit 0 always (cron no_agent delivery treats nonzero as job failure; drift
+# state is carried in the text). Prints OK when in sync, DRIFT lines otherwise.
 set -euo pipefail
 
 SUMMARY_ONLY="${SUMMARY_ONLY:-0}"
@@ -48,22 +48,22 @@ n_mod=$(echo "$mods" | grep -c . || true)
 
 if [ "$n_mig" -gt 0 ]; then
   echo "DRIFT: $n_mig skill(s) exist in the pod but are NOT in git (never PR'd):"
-  [ "$SUMMARY_ONLY" = "1" ] || echo "$mig" | sed 's/^/  - /'
+  [ "$SUMMARY_ONLY" = "1" ] || { echo "$mig" | head -15 | sed 's/^/  - /'; [ "$n_mig" -gt 15 ] && echo "  ... ($n_mig total)"; true; }
   drift=1
 fi
 if [ "$n_ml" -gt 0 ]; then
   echo "DRIFT: $n_ml skill(s) in git but missing from pod (check mount/restart):"
-  [ "$SUMMARY_ONLY" = "1" ] || echo "$ml" | sed 's/^/  - /'
+  [ "$SUMMARY_ONLY" = "1" ] || { echo "$ml" | head -15 | sed 's/^/  - /'; [ "$n_ml" -gt 15 ] && echo "  ... ($n_ml total)"; true; }
   drift=1
 fi
 if [ "$n_mod" -gt 0 ]; then
   echo "DRIFT: $n_mod skill(s) modified locally vs git:"
-  [ "$SUMMARY_ONLY" = "1" ] || echo "$mods" | sed 's/^/  - /'
+  [ "$SUMMARY_ONLY" = "1" ] || { echo "$mods" | head -15 | sed 's/^/  - /'; [ "$n_mod" -gt 15 ] && echo "  ... ($n_mod total)"; true; }
   drift=1
 fi
 
-if [ "$drift" -eq 0 ]; then
-  echo "OK: $(wc -l < "$TMP/local.txt") skills, pod and git in sync"
-  exit 0
+if [ "$drift" -eq 1 ]; then
+  echo ""
+  echo "Reminder: PR the skill changes into home-cluster/ai-services/hermes-skills/ and regenerate the configMapGenerator keys (see devops/skills-to-git skill)."
 fi
-exit 1
+exit 0
