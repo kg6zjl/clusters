@@ -45,3 +45,19 @@ kubectl get pods -n ai-services -l app=hermes-agent
 - Two skills mapping to the same `<cat>__<name>` key — kustomize build fails.
 - Skill content that embeds secret values — paths to ESO-managed files are fine, values never.
 - Adding a skill file without its `configMapGenerator` line — it sits in git and never mounts.
+
+## Runtime state is not ownership
+
+`/opt/data` (config.yaml, skills/, memory) is a **cache**, not the source of truth. It is
+re-seeded from git on every reload, so an edit made directly at runtime is not a change —
+it is temporary drift that gets silently reverted.
+
+- **Never** use `hermes config set` / direct file writes to make a durable change to config,
+  model defaults, or skills. Open the PR. Merging it rolls the pod via the reloader
+  annotation on the hermes-agent Deployment
+  (`configmap.reloader.stakater.com/reload: "hermes-config,hermes-skills,hermes-soul"`)
+  and the initContainer re-seeds from the ConfigMaps.
+- When asked to "switch yourself to X", the deliverable is a **PR**, not a local set.
+  Say that, don't take the shortcut — a local set is drift that a reload erases, and it
+  makes the git state look like it never happened.
+- Same rule as skills: nothing is done until it is merged.
