@@ -61,6 +61,19 @@ rules:
     resources: ["networkpolicies", "ingresses", "ingressclasses", "endpointslices"]
     verbs: ["get", "list", "watch"]
 
+  # EndpointSlices are the authoritative endpoint set for a Service. The legacy
+  # v1 Endpoints object can be stale (skip-mirror), which is exactly how a
+  # decommissioned IP stayed in the API service endpoints unnoticed.
+  - apiGroups: ["discovery.k8s.io"]
+    resources: ["endpointslices"]
+    verbs: ["get", "list", "watch"]
+
+  # CRD status: needed to tell "the CRD is missing" apart from "the CRD exists
+  # but is not Established", which look identical from a failed list call.
+  - apiGroups: ["apiextensions.k8s.io"]
+    resources: ["customresourcedefinitions"]
+    verbs: ["get", "list", "watch"]
+
   # Traefik CRDs (read-only)
   - apiGroups: ["traefik.io", "traefik.containo.us"]
     resources:
