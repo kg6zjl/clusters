@@ -190,6 +190,13 @@ spec:
           mountPath: /etc/hermes/github-token
           subPath: github-token
           readOnly: true
+        startupProbe:
+          httpGet:
+            path: /health
+            port: api
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 60
         readinessProbe:
           httpGet:
             path: /health
