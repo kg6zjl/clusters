@@ -1,0 +1,190 @@
+# Stage 1 of moving radarr, sonarr, lidarr and seerr configs off their
+# node-pinned hostpath volumes.
+#
+# Each app declares a 2Gi microk8s-hostpath claim whose PV carries a nodeAffinity
+# for one node (thinkcentre01 for lidarr, thinkcentre02 for the rest), so each
+# pod can only ever run where its volume was made. The Deployments are scaled to
+# 0 in the same commit so no config is written while it is read, and stage 2
+# repoints the claims, scales back to 1 and deletes this file.
+#
+# Every job lands on the node its source PV is pinned to, by itself, because the
+# source claim's nodeAffinity pulls it there. The source is mounted read-only:
+# the copy only reads it, and read-only means a mistake cannot damage the
+# original.
+#
+# A job that cannot fit the source onto the destination fails loudly
+# (backoffLimit 2, non-zero exit) rather than leaving a half-copied volume
+# behind, and stage 2 only happens after the logs are checked.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: radarr-config-migrate
+  namespace: media
+spec:
+  backoffLimit: 2
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: copy
+          image: alpine:3.24
+          command:
+            - /bin/sh
+            - -c
+            - |
+              set -euo pipefail
+              # the Deployment is scaled to 0 in the same commit; give the old
+              # pod time to release the ReadWriteOnce claim
+              sleep 20
+              echo "radarr source (hostpath):"
+              du -sh /old
+              find /old | wc -l
+              cp -a /old/. /new/
+              echo "radarr destination (longhorn):"
+              du -sh /new
+              find /new | wc -l
+              test -n "$(ls -A /new)"
+              test "$(find /new | wc -l)" -ge "$(find /old | wc -l)"
+              echo "radarr copy ok"
+          volumeMounts:
+            - name: old
+              mountPath: /old
+              readOnly: true
+            - name: new
+              mountPath: /new
+      volumes:
+        - name: old
+          persistentVolumeClaim:
+            claimName: radarr-config
+        - name: new
+          persistentVolumeClaim:
+            claimName: radarr-config-longhorn
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: sonarr-config-migrate
+  namespace: media
+spec:
+  backoffLimit: 2
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: copy
+          image: alpine:3.24
+          command:
+            - /bin/sh
+            - -c
+            - |
+              set -euo pipefail
+              sleep 20
+              echo "sonarr source (hostpath):"
+              du -sh /old
+              find /old | wc -l
+              cp -a /old/. /new/
+              echo "sonarr destination (longhorn):"
+              du -sh /new
+              find /new | wc -l
+              test -n "$(ls -A /new)"
+              test "$(find /new | wc -l)" -ge "$(find /old | wc -l)"
+              echo "sonarr copy ok"
+          volumeMounts:
+            - name: old
+              mountPath: /old
+              readOnly: true
+            - name: new
+              mountPath: /new
+      volumes:
+        - name: old
+          persistentVolumeClaim:
+            claimName: sonarr-config
+        - name: new
+          persistentVolumeClaim:
+            claimName: sonarr-config-longhorn
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: lidarr-config-migrate
+  namespace: media
+spec:
+  backoffLimit: 2
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: copy
+          image: alpine:3.24
+          command:
+            - /bin/sh
+            - -c
+            - |
+              set -euo pipefail
+              sleep 20
+              echo "lidarr source (hostpath):"
+              du -sh /old
+              find /old | wc -l
+              cp -a /old/. /new/
+              echo "lidarr destination (longhorn):"
+              du -sh /new
+              find /new | wc -l
+              test -n "$(ls -A /new)"
+              test "$(find /new | wc -l)" -ge "$(find /old | wc -l)"
+              echo "lidarr copy ok"
+          volumeMounts:
+            - name: old
+              mountPath: /old
+              readOnly: true
+            - name: new
+              mountPath: /new
+      volumes:
+        - name: old
+          persistentVolumeClaim:
+            claimName: lidarr-config
+        - name: new
+          persistentVolumeClaim:
+            claimName: lidarr-config-longhorn
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: seerr-config-migrate
+  namespace: media
+spec:
+  backoffLimit: 2
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: copy
+          image: alpine:3.24
+          command:
+            - /bin/sh
+            - -c
+            - |
+              set -euo pipefail
+              sleep 20
+              echo "seerr source (hostpath):"
+              du -sh /old
+              find /old | wc -l
+              cp -a /old/. /new/
+              echo "seerr destination (longhorn):"
+              du -sh /new
+              find /new | wc -l
+              test -n "$(ls -A /new)"
+              test "$(find /new | wc -l)" -ge "$(find /old | wc -l)"
+              echo "seerr copy ok"
+          volumeMounts:
+            - name: old
+              mountPath: /old
+              readOnly: true
+            - name: new
+              mountPath: /new
+      volumes:
+        - name: old
+          persistentVolumeClaim:
+            claimName: seerr-config
+        - name: new
+          persistentVolumeClaim:
+            claimName: seerr-config-longhorn

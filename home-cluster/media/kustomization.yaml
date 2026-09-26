@@ -9,6 +9,8 @@ resources:
   - jellyfin-helmrepository.yaml
   - jellyfin-helmrelease.yaml
   - jellyfin-config-longhorn-pvc.yaml
+  - media-config-longhorn-pvcs.yaml
+  - media-config-migration.yaml
   - seerr.yaml
   - prowlarr.yaml
   - radarr.yaml
