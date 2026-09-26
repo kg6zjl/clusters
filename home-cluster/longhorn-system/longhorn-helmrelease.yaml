@@ -1,0 +1,63 @@
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: longhorn
+  namespace: longhorn-system
+spec:
+  interval: 1h
+  chart:
+    spec:
+      chart: longhorn
+      version: 1.12.1
+      sourceRef:
+        kind: HelmRepository
+        name: longhorn
+        namespace: flux-system
+  install:
+    createNamespace: true
+    remediation:
+      retries: 3
+  upgrade:
+    remediation:
+      retries: 3
+  values:
+    # GitOps: the pre-upgrade check Job races Flux reconciliation and is
+    # explicitly documented as something to disable for GitOps installs.
+    preUpgradeChecker:
+      jobEnabled: false
+    defaultSettings:
+      # Only three usable nodes (thinkcentre01/02/03). Two replicas tolerates
+      # the loss of one node without every volume becoming degraded/offline.
+      defaultReplicaCount: 2
+      # Default is 200. Home-lab disks are small and shared with the OS and
+      # the microk8s-hostpath PVs, so cap commitment at real capacity.
+      storageOverProvisioningPercentage: 100
+      # Default is 25. Keep ~15% of each disk free so a node cannot be filled
+      # to the point where the kubelet and the OS suffer.
+      storageMinimalAvailablePercentage: 15
+      # Default data path is a directory on the root filesystem. All three
+      # usable nodes have ample free space on /, and there is no separate data
+      # disk mounted on them, so the default is the correct choice here.
+      defaultDataPath: /var/lib/longhorn
+      # No need to phone home to the Longhorn upgrade responder from a home lab.
+      upgradeChecker: false
+    persistence:
+      # Keep microk8s-hostpath as the cluster default StorageClass. New PVCs
+      # without an explicit storageClassName must NOT silently switch backend.
+      defaultClass: false
+      # Replica count for the `longhorn` StorageClass that is created (it stays
+      # non-default). Must match defaultSettings.defaultReplicaCount.
+      defaultClassReplicaCount: 2
+    # Exclude pi4-microk8s (aarch64, being decommissioned) from Longhorn.
+    # nodeSelector is equality-only, so it cannot express "hostname NotIn".
+    # pi4-microk8s is the only arm64 node, so selecting amd64 excludes it and
+    # also future-proofs against other arm64 nodes being added.
+    longhornManager:
+      nodeSelector:
+        kubernetes.io/arch: amd64
+    longhornDriver:
+      nodeSelector:
+        kubernetes.io/arch: amd64
+    longhornUI:
+      nodeSelector:
+        kubernetes.io/arch: amd64

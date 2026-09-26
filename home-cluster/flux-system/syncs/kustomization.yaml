@@ -32,3 +32,4 @@ resources:
   - adsb-kustomization.yaml
   - nodered-kustomization.yaml
   - security-scanning-kustomization.yaml
+  - longhorn-system-kustomization.yaml
