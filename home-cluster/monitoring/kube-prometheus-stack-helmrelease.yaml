@@ -69,6 +69,10 @@ spec:
                 target_label: instance
               - target_label: __address__
                 replacement: blackbox-exporter-prometheus-blackbox-exporter.monitoring.svc:9115
+        additionalAlertRelabelConfigs:
+          - source_labels: [alertname]
+            regex: NodeDiskIOSaturation
+            action: drop
         additionalRules:
           - name: ingress-availability
             rules:
@@ -80,6 +84,26 @@ spec:
                 annotations:
                   summary: "Ingress {{ $labels.instance }} is down"
                   description: "Cannot reach {{ $labels.instance }} for 2 minutes"
+          - name: node-disk-io
+            rules:
+              - alert: NodeDiskIOSaturationNvme
+                expr: rate(node_disk_io_time_weighted_seconds_total{device=~"nvme.+",job="node-exporter"}[5m]) > 50
+                for: 30m
+                labels:
+                  severity: warning
+                annotations:
+                  summary: "NVMe disk IO queue is deep"
+                  description: "Queue depth (aqu-sq) on {{ $labels.device }} at {{ $labels.instance }} above 50 for 30 minutes, currently {{ printf \"%.2f\" $value }}"
+                  runbook_url: https://runbooks.prometheus-operator.dev/runbooks/node/nodediskiosaturation
+              - alert: NodeDiskIOSaturationOther
+                expr: rate(node_disk_io_time_weighted_seconds_total{device=~"(/dev/)?(mmcblk.p.+|rbd.+|sd.+|vd.+|xvd.+|dm-.+|md.+|dasd.+)",job="node-exporter"}[5m]) > 10
+                for: 30m
+                labels:
+                  severity: warning
+                annotations:
+                  summary: "Disk IO queue is high"
+                  description: "Queue depth (aqu-sq) on {{ $labels.device }} at {{ $labels.instance }} above 10 for 30 minutes, currently {{ printf \"%.2f\" $value }}"
+                  runbook_url: https://runbooks.prometheus-operator.dev/runbooks/node/nodediskiosaturation
     grafana:
       enabled: true
       replicas: 1
