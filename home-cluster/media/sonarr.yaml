@@ -38,19 +38,6 @@ spec:
     protocol: TCP
   type: ClusterIP
 ---
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: sonarr-config
-  namespace: media
-spec:
-  accessModes:
-    - ReadWriteOnce
-  resources:
-    requests:
-      storage: 2Gi
-  storageClassName: microk8s-hostpath
----
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -90,8 +77,8 @@ spec:
       volumes:
       - name: sonarr-config
         persistentVolumeClaim:
-          # Longhorn-backed since stage 2; the old hostpath claim is kept as the
-          # rollback path until this has been verified, then dropped.
+          # Longhorn-backed. The hostpath claim that pinned this pod to a single
+          # node is gone, so this volume can attach anywhere.
           claimName: sonarr-config-longhorn
       - name: downloads
         hostPath:
