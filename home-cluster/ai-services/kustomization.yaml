@@ -11,6 +11,8 @@ resources:
   - namespace.yaml
   - llama-qwen35.yaml
   - open-webui.yaml
+  - open-webui-data-longhorn-pvc.yaml
+  - open-webui-migration.yaml
   - ingressroute-openwebui.yaml
   - dnsendpoint.yaml
   - service-comfy.yaml
