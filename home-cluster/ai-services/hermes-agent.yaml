@@ -7,6 +7,12 @@ metadata:
   labels:
     app: hermes-agent
     alert-on-down: "true"
+  annotations:
+    # Roll the pod when any of the git-managed config that only takes effect at
+    # container start changes: the initContainer re-seeds config.yaml and the
+    # skill tree from these ConfigMaps, so a merge alone is otherwise a no-op
+    # until the next unrelated restart. Reloader watches for changes.
+    configmap.reloader.stakater.com/reload: "hermes-config,hermes-skills,hermes-soul"
 spec:
   replicas: 1
   revisionHistoryLimit: 5
@@ -61,18 +67,21 @@ spec:
           # PATH wrapper for pre-commit (—target puts the console script in pylib/bin)
           printf '#!/bin/sh\nexec python3 -m pre_commit "$@"\n' > /opt/data/.local/bin/pre-commit
           chmod +x /opt/data/.local/bin/*
-          # Copy skills from ConfigMap into HERMES_HOME/skills in the
-          # <category>/<skill>/SKILL.md layout Hermes discovers (rglob for
-          # SKILL.md under $HERMES_HOME/skills). ConfigMap keys are flattened
-          # (no '/' allowed), so re-derive the tree from each skill's frontmatter.
-          mkdir -p /opt/data/.hermes/skills
+          # Materialize the full skill tree from the git-managed hermes-skills
+          # ConfigMap into $HERMES_HOME/skills (the live tree the gateway loads
+          # at startup). ConfigMap keys cannot contain '/', so keys are encoded
+          # as <category>__<skill>.md by the kustomize configMapGenerator.
+          # Git is the source of truth: these copies override the image-bundled
+          # skills, and any runtime edit is reset on next pod start.
+          mkdir -p /opt/data/skills
           for f in /skills/*; do
             [ -f "$f" ] || continue
-            cat="$(sed -n 's/^category:[[:space:]]*//p' "$f" | head -1)"
-            name="$(sed -n 's/^name:[[:space:]]*//p' "$f" | head -1)"
-            [ -n "$cat" ] && [ -n "$name" ] || continue
-            mkdir -p "/opt/data/.hermes/skills/$cat/$name"
-            cp "$f" "/opt/data/.hermes/skills/$cat/$name/SKILL.md" 2>/dev/null || true
+            base="$(basename "$f" .md)"
+            cat="${base%%__*}"
+            name="${base#*__}"
+            [ "$cat" != "$base" ] && [ -n "$name" ] || continue
+            mkdir -p "/opt/data/skills/$cat/$name"
+            cp "$f" "/opt/data/skills/$cat/$name/SKILL.md" 2>/dev/null || true
           done
           # Seed the config file Hermes actually reads ($HERMES_HOME/config.yaml)
           # from the git-managed ConfigMap. Env vars (HERMES_MODEL_DEFAULT) are

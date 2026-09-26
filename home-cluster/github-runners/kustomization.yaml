@@ -6,6 +6,7 @@ resources:
   - helmrelease.yaml
   - rbac.yaml
   - runner-deployment.yaml
+  - runner-autoscaler.yaml
   - external-secrets-store.yaml
   - external-secrets.yaml
   - controller-manager-external-secret.yaml
