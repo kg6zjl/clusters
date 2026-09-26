@@ -69,6 +69,11 @@ spec:
                 target_label: instance
               - target_label: __address__
                 replacement: blackbox-exporter-prometheus-blackbox-exporter.monitoring.svc:9115
+          - job_name: openrouter-exporter
+            scrape_interval: 60s
+            static_configs:
+              - targets:
+                  - openrouter-exporter.monitoring.svc.cluster.local:9101
         additionalAlertRelabelConfigs:
           - source_labels: [alertname]
             regex: NodeDiskIOSaturation

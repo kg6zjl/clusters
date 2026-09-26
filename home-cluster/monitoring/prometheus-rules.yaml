@@ -44,3 +44,29 @@ spec:
       annotations:
         summary: "Pod {{ $labels.pod }} in {{ $labels.namespace }} is crash looping"
         description: "Container {{ $labels.container }} has restarted multiple times in the last 5 minutes"
+  - name: openrouter
+    rules:
+    - alert: OpenRouterCreditLow
+      expr: openrouter_credit_limit_remaining_usd >= 0 and openrouter_credit_limit_remaining_usd < 5
+      for: 15m
+      labels:
+        severity: warning
+      annotations:
+        summary: "OpenRouter spend limit is low ({{ printf \"%.2f\" $value }} USD remaining)"
+        description: "Under 5 USD of the OpenRouter key spend limit is left. Top up before agent requests start failing with HTTP 402."
+    - alert: OpenRouterCreditExhausted
+      expr: openrouter_credit_limit_remaining_usd >= 0 and openrouter_credit_limit_remaining_usd < 1
+      for: 5m
+      labels:
+        severity: critical
+      annotations:
+        summary: "OpenRouter spend limit nearly exhausted ({{ printf \"%.2f\" $value }} USD remaining)"
+        description: "Under 1 USD of the OpenRouter key spend limit is left. Agent requests will start failing with HTTP 402."
+    - alert: OpenRouterExporterDown
+      expr: openrouter_up == 0 or absent(openrouter_up)
+      for: 15m
+      labels:
+        severity: warning
+      annotations:
+        summary: "OpenRouter exporter is not reporting"
+        description: "openrouter_up has been 0 or absent for 15 minutes - OpenRouter spend is not being recorded."
