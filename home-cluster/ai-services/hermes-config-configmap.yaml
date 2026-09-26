@@ -9,7 +9,7 @@ metadata:
 data:
   config.yaml: |
     model:
-      default: "cohere/north-mini-code:free"
+      default: "deepseek/deepseek-v4.1-flash"
       provider: openrouter
       # context_length only matters for local providers; omit for OpenRouter
 
