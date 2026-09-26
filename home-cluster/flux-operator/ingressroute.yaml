@@ -1,0 +1,42 @@
+---
+# Flux Status web UI (served by flux-operator on 9080, Service port name `http-web`).
+#
+# No `middlewares:` block, matching every other dashboard route in this repo
+# (grafana, prometheus, alertmanager, headlamp are all unexposed to a middleware
+# too). The oauth2-proxy middleware exists in namespace traefik but is referenced
+# by no route, and a forwardAuth login flow needs /oauth2/* reachable on this same
+# host -- pointing the middleware at this IngressRoute without that plumbing would
+# 401 or 404 the login rather than protect anything. See the PR body: the UI is
+# unauthenticated by default and read-only (it cannot read Secrets or ConfigMaps).
+# Putting it behind SSO is a deliberate follow-up, not something to bolt on here.
+#
+# No `tls:` block, matching every other IngressRoute in this repo. TLS comes from
+# the Traefik TLSStore default (home-cluster/traefik/tlsstore.yaml ->
+# wildcard-stevearnett-com-tls), whose certificate covers *.kube.stevearnett.com.
+#
+# NetworkPolicy: flux-system is default-deny for ingress (the distribution's
+# allow-egress selects every pod in the namespace and only admits ingress from
+# within flux-system). Traefik is therefore NOT admitted without
+# networkpolicy.yaml alongside this file, which allows exactly traefik -> 9080.
+#
+# DNS: external-dns runs with --source=crd (DNSEndpoint) and --source=ingress
+# only -- it does not read IngressRoutes. dnsendpoint.yaml is what actually
+# publishes this record; the hostname annotation below is inert today, kept only
+# to match the sibling routes so it goes live if a traefik source is ever added.
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: flux-operator
+  namespace: flux-system
+  annotations:
+    external-dns.alpha.kubernetes.io/hostname: flux.kube.stevearnett.com
+    external-dns.alpha.kubernetes.io/target: kube.stevearnett.com
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - match: Host(`flux.kube.stevearnett.com`)
+      kind: Rule
+      services:
+        - name: flux-operator
+          port: http-web
