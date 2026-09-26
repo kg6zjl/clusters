@@ -9,7 +9,7 @@ metadata:
 data:
   config.yaml: |
     model:
-      default: "anthropic/claude-sonnet-4"
+      default: "nvidia/nemotron-3-ultra-550b-a55b:free"
       provider: openrouter
       # context_length only matters for local providers; omit for OpenRouter
 
@@ -29,6 +29,8 @@ data:
         # api_key comes from OPENROUTER_API_KEY env var (via ExternalSecret)
         models:
         - "openrouter/free"
+        - "nvidia/nemotron-3-ultra-550b-a55b:free"
+        - "poolside/laguna-s-2.1:free"
         - "anthropic/claude-sonnet-4"
         - "anthropic/claude-opus-4"
         - "google/gemini-2.5-pro"
