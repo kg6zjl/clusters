@@ -4,6 +4,7 @@ resources:
   - network-policy.yaml
   - namespace.yaml
   - pvc.yaml
+  - meshmonitor-data-longhorn-pvc.yaml
   - deployment.yaml
   - service.yaml
   - ingressroute.yaml

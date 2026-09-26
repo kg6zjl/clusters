@@ -26,11 +26,16 @@ spec:
       enabled: false
     persistence:
       config:
-        enabled: true
-        size: 10Gi
+        # Stage 2: repointed at the Longhorn claim created in stage 1. The chart
+        # stops rendering its own PVC once existingClaim is set, so the old
+        # hostpath claim is pruned by this upgrade.
+        existingClaim: jellyfin-config-longhorn
       cache:
+        # Transcoding scratch. Measured at 8K in use against a 50Gi request that
+        # pinned the pod to thinkcentre02 for nothing. Ephemeral is what it
+        # always was.
         enabled: true
-        size: 50Gi
+        type: emptyDir
       media:
         enabled: true
         type: hostPath

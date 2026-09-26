@@ -63,7 +63,7 @@ spec:
       volumes:
       - name: data
         persistentVolumeClaim:
-          claimName: netalertx-data
+          claimName: netalertx-data-longhorn
       - name: localtime
         hostPath:
           path: /etc/localtime

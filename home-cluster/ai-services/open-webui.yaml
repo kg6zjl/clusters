@@ -72,7 +72,7 @@ spec:
       volumes:
       - name: webui-data
         persistentVolumeClaim:
-          claimName: open-webui-data
+          claimName: open-webui-data-longhorn
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim

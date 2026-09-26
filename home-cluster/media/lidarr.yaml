@@ -24,19 +24,6 @@ spec:
             port:
               number: 8686
 ---
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: lidarr-config
-  namespace: media
-spec:
-  accessModes:
-    - ReadWriteOnce
-  resources:
-    requests:
-      storage: 2Gi
-  storageClassName: microk8s-hostpath
----
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -76,7 +63,9 @@ spec:
       volumes:
       - name: lidarr-config
         persistentVolumeClaim:
-          claimName: lidarr-config
+          # Longhorn-backed. The hostpath claim that pinned this pod to a single
+          # node is gone, so this volume can attach anywhere.
+          claimName: lidarr-config-longhorn
       - name: downloads
         hostPath:
           path: /mnt/nas/torrents/Downloads

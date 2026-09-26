@@ -9,13 +9,35 @@ metadata:
 data:
   config.yaml: |
     model:
-      default: "deepseek/deepseek-v4.1-flash"
       provider: openrouter
-      # context_length only matters for local providers; omit for OpenRouter
+      default: "deepseek/deepseek-v4.1-flash"
 
+    # Ordered backups, tried when the primary cannot serve the turn.
+    #
+    # Why this exists: Hermes tracks OpenRouter health in a single credential pool, and an
+    # upstream 429 on ONE model marks that credential unusable for every model. The failure
+    # record carries no reset time, so with no chain declared the gateway raised
+    # "No LLM provider configured" and every turn hard-failed (17 turns, 2026-09-26
+    # 16:01-16:15Z). A chain downgrades that total outage to a degraded response.
+    #
+    # Both rungs are served by beast's llama.cpp. The model ids below are verified against
+    # GET http://192.168.1.161:11434/v1/models — do not add an id that endpoint does not
+    # list, or the rung 404s at call time.
+    fallback_providers:
+    - provider: llamacpp
+      model: "GLM-4.6V-Flash-UD-Q4_K_XL"
+    - provider: llamacpp
+      model: "Qwen35-0.8B-Q4_K_M"
+
+    # Local catalog so /model can select these ids. A model absent from
+    # providers.<name>.models is unreachable from /model even when the fallback chain can
+    # still reach it.
     providers:
-      lmstudio:
+      llamacpp:
         base_url: "http://192.168.1.161:11434/v1"
+        # llama.cpp serves without auth. key_env reuses the OPENAI_API_KEY already set on
+        # the Deployment, so no key material is committed here.
+        key_env: OPENAI_API_KEY
         models:
         - "GLM-4.6V-Flash-UD-Q4_K_XL"
         - "Qwen3-14B-abliterated-Q4_K_M"
@@ -24,28 +46,11 @@ data:
         - "Qwen3.8-27B-ABLITERATED-Q4_K_M"
         - "Qwen35-0.8B-Q4_K_M"
 
-      openrouter:
-        # base_url defaults to https://openrouter.ai/api/v1
-        # api_key comes from OPENROUTER_API_KEY env var (via ExternalSecret)
-        models:
-        - "deepseek/deepseek-v4.1-flash"
-        - "cohere/north-mini-code:free"
-        - "openrouter/free"
-        - "nvidia/nemotron-3-ultra-550b-a55b:free"
-        - "poolside/laguna-s-2.1:free"
-        - "anthropic/claude-sonnet-4"
-        - "anthropic/claude-opus-4"
-        - "google/gemini-2.5-pro"
-        - "openai/gpt-4.1"
-
     cron:
-      model: "Qwen35-0.8B-Q4_K_M"
-      model_provider: lmstudio
+      model: "deepseek/deepseek-v4.1-flash"
+      model_provider: openrouter
 
     display:
-      # Per-platform (schema-canonical) tool_progress off: no tool-call bubbles
-      # on any gateway surface. Top-level display.tool_progress also works but
-      # is schema-flagged; the per-platform key is what /verbose saves and reads.
       platforms:
         discord:
           tool_progress: off

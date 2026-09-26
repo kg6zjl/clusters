@@ -1,0 +1,29 @@
+# Longhorn-backed replacement for netalertx's node-pinned data claim.
+#
+# netalertx-data is a 5Gi microk8s-hostpath claim whose PV carries a nodeAffinity
+# tying it to whichever node created it. spec.storageClassName is immutable and
+# Longhorn cannot adopt an existing volume, so migration means a new claim plus a
+# copy - the two-stage pattern proven on prowlarr (#617/#620), jellyfin (#623/#625)
+# and the four *arr apps (#626/#627).
+#
+# Declared in this file rather than in netalertx-migration.yaml so it survives
+# stage 2. A Bound claim declared only in the file stage 2 deletes gets pruned by
+# Flux, and with the longhorn class's Delete reclaim policy the volume and its data
+# go with it.
+#
+# 10Gi rather than 5Gi: hostpath claims never enforced their request, so real usage
+# is unknown until the copy job reports it, and a claim that is too small fails the
+# copy with ENOSPC while the app is down. Longhorn is thin-provisioned, so the
+# larger request is headroom rather than consumed disk.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: netalertx-data-longhorn
+  namespace: netalertx
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+  storageClassName: longhorn

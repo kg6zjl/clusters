@@ -1,0 +1,93 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: openrouter-exporter
+  namespace: monitoring
+  labels:
+    app: openrouter-exporter
+    alert-on-down: "true"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: openrouter-exporter
+  template:
+    metadata:
+      labels:
+        app: openrouter-exporter
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        runAsGroup: 65534
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+      - name: exporter
+        image: python:3.13-slim
+        command:
+        - python
+        - /app/exporter.py
+        env:
+        - name: OPENROUTER_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: openrouter-exporter-secret
+              key: api-key
+        - name: SCRAPE_INTERVAL_SECONDS
+          value: "60"
+        - name: PORT
+          value: "9101"
+        - name: PYTHONDONTWRITEBYTECODE
+          value: "1"
+        resources:
+          requests:
+            cpu: 10m
+            memory: 32Mi
+          limits:
+            cpu: 100m
+            memory: 128Mi
+        ports:
+        - name: metrics
+          containerPort: 9101
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: metrics
+          initialDelaySeconds: 10
+          periodSeconds: 60
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: metrics
+          initialDelaySeconds: 5
+          periodSeconds: 30
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+        volumeMounts:
+        - name: script
+          mountPath: /app
+          readOnly: true
+      volumes:
+      - name: script
+        configMap:
+          name: openrouter-exporter-script
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: openrouter-exporter
+  namespace: monitoring
+  labels:
+    app: openrouter-exporter
+spec:
+  selector:
+    app: openrouter-exporter
+  ports:
+  - name: metrics
+    port: 9101
+    targetPort: metrics

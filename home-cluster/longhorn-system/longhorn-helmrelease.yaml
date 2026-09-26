@@ -28,6 +28,14 @@ spec:
     remediation:
       retries: 3
   values:
+    csi:
+      # MicroK8s does not place the kubelet root directory where Longhorn's
+      # auto-detection looks - it probes for k3s/rke2 process arguments and
+      # finds none, then dies with:
+      #   failed to get arg root-dir. Need to specify "--kubelet-root-dir"
+      # so the driver deployer never finishes and no CSIDriver is created.
+      # Verify on any node with: grep -i root-dir /var/snap/microk8s/current/args/kubelet
+      kubeletRootDir: /var/snap/microk8s/common/var/lib/kubelet
     # GitOps: the pre-upgrade check Job races Flux reconciliation and is
     # explicitly documented as something to disable for GitOps installs.
     preUpgradeChecker:

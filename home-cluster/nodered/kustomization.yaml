@@ -7,4 +7,5 @@ resources:
   - service.yaml
   - ingressroute.yaml
   - pvc.yaml
+  - nodered-data-longhorn-pvc.yaml
   - dnsendpoint.yaml

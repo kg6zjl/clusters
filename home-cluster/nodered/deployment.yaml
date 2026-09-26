@@ -27,4 +27,4 @@ spec:
       volumes:
       - name: nodered-data
         persistentVolumeClaim:
-          claimName: nodered-data
+          claimName: nodered-data-longhorn
