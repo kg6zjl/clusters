@@ -8,7 +8,9 @@ resources:
   - dashboard-ugreen-nas.yaml
   - dashboard-beast.yaml
   - dashboard-trivy-operator.yaml
+  - dashboard-openrouter.yaml
   - alertmanager-external-secret.yaml
+  - openrouter-external-secret.yaml
   - external-secrets.yaml
   - kube-prometheus-stack-helmrelease.yaml
   - blackbox-exporter-helmrelease.yaml
