@@ -26,6 +26,7 @@ resources:
   - hermes-gitconfig.yaml
   - hermes-soul-configmap.yaml
   - hermes-config-configmap.yaml
+  - hermes-e2e-probe.yaml
 
 configMapGenerator:
   - name: hermes-skills
@@ -117,6 +118,10 @@ configMapGenerator:
       - software-development__systematic-debugging.md=hermes-skills/software-development/systematic-debugging/SKILL.md
       - software-development__test-driven-development.md=hermes-skills/software-development/test-driven-development/SKILL.md
       - web__blocked-page-recovery.md=hermes-skills/web/blocked-page-recovery/SKILL.md
+  - name: hermes-agent-e2e-scripts
+    files:
+      - scripts/e2e-wait-ready.py
+      - scripts/e2e-llm-ping.py
 
 generatorOptions:
   disableNameSuffixHash: true

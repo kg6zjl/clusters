@@ -1,0 +1,139 @@
+---
+# End-to-end gate for hermes-agent.
+#
+# /health is a shallow liveness answer ("status": ok) served as soon as the
+# API server binds -- it says nothing about whether the gateway can actually
+# serve a turn. Measured on 2026-09-26: pod Ready 22s after container start,
+# while the gateway's own host claim was not published until ~6 min later.
+# So "Ready" is not "able to answer", which is why this gate exists.
+#
+# It runs two scripts out of the hermes-agent-e2e-scripts ConfigMap (see
+# scripts/e2e-wait-ready.py and scripts/e2e-llm-ping.py), chained:
+#
+#   1. e2e-wait-ready.py  -- GET /health, then GET /health/detailed with
+#      Bearer API_SERVER_KEY, asserting status == "ok",
+#      checks.gateway.state == "running" and a connected platform.
+#   2. e2e-llm-ping.py    -- one real POST /v1/chat/completions turn. The hard
+#      assertion is HTTP 200 + a non-empty completion.
+#
+# Why the second stage is not redundant: /health/detailed reports model "ok"
+# when a model is merely *configured*, so it cannot catch the documented
+# failure mode where the OpenRouter credential pool wedges and every turn dies
+# with "No LLM provider configured" (see hermes-config-configmap.yaml). Only a
+# real completion proves the deployment can serve.
+#
+# The scripts are files, not an inline `python3 -c`: runnable by hand, lintable
+# and testable. Both also run inside the pod for manual checks:
+#   python3 scripts/e2e-llm-ping.py --base-url http://127.0.0.1:8642
+#   python3 scripts/e2e-wait-ready.py --base-url http://127.0.0.1:8642
+#
+# Run the whole gate on demand after a rollout instead of waiting for the tick:
+#   kubectl create job -n ai-services --from=cronjob/hermes-agent-e2e hermes-agent-e2e-manual
+#   kubectl logs -n ai-services job/hermes-agent-e2e-manual
+#
+# Nothing here touches the pod's lifecycle: a failed run leaves a failed Job
+# for inspection, it never restarts the agent. Because it can fail on an
+# upstream provider outage, failure is deliberately an alert
+# (HermesAgentCannotServeTurns in monitoring/prometheus-rules.yaml), never a
+# container kill.
+#
+# NOTE: the gate reaches the Service, so it needs an ingress rule on the
+# hermes-agent pods. Without it the call dies as a timeout, not a 403 --
+# measured from a pod labelled app=hermes-agent on 2026-09-26: HTTP 000 after
+# 5s. hermes-agent-allow-probe below is that rule and must ship with this file.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: hermes-agent-e2e
+  namespace: ai-services
+  labels:
+    app: hermes-agent-probe
+spec:
+  schedule: "*/30 * * * *"
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 120
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      activeDeadlineSeconds: 300
+      template:
+        metadata:
+          labels:
+            app: hermes-agent-probe
+        spec:
+          restartPolicy: Never
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65534
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+          - name: e2e
+            image: python:3.13-slim
+            command: ["sh", "-c"]
+            args:
+            - |
+              set -e
+              python3 /scripts/e2e-wait-ready.py --base-url "$E2E_BASE_URL" --timeout "$READY_TIMEOUT_SECONDS"
+              exec python3 /scripts/e2e-llm-ping.py --base-url "$E2E_BASE_URL" --model "$E2E_MODEL" --timeout "$PING_TIMEOUT_SECONDS"
+            env:
+            - name: E2E_BASE_URL
+              value: http://hermes-agent:8642
+            # The default route, i.e. what Discord and open-webui actually hit.
+            - name: E2E_MODEL
+              value: hermes-agent
+            - name: READY_TIMEOUT_SECONDS
+              value: "180"
+            - name: PING_TIMEOUT_SECONDS
+              value: "60"
+            - name: API_SERVER_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: hermes-agent-secrets
+                  key: API_SERVER_KEY
+            volumeMounts:
+            - name: scripts
+              mountPath: /scripts
+              readOnly: true
+            resources:
+              requests:
+                cpu: 50m
+                memory: 64Mi
+              limits:
+                cpu: 250m
+                memory: 256Mi
+            securityContext:
+              allowPrivilegeEscalation: false
+              readOnlyRootFilesystem: true
+              capabilities:
+                drop: ["ALL"]
+          volumes:
+          - name: scripts
+            configMap:
+              name: hermes-agent-e2e-scripts
+              defaultMode: 0555
+---
+# Admits the e2e gate (and only the gate) to the agent's API port. The existing
+# hermes-agent-allow-openwebui rule admits app=open-webui only, so without this
+# the gate times out on connect.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: hermes-agent-allow-probe
+  namespace: ai-services
+spec:
+  podSelector:
+    matchLabels:
+      app: hermes-agent
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          app: hermes-agent-probe
+    ports:
+    - protocol: TCP
+      port: 8642

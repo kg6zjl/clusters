@@ -119,3 +119,43 @@ spec:
       annotations:
         summary: "PROD backup stale: {{ $labels.entity }}{{ $labels.cronjob }} in {{ $labels.namespace }}"
         description: "No successful backup in over 30 hours, or the metric reporting it has gone away. home-assistant uploads to the NAS over SFTP (schedule ~24h); meshmonitor writes a nightly tarball to the NAS at 03:30."
+  # The hermes-agent e2e gate (home-cluster/ai-services/hermes-e2e-probe.yaml) records its verdict as
+  # Job objects. Nothing watched them, and a CronJob failing every tick is silence -- which is how the
+  # agent can sit unable to answer turns for hours while Kubernetes still reports it running. This
+  # group is the watcher.
+  #
+  # Both rules are anchored on the gate's last SUCCESS, never on a failed Job object alone: the
+  # CronJob keeps failed Jobs for failedJobsHistoryLimit runs, so kube_job_status_failed on its own
+  # stays 1 for as long as those objects exist and cannot clear when the agent recovers. An alert
+  # that cannot resolve itself is an alert everybody learns to ignore. last_successful_time clears
+  # the moment one run passes, which is the behaviour wanted here.
+  #
+  # absent() in the first rule is deliberate, with the kube_cronjob_created guard: the metric does
+  # not exist until the gate has succeeded once, so without the guard a freshly merged CronJob would
+  # page before its first tick. With it, "never succeeded in the first hour of its life" still pages.
+  - name: hermes-agent-e2e
+    rules:
+    - alert: HermesAgentCannotServeTurns
+      expr: |
+        (time() - kube_cronjob_status_last_successful_time{namespace="ai-services",cronjob="hermes-agent-e2e"} > 3600)
+        or
+        (
+          absent(kube_cronjob_status_last_successful_time{namespace="ai-services",cronjob="hermes-agent-e2e"})
+          and on() (time() - kube_cronjob_created{namespace="ai-services",cronjob="hermes-agent-e2e"} > 3600)
+        )
+      for: 5m
+      labels:
+        severity: critical
+      annotations:
+        summary: "hermes-agent has not passed its e2e gate in over an hour"
+        description: "No successful run of CronJob hermes-agent-e2e (ai-services) for over an hour - schedule is */30, so two consecutive misses. The gate asserts a real /v1 turn returned a completion, not that the pod is up: a wedged OpenRouter credential pool makes every turn fail with 'No LLM provider configured' while /health still reports ok. Check: kubectl -n ai-services get jobs -l app=hermes-agent-probe; kubectl -n ai-services logs job/<newest>."
+    - alert: HermesAgentE2EGateFailed
+      expr: |
+        kube_job_status_failed{namespace="ai-services",job_name=~"hermes-agent-e2e-.+"} > 0
+        and (time() - kube_job_created{namespace="ai-services",job_name=~"hermes-agent-e2e-.+"} < 5400)
+      for: 0m
+      labels:
+        severity: warning
+      annotations:
+        summary: "hermes-agent e2e gate run failed"
+        description: "The newest hermes-agent-e2e run failed within the last 90 minutes. Read its log before assuming the agent is down - this gate also fails on a transient OpenRouter outage, which is exactly why it alerts and never restarts the container. A failure still unresolved after an hour escalates to HermesAgentCannotServeTurns."
