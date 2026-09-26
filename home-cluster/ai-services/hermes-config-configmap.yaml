@@ -12,6 +12,40 @@ data:
       provider: openrouter
       default: "deepseek/deepseek-v4.1-flash"
 
+    # Ordered backups, tried when the primary cannot serve the turn.
+    #
+    # Why this exists: Hermes tracks OpenRouter health in a single credential pool, and an
+    # upstream 429 on ONE model marks that credential unusable for every model. The failure
+    # record carries no reset time, so with no chain declared the gateway raised
+    # "No LLM provider configured" and every turn hard-failed (17 turns, 2026-09-26
+    # 16:01-16:15Z). A chain downgrades that total outage to a degraded response.
+    #
+    # Both rungs are served by beast's llama.cpp. The model ids below are verified against
+    # GET http://192.168.1.161:11434/v1/models — do not add an id that endpoint does not
+    # list, or the rung 404s at call time.
+    fallback_providers:
+    - provider: llamacpp
+      model: "GLM-4.6V-Flash-UD-Q4_K_XL"
+    - provider: llamacpp
+      model: "Qwen35-0.8B-Q4_K_M"
+
+    # Local catalog so /model can select these ids. A model absent from
+    # providers.<name>.models is unreachable from /model even when the fallback chain can
+    # still reach it.
+    providers:
+      llamacpp:
+        base_url: "http://192.168.1.161:11434/v1"
+        # llama.cpp serves without auth. key_env reuses the OPENAI_API_KEY already set on
+        # the Deployment, so no key material is committed here.
+        key_env: OPENAI_API_KEY
+        models:
+        - "GLM-4.6V-Flash-UD-Q4_K_XL"
+        - "Qwen3-14B-abliterated-Q4_K_M"
+        - "Qwen3.5-9B-Q4_K_M"
+        - "Qwen3.8-27B-ABLITERATED-Q3_K_M"
+        - "Qwen3.8-27B-ABLITERATED-Q4_K_M"
+        - "Qwen35-0.8B-Q4_K_M"
+
     cron:
       model: "deepseek/deepseek-v4.1-flash"
       model_provider: openrouter
