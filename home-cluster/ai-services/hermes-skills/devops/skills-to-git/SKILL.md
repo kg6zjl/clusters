@@ -16,11 +16,44 @@ I am ephemeral. `/opt/data/skills/` is re-materialized from git on every pod sta
 
 ## Where things live
 
-- Git tree: `home-cluster/ai-services/hermes-skills/<category>/<skill-name>/SKILL.md`
-- Generator: `configMapGenerator` in `home-cluster/ai-services/kustomization.yaml`, one line per skill:
-  `- <category>__<skill-name>.md=hermes-skills/<category>/<skill-name>/SKILL.md`
-  (ConfigMap keys cannot contain `/`, hence the `__` encoding — the key name is the ONLY layout authority; the initContainer parses the key, NOT the frontmatter.)
-- Pod startup: initContainer in `hermes-agent.yaml` mounts the ConfigMap at `/skills` and copies each key to `/opt/data/skills/<cat>/<name>/SKILL.md`, overriding image-bundled copies.
+- Git tree: `home-cluster/ai-services/hermes-skills/<category>/<skill-name>/SKILL.md`, plus any
+  `references/`, `scripts/`, `templates/` files that skill owns.
+- Generator: `configMapGenerator` in `home-cluster/ai-services/kustomization.yaml`, one line per file:
+  `- <key>=hermes-skills/<category>/<skill-name>/<path>`. The key is the **relative path with `__`
+  substituted for `/`**, because ConfigMap keys cannot contain `/`:
+
+  | Key | Materializes to |
+  |---|---|
+  | `<cat>__<skill>.md` | `/opt/data/skills/<cat>/<skill>/SKILL.md` |
+  | `<skill>.md` (no `__`) | `/opt/data/skills/<skill>/SKILL.md` — categoryless skill |
+  | `<cat>__<skill>__<dir>__<file.ext>` | `/opt/data/skills/<cat>/<skill>/<dir>/<file.ext>` |
+
+  The trailing `.md` is **only a marker** meaning "this is the SKILL.md"; on three-or-more-part keys
+  the final segment is a real filename and its extension is preserved verbatim.
+  The key is the ONLY layout authority — the initContainer parses the key, NOT the frontmatter.
+
+- Pod startup: initContainer in `hermes-agent.yaml` mounts the ConfigMap at `/skills` and walks every
+  key to its destination, overriding image-bundled copies. **Keys without `__` used to be skipped
+  silently**, which is how two skills stayed git-less for weeks — the parser now handles all three forms.
+
+## What belongs in git (and what does not)
+
+Skills come from two places, and only one of them needs the ConfigMap:
+
+- **Ours** — skills written or edited in this pod. Their `SKILL.md` *and* their supporting files belong
+  in git. Check membership with `/opt/data/skills/.bundled_manifest` (`<skill-name>:<hash>` lines):
+  a skill *not* listed there is ours.
+- **Image-bundled** — pdf, docx, box, xlsx, manim, popular-web-designs and friends, plus their
+  references/scripts/templates. They ship in the image; copying them into the ConfigMap would
+  duplicate content we do not own and blow the size limit. Leave them alone.
+
+Size budget: measure with
+`find home-cluster/ai-services/hermes-skills -type f -printf '%s\n' | awk '{s+=$1} END{print s, s/1048576*100 "%"}'`.
+Above ~900 KB, split into a second `configMapGenerator` + volume and extend the initContainer loop.
+
+Verify a key encoding change by running the parser against the real key set **before** committing —
+copy the key names into a scratch dir as empty files, run the loop with an output root, and assert every
+key lands on its intended path with no extras. The 85-key check takes under a second.
 
 ## Procedure after any skill create/edit
 
