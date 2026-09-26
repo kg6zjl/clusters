@@ -26,6 +26,7 @@ resources:
   - hermes-gitconfig.yaml
   - hermes-soul-configmap.yaml
   - hermes-config-configmap.yaml
+  - hermes-e2e-probe.yaml
 
 configMapGenerator:
   - name: hermes-skills
