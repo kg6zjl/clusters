@@ -43,9 +43,7 @@ metadata:
   name: lidarr
   namespace: media
 spec:
-  # Stage 1 of the config migration: scaled to 0 so the copy job can read the
-  # hostpath claim without it being written to. Stage 2 restores this to 1.
-  replicas: 0
+  replicas: 1
   revisionHistoryLimit: 5
   selector:
     matchLabels:
@@ -78,7 +76,9 @@ spec:
       volumes:
       - name: lidarr-config
         persistentVolumeClaim:
-          claimName: lidarr-config
+          # Longhorn-backed since stage 2; the old hostpath claim is kept as the
+          # rollback path until this has been verified, then dropped.
+          claimName: lidarr-config-longhorn
       - name: downloads
         hostPath:
           path: /mnt/nas/torrents/Downloads
