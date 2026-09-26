@@ -6,10 +6,7 @@ metadata:
 spec:
   strategy:
     type: Recreate
-  # Scaled to 0 by the storage migration in netalertx-migration.yaml: nothing may
-  # write to netalertx-data while the copy job reads it. Restored to 1 in the stage-2
-  # PR once the copy has been verified.
-  replicas: 0
+  replicas: 1
   revisionHistoryLimit: 5
   selector:
     matchLabels:
@@ -66,7 +63,7 @@ spec:
       volumes:
       - name: data
         persistentVolumeClaim:
-          claimName: netalertx-data
+          claimName: netalertx-data-longhorn
       - name: localtime
         hostPath:
           path: /etc/localtime
