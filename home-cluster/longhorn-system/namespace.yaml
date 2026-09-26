@@ -1,0 +1,5 @@
+# Longhorn (Cloud Native Storage) system namespace
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: longhorn-system
