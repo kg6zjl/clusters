@@ -16,4 +16,6 @@ spec:
     installCRDs: true
     priorityClassName: system-cluster-critical
     web:
-      enabled: false
+      enabled: true
+      networkPolicy:
+        create: false
