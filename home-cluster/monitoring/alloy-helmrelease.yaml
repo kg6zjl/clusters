@@ -160,3 +160,9 @@ spec:
       # loki_write_dropped_* are the difference between "Loki is up" and "logs are
       # arriving".
       enabled: true
+      # Same reason as Loki's: the live Prometheus CR selects ServiceMonitors by
+      # matchLabels {release: kube-prometheus-stack}. Without this label no scrape
+      # job is rendered and the shipper is unobservable. Note this chart calls the
+      # key additionalLabels, not labels (Loki's chart uses labels).
+      additionalLabels:
+        release: kube-prometheus-stack
