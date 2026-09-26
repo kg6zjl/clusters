@@ -124,8 +124,20 @@ rules:
     verbs: ["get", "list", "watch"]
 
   # Monitoring / observability CRDs (read-only)
+  # `prometheuses` is the one that matters for diagnosis: the Prometheus CR is the only
+  # place serviceMonitorSelector / serviceMonitorNamespaceSelector /
+  # serviceMonitorSelectorNilUsesHelmValues live. Without reading it, a scrape job that was
+  # never rendered is indistinguishable from a ServiceMonitor that was never selected, and
+  # the ServiceMonitor object itself looks perfectly correct either way. That gap produced
+  # exactly that mistake on the Loki scrape issue: a confident wrong root cause.
   - apiGroups: ["monitoring.coreos.com"]
-    resources: ["servicemonitors", "podmonitors", "prometheusrules", "probes"]
+    resources:
+      - servicemonitors
+      - podmonitors
+      - prometheusrules
+      - probes
+      - prometheuses
+      - prometheuses/status
     verbs: ["get", "list", "watch"]
 
   # Secrets operators / cert-manager / external-dns (read-only)
