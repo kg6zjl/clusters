@@ -96,8 +96,15 @@ ansible-playbook playbook.yaml \
 
 - All secrets resolve from **1Password** via `roles/secrets` (op CLI,
   biometric auth in your shell). Nothing is committed.
-- NAS password reference: `op://home-cluster/nas-server/NAS password`
-  (adjust item/field in `roles/secrets/defaults/main.yml`).
-- Join tokens are ephemeral (1h) and passed inline, never stored.
+- NAS credentials live in the 1Password item `home-cluster/nas-smb-credentials`
+  (SMB user `plex`, default `username`/`password` fields). Only the password is
+  resolved at runtime, via `op://home-cluster/nas-smb-credentials/password` in
+  `roles/secrets/defaults/main.yml`; the username is the `nas_user` role default.
+- `community.general.onepassword` cannot take an `op://vault/item/field` string
+  as its lookup term — it forwards the term to `op item get`, which wants an
+  item name/UUID/domain. `roles/secrets` keeps the readable `op://` form in
+  `op_secrets` and splits it into separate `item`/`field`/`vault` arguments.
+- Join tokens are ephemeral (1h) and passed inline, never stored. The join
+  tasks set `no_log: true` so a failure cannot echo the token into a log.
 
 > **AGENT RULE**: never read, echo, or log resolved secret values.

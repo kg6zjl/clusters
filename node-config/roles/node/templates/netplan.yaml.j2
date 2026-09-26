@@ -1,22 +1,31 @@
 # Managed by Ansible (node-config)
+#
+# NOTE: Jinja block tags (if/for) MUST start at column 0.
+# Ansible renders templates with trim_blocks=True, which strips the newline
+# AFTER a block tag but keeps any leading whitespace BEFORE it. Indenting a
+# tag concatenates that whitespace onto the next real line, producing
+# invalid YAML (netplan apply fails with "inconsistent indentation").
+# Do not indent these tags when editing this file.
 network:
   version: 2
   ethernets:
     {{ network_interface }}:
-      {% if node_ip %}
+{% if node_ip %}
       dhcp4: false
       addresses:
         - {{ node_ip }}/24
-      {% else %}
+{% else %}
       dhcp4: true
-      {% endif %}
-      {% if network_gateway %}
+{% endif %}
+{% if network_gateway %}
       routes:
         - to: default
           via: {{ network_gateway }}
-      {% endif %}
+{% endif %}
+{% if network_dns %}
       nameservers:
         addresses:
 {% for dns in network_dns %}
           - {{ dns }}
 {% endfor %}
+{% endif %}

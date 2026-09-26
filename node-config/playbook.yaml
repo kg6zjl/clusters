@@ -22,6 +22,7 @@
         - cluster_join_url | length > 0
         - node_role == 'control-plane'
       register: join_result
+      no_log: true
 
     - name: Join cluster (worker)
       ansible.builtin.shell:
@@ -30,6 +31,7 @@
       when:
         - cluster_join_url | length > 0
         - node_role == 'worker'
+      no_log: true
 
     - name: Wait and report node status
       when: cluster_join_url | length > 0
@@ -41,8 +43,8 @@
         - name: Get node status
           ansible.builtin.shell:
             cmd: microk8s kubectl get nodes {{ ansible_hostname }}
-            environment:
-              PATH: "/snap/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+          environment:
+            PATH: "/snap/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
           register: node_status
           failed_when: false
 
