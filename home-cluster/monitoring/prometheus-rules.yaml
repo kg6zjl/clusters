@@ -10,13 +10,29 @@ spec:
   groups:
   - name: service-down
     rules:
+    # Availability for the two services that are prod. Selects on namespace and name,
+    # which are always present on this metric, so it works today and depends on nothing.
+    # A replica count of 0 catches a scaled-to-zero deployment as well as a crash - and
+    # being scaled to 0 is exactly how meshmonitor went unnoticed for 20 minutes on
+    # 2026-09-26, which is why this exists.
+    - alert: ProdServiceDown
+      expr: |
+        kube_deployment_status_replicas_available{namespace="home-assistant",deployment="home-assistant"} == 0
+        or kube_deployment_status_replicas_available{namespace="meshtastic",deployment="meshmonitor"} == 0
+      for: 3m
+      labels:
+        severity: critical
+      annotations:
+        summary: "PROD service {{ $labels.deployment }} in {{ $labels.namespace }} is down"
+        description: "Deployment {{ $labels.deployment }} ({{ $labels.namespace }}) has had no available replicas for 3 minutes. Both are prod: home-assistant runs the house, meshmonitor runs the HotPotato Base meshtastic bots."
+    # Generic label-driven availability. This cannot fire yet: kube-state-metrics only
+    # exposes resource labels that are allowlisted, and `alert-on-down` is not. The
+    # allowlist goes under `kube-state-metrics:` in kube-prometheus-stack-helmrelease.yaml
+    # (the subchart's values - `kubeStateMetrics:` is only the component toggle and is
+    # ignored there), and the label then arrives prefixed as label_alert_on_down. Not
+    # enabled yet because changing those values starts an upgrade loop on that release;
+    # see the note in that file. Prod is covered by ProdServiceDown above meanwhile.
     - alert: ServiceDown
-      # label_alert_on_down is the prefixed form: kube-state-metrics renames allowlisted
-      # resource labels with a `label_` prefix, and the bare `alert_on_down` this used to
-      # select on is never exposed at all. The selector matched zero series, so this rule
-      # could not fire - it sat healthy and silent until 2026-09-26, when meshmonitor ran
-      # at 0/1 for 20 minutes and no alert was raised. The allowlist that exposes the
-      # label is set under kubeStateMetrics in kube-prometheus-stack-helmrelease.yaml.
       expr: kube_deployment_status_replicas_available{label_alert_on_down="true"} == 0
       for: 10m
       labels:
