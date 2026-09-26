@@ -9,7 +9,7 @@ metadata:
 data:
   config.yaml: |
     model:
-      default: "openrouter/free"
+      default: "cohere/north-mini-code:free"
       provider: openrouter
       # context_length only matters for local providers; omit for OpenRouter
 
@@ -28,6 +28,7 @@ data:
         # base_url defaults to https://openrouter.ai/api/v1
         # api_key comes from OPENROUTER_API_KEY env var (via ExternalSecret)
         models:
+        - "cohere/north-mini-code:free"
         - "openrouter/free"
         - "nvidia/nemotron-3-ultra-550b-a55b:free"
         - "poolside/laguna-s-2.1:free"
