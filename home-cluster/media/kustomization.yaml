@@ -10,6 +10,7 @@ resources:
   - jellyfin-helmrelease.yaml
   - seerr.yaml
   - prowlarr.yaml
+  - prowlarr-config-migration.yaml
   - radarr.yaml
   - sonarr.yaml
   - flaresolverr.yaml
