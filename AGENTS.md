@@ -275,9 +275,16 @@ If this check fails, fix it immediately before committing.
 
 **TODO**: Add `trufflehog` or `detect-secrets` for intelligent key-value pair detection in addition to gitleaks.
 
-Manual backup can be triggered with:
+Manual NAS backups are handled by the two backup CronJobs defined in this repo
+(there is no generic `pvc-backup` CronJob and no `backup` namespace):
+
+- `backup-wildcard-cert-to-nas` in `cert-manager` (`home-cluster/cert-manager/nas-cert-backup-cronjob.yaml`)
+- `meshmonitor-backup` in `meshtastic` (`home-cluster/meshtastic/backup-cronjob.yaml`)
+
+To run one on demand instead of waiting for its schedule, create a one-off Job
+from the existing CronJob by name:
 ```bash
-kubectl create job -n backup --from=cronjob/pvc-backup pvc-backup-manual
+kubectl create job -n meshtastic --from=cronjob/meshmonitor-backup meshmonitor-backup-manual
 ```
 
 ### Environment Variables in ConfigMaps
