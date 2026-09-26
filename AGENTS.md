@@ -108,7 +108,7 @@ kubectl logs -n <namespace> <pod>
 kubectl describe <resource> -n <namespace>
 
 # Check certificate validity
-kubectl get secret wildcard-stevearnett-com-tls -n cert-manager -o jsonpath='{.data.tls\.crt}' | base64 -d | openssl x509 -noout -dates
+kubectl get secret wildcard-stevearnett-com-tls -n traefik -o jsonpath='{.data.tls\.crt}' | base64 -d | openssl x509 -noout -dates
 
 # Check Flux reconciliation status
 kubectl get kustomizations -n flux-system
@@ -278,7 +278,7 @@ If this check fails, fix it immediately before committing.
 Manual NAS backups are handled by the two backup CronJobs defined in this repo
 (there is no generic `pvc-backup` CronJob and no `backup` namespace):
 
-- `backup-wildcard-cert-to-nas` in `cert-manager` (`home-cluster/cert-manager/nas-cert-backup-cronjob.yaml`)
+- `backup-wildcard-cert-to-nas` in `traefik` (`home-cluster/traefik/nas-cert-backup-cronjob.yaml`)
 - `meshmonitor-backup` in `meshtastic` (`home-cluster/meshtastic/backup-cronjob.yaml`)
 
 To run one on demand instead of waiting for its schedule, create a one-off Job
