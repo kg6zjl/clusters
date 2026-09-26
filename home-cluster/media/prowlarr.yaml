@@ -24,21 +24,9 @@ spec:
             port:
               number: 9696
 ---
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: prowlarr-config
-  namespace: media
-spec:
-  accessModes:
-    - ReadWriteOnce
-  resources:
-    requests:
-      storage: 2Gi
-  storageClassName: microk8s-hostpath
----
-# Migrated off the node-pinned hostpath volume above. This is the claim the
-# Deployment now uses; the old one is kept only as the rollback path.
+# The previous microk8s-hostpath claim (prowlarr-config) has been removed: it
+# pinned this pod to whichever node the volume was created on. This claim
+# carries no node affinity, so the pod can land on any node.
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
@@ -106,9 +94,7 @@ spec:
       volumes:
       - name: config
         persistentVolumeClaim:
-          # Migrated off the node-pinned hostpath volume. The old
-          # microk8s-hostpath claim (prowlarr-config) is left in place as the
-          # rollback path; delete it once this has run without incident.
+          # Longhorn-backed. The old node-pinned hostpath claim is gone.
           claimName: prowlarr-config-longhorn
 ---
 apiVersion: v1
