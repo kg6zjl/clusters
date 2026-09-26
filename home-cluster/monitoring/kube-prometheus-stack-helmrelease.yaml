@@ -22,6 +22,21 @@ spec:
       enabled: false
     crds:
       enabled: true
+    # NOTE: exposing the `alert-on-down` resource label needs the SUBCHART's values, i.e.
+    # `kube-state-metrics:` - not `kubeStateMetrics:`, which at this level is only the
+    # component toggle. Setting the allowlist under `kubeStateMetrics:` is accepted
+    # silently and does nothing, which is how ServiceDown stayed dead:
+    #
+    #   kube-state-metrics:
+    #     metricLabelsAllowlist:
+    #       - deployments=[alert-on-down]
+    #
+    # Deliberately NOT applied yet. Touching these values restarts an upgrade loop on this
+    # release: the upgrade takes ~11 minutes, longer than the 5m action timeout, so each
+    # attempt overlaps the previous one and the release never settles
+    # (in-sync -> out-of-sync -> upgrade, endlessly). Churning the prod monitoring stack
+    # is worse than a missing label, so prod availability is covered by the
+    # ProdServiceDown rule in prometheus-rules.yaml, which needs no allowlist at all.
     prometheus:
       serviceMonitorSelectorNilUsesHelmValues: false
       podMonitorSelectorNilUsesHelmValues: false
@@ -60,6 +75,7 @@ spec:
                   - https://ha.kube.stevearnett.com/
                   - https://grafana.kube.stevearnett.com/
                   - https://prometheus.kube.stevearnett.com/
+                  - https://meshmonitor.kube.stevearnett.com/
                 labels:
                   service: ingress
             relabel_configs:
