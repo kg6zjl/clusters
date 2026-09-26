@@ -13,7 +13,9 @@ resources:
   - open-webui.yaml
   - open-webui-data-longhorn-pvc.yaml
   - ingressroute-openwebui.yaml
+  - ingressroute-dashboard.yaml
   - dnsendpoint.yaml
+  - dnsendpoint-dashboard.yaml
   - service-comfy.yaml
   - middleware-comfy.yaml
   - ingressroute-comfy.yaml

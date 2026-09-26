@@ -132,6 +132,11 @@ spec:
         ports:
         - containerPort: 8642
           name: api
+        # The dashboard listens on 9119 inside the same container, supervised by
+        # the image's own s6 service (docker/s6-rc.d/dashboard). Declared here so
+        # the Service and the IngressRoute have a named port to target.
+        - containerPort: 9119
+          name: dashboard
         env:
         - name: API_SERVER_ENABLED
           value: "true"
@@ -139,6 +144,23 @@ spec:
           value: "0.0.0.0"
         - name: API_SERVER_PORT
           value: "8642"
+        # Web dashboard (skills/kanban/chat surface). The image ships an s6 slot
+        # for it that starts ONLY when HERMES_DASHBOARD is truthy; with it unset
+        # the run script exits 0 and the finish script marks the slot permanently
+        # failed, so s6 does not restart-loop. Defaults are already 0.0.0.0:9119
+        # but both are set explicitly so we do not depend on image defaults.
+        #
+        # A non-loopback bind REQUIRES an auth provider -- HERMES_DASHBOARD_INSECURE
+        # is a no-op since the June 2026 hardening. The provider comes from the
+        # HERMES_DASHBOARD_BASIC_AUTH_* vars, which arrive via envFrom below from
+        # 1Password through ESO. Without them the dashboard fails closed and will
+        # not start, which is the intended behaviour.
+        - name: HERMES_DASHBOARD
+          value: "true"
+        - name: HERMES_DASHBOARD_HOST
+          value: "0.0.0.0"
+        - name: HERMES_DASHBOARD_PORT
+          value: "9119"
         # No OPENAI_API_BASE_URL / OPENAI_API_KEY here: both existed only to point the
         # gateway at beast's llama.cpp (192.168.1.161:11434) and fed the now-removed
         # llamacpp provider. OpenRouter authenticates with OPENROUTER_API_KEY from
@@ -265,6 +287,23 @@ spec:
     targetPort: 8642
     protocol: TCP
     name: api
+  selector:
+    app: hermes-agent
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: hermes-dashboard
+  namespace: ai-services
+  labels:
+    app: hermes-agent
+spec:
+  type: ClusterIP
+  ports:
+  - port: 9119
+    targetPort: 9119
+    protocol: TCP
+    name: dashboard
   selector:
     app: hermes-agent
 ---
