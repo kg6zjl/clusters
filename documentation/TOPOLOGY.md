@@ -465,9 +465,7 @@ namespaces:
   - name: cert-manager
     purpose: TLS certificates
   - name: monitoring
-    purpose: Observability
-  - name: logging
-    purpose: Log aggregation (single-binary Loki + Alloy log shipper)
+    purpose: Observability (Prometheus, Grafana, Alertmanager, Loki, Alloy)
   - name: media
     purpose: Media management
   - name: vpn

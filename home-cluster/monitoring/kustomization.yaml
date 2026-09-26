@@ -14,6 +14,9 @@ resources:
   - alertmanager-external-secret.yaml
   - external-secrets.yaml
   - loki-datasource.yaml
+  - loki-helmrelease.yaml
+  - alloy-helmrelease.yaml
+  - loki-alerts.yaml
   - openrouter-exporter-external-secret.yaml
   - openrouter-exporter-configmap.yaml
   - openrouter-exporter.yaml

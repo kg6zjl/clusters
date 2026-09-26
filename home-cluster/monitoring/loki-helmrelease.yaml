@@ -1,0 +1,184 @@
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: loki
+  namespace: monitoring
+spec:
+  interval: 1h
+  chart:
+    spec:
+      chart: loki
+      version: 7.3.0
+      sourceRef:
+        kind: HelmRepository
+        name: grafana
+        namespace: flux-system
+  install:
+    # A cold install pulls the Loki and canary images onto three nodes. Flux's
+    # default of 5m is tight for that, and a failed install leaves the release in
+    # a state Flux keeps retrying.
+    timeout: 15m
+    remediation:
+      retries: 3
+  upgrade:
+    timeout: 15m
+    remediation:
+      retries: 3
+  values:
+    # Loki lives in `monitoring`, next to Grafana and Prometheus, not in a
+    # namespace of its own. That makes every query Grafana issues intra-namespace
+    # traffic, which the existing monitoring-allow-all NetworkPolicy already
+    # permits (podSelector {} with ingress from namespaceSelector {}), so this
+    # needs no NetworkPolicy change at all. This is also where Loki and Promtail
+    # last lived here, before commit 43bc893 removed them.
+
+    # Single binary: one StatefulSet running every Loki target (distributor,
+    # ingester, querier, compactor). Read/write separation buys nothing at this
+    # scale and would triple the pod count and the memory footprint.
+    deploymentMode: SingleBinary
+
+    # Least privilege. The chart's default creates a ClusterRole granting
+    # get/watch/list on configmaps and secrets in EVERY namespace, bound to Loki's
+    # ServiceAccount, purely so its rules sidecar can watch rule ConfigMaps.
+    # Nothing needs that here: the sidecar is disabled below (no ruler runs to load
+    # rules into - ruler.replicas is 0 in single binary), and with rbac.namespaced
+    # the chart creates no ClusterRole/Role at all instead of cluster-wide read on
+    # every secret in the cluster.
+    rbac:
+      namespaced: true
+
+    sidecar:
+      rules:
+        # Chart default is true, which runs a k8s-sidecar container watching for
+        # ConfigMaps labelled `loki_rule` to feed the ruler. No ruler runs here.
+        enabled: false
+
+    # The chart's write/read/backend replica defaults are 3 each, and it refuses to
+    # render if those coexist with a non-zero singleBinary replica count ("more
+    # than zero replicas configured for both the single binary and simple scalable
+    # targets"). Zeroing them is what the chart's own single-binary-values.yaml
+    # does. The distributed targets (ingester, querier, queryFrontend,
+    # queryScheduler, distributor, compactor, indexGateway) already default to 0
+    # replicas and need no entry.
+    write:
+      replicas: 0
+    read:
+      replicas: 0
+    backend:
+      replicas: 0
+
+    gateway:
+      # Chart default is true, which deploys an nginx gateway in front of Loki. It
+      # exists to route between the read and write paths and to hold basic-auth
+      # tenants. Single binary has one query path and auth is off, so it would be
+      # an extra pod and an extra hop for no benefit.
+      enabled: false
+
+    chunksCache:
+      # Chart default is true and requests 8Gi of memcached for chunk caching.
+      # With 10Gi of storage that cache would be larger than the data set it
+      # caches - it would cost more memory than Loki itself.
+      enabled: false
+
+    resultsCache:
+      # Same as chunksCache: chart default true, 1Gi of memcached.
+      enabled: false
+
+    loki:
+      # Single tenant. Every pusher (Alloy and the canary) and every reader
+      # (Grafana, the ServiceMonitor scrape) is inside this cluster, and there is
+      # no multi-tenancy to enforce. With auth off, no component needs an
+      # X-Scope-OrgID header and the Grafana datasource needs no credentials.
+      auth_enabled: false
+
+      commonConfig:
+        # One replica of a single binary is the only writer.
+        replication_factor: 1
+
+      storage:
+        # Chunks and the TSDB index live on the Longhorn PVC mounted at /var/loki.
+        type: filesystem
+
+      schemaConfig:
+        # Loki refuses to start without an explicit schema, and it must never
+        # change once set: this matches what the previous Loki install here used,
+        # so the schema lineage stays consistent if any of those chunks ever come
+        # back.
+        configs:
+        - from: "2024-01-01"
+          store: tsdb
+          object_store: filesystem
+          schema: v13
+          index:
+            prefix: loki_index_
+            period: 24h
+
+      limits_config:
+        # 7 days of retention. Sized for a few hundred pods at ~1-2GB/week of
+        # compressed chunks; LokiVolumeFillingUp/LokiVolumeFull in
+        # loki-alerts.yaml are what actually catch growth before the volume does.
+        retention_period: 168h
+
+      compactor:
+        # THE IMPORTANT ONE: retention_period alone does NOT delete anything. The
+        # compactor is the component that walks the index and removes chunks past
+        # the retention period. With the compactor off, the PVC fills silently
+        # forever and the first sign is Loki failing to write.
+        retention_enabled: true
+        # Required by Loki whenever retention_enabled is true - the object store
+        # used to keep delete requests. Filesystem here, matching storage.
+        delete_request_store: filesystem
+
+      querier:
+        # The chart's single-binary example lowers this from the default of 4;
+        # concurrent range queries are the main memory consumer in a single binary
+        # and Grafana Explore is the only client. 2 keeps a wide query from making
+        # Loki the biggest thing on a 1Gi limit.
+        max_concurrent: 2
+
+    singleBinary:
+      replicas: 1
+
+      extraEnv:
+        # From the chart's single-binary example: keep Go's soft memory limit a
+        # little below the container limit so the runtime GCs rather than getting
+        # OOM-killed under a burst of queries.
+        - name: GOMEMLIMIT
+          value: 768MiB
+
+      resources:
+        requests:
+          cpu: 100m
+          memory: 512M
+        limits:
+          cpu: 2
+          memory: 1G
+
+      persistence:
+        enabled: true
+        # Longhorn explicitly, not the microk8s-hostpath cluster default: logs are
+        # the one data set here that must survive the node the pod lands on, and
+        # the StorageClass carries defaultReplicaCount 2. 10Gi matches what the
+        # previous install used and leaves a full retention period's worth of
+        # headroom instead of sizing to the tight estimate.
+        size: 10Gi
+        storageClass: longhorn
+        accessModes:
+        - ReadWriteOnce
+
+    lokiCanary:
+      # Enabled by default. A DaemonSet that writes a log line every second and
+      # reads it back, which is what makes LokiCanaryLatency (see monitoring.rules
+      # below) meaningful: it measures the write-to-readable round trip rather than
+      # just "the process is up".
+      enabled: true
+
+    monitoring:
+      serviceMonitor:
+        enabled: true
+      rules:
+        # The chart's own recording rules and alerts (request errors, panics,
+        # latency, canary latency, too many compactors).
+        enabled: true
+      dashboards:
+        enabled: true

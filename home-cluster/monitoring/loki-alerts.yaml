@@ -1,0 +1,58 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: loki
+  namespace: monitoring
+  labels:
+    prometheus: kube-prometheus-stack-prometheus
+    app: kube-prometheus-stack-prometheus
+spec:
+  groups:
+  # Loki's own chart ships alerts for Loki being broken (request errors, panics,
+  # latency, canary latency). These are for the two failures specific to running it
+  # on one Longhorn volume on a home cluster: the volume filling up, and the
+  # StatefulSet not coming up at all. Both are grounded in metrics already being
+  # scraped here - checked against the live cluster before this was written, not
+  # assumed.
+  - name: loki
+    rules:
+    # The failure mode the ticket calls out: retention_period does nothing on its
+    # own, and without the compactor actually deleting chunks the volume fills
+    # silently and the first sign is Loki failing to write. Measured off the PVC, so
+    # it catches a stalled compactor, an unexpected log volume spike, or a log loop,
+    # without depending on which of those it was.
+    # kubelet_volume_stats_* is scraped by the existing kubelet ServiceMonitor and
+    # carries a namespace label. Loki's is the only volume in monitoring, so
+    # namespace=monitoring selects exactly it; it reports only while the volume is
+    # mounted, which is fine because LokiNotReady covers the pod being gone.
+    - alert: LokiVolumeFillingUp
+      expr: |
+        kubelet_volume_stats_used_bytes{namespace="monitoring"}
+        / kubelet_volume_stats_capacity_bytes{namespace="monitoring"} > 0.85
+      for: 15m
+      labels:
+        severity: warning
+      annotations:
+        summary: "Loki log volume is {{ printf \"%.0f\" (mul $value 100) }}% full"
+        description: "kubelet_volume_stats_used_bytes is above 85% of the Longhorn PVC. At 7d retention the volume should sit near steady state.
+          Sustained growth means the compactor is not deleting chunks (compactor.retention_enabled) or something is emitting far more logs than expected."
+    - alert: LokiVolumeFull
+      expr: |
+        kubelet_volume_stats_used_bytes{namespace="monitoring"}
+        / kubelet_volume_stats_capacity_bytes{namespace="monitoring"} > 0.95
+      for: 5m
+      labels:
+        severity: critical
+      annotations:
+        summary: "Loki log volume is {{ printf \"%.0f\" (mul $value 100) }}% full"
+        description: "Loki has under 5% of its 10Gi PVC left and is about to start failing writes. Longhorn volumes can be grown online (singleBinary.persistence.size) or limits_config.retention_period shortened."
+    # A StatefulSet, so the existing ProdServiceDown rule (deployments) does not cover
+    # it. Selected on namespace and name, which are always present on this metric.
+    - alert: LokiNotReady
+      expr: kube_statefulset_status_replicas_ready{namespace="monitoring",statefulset="loki"} == 0
+      for: 10m
+      labels:
+        severity: critical
+      annotations:
+        summary: "Loki has no ready replicas"
+        description: "StatefulSet loki in monitoring has had zero ready replicas for 10 minutes. No logs are being ingested or queryable until this clears."
