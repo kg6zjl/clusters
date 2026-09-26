@@ -33,3 +33,4 @@ resources:
   - nodered-kustomization.yaml
   - security-scanning-kustomization.yaml
   - longhorn-system-kustomization.yaml
+  - logging-kustomization.yaml

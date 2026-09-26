@@ -13,6 +13,7 @@ resources:
   - dashboard-openrouter.yaml
   - alertmanager-external-secret.yaml
   - external-secrets.yaml
+  - loki-datasource.yaml
   - openrouter-exporter-external-secret.yaml
   - openrouter-exporter-configmap.yaml
   - openrouter-exporter.yaml
