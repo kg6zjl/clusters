@@ -7,6 +7,12 @@ metadata:
   labels:
     app: hermes-agent
     alert-on-down: "true"
+  annotations:
+    # Roll the pod when any of the git-managed config that only takes effect at
+    # container start changes: the initContainer re-seeds config.yaml and the
+    # skill tree from these ConfigMaps, so a merge alone is otherwise a no-op
+    # until the next unrelated restart. Reloader watches for changes.
+    configmap.reloader.stakater.com/reload: "hermes-config,hermes-skills,hermes-soul"
 spec:
   replicas: 1
   revisionHistoryLimit: 5
