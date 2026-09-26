@@ -5,7 +5,7 @@ resources:
   - namespace.yaml
   - pvc.yaml
   - meshmonitor-data-longhorn-pvc.yaml
-  - meshmonitor-migration.yaml
+  - meshmonitor-diagnose.yaml
   - deployment.yaml
   - service.yaml
   - ingressroute.yaml

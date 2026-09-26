@@ -1,0 +1,82 @@
+# Diagnosis for the failed meshmonitor copy.
+#
+# meshmonitor-data-migrate hit BackoffLimitExceeded and the job controller deleted
+# the pod, taking its log with it - so the one artifact that would explain the
+# failure was removed by the failure itself. This job exists to get that evidence
+# back, and it is built so the same thing cannot happen again:
+#
+#   * restartPolicy: Never and backoffLimit: 0, so a failed attempt is not retried
+#     and the pod is not replaced
+#   * deliberately no `set -e`, and it ends with `exit 0`, so every probe runs even
+#     when an earlier one fails and the pod stays in Completed for reading
+#
+# The source stays mounted read-only: this job must not be able to damage the
+# original. It re-attempts the copy with verbose output purely to capture where it
+# stops, which is the single most useful clue - the destination already contains
+# whatever the failed attempt managed to write before dying.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: meshmonitor-data-diagnose
+  namespace: meshtastic
+spec:
+  backoffLimit: 0
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: diagnose
+          image: alpine:3.24
+          command:
+            - /bin/sh
+            - -c
+            - |
+              echo "=== source /old (hostpath volume, read-only)"
+              du -sh /old 2>&1 || echo "du /old failed"
+              echo "--- total entries:"
+              find /old 2>&1 | wc -l
+              echo "--- per top-level entry:"
+              du -sh /old/* 2>&1 || true
+              echo "--- top-level listing:"
+              ls -la /old 2>&1
+
+              echo "=== destination /new (longhorn volume, partial copy from the failed job)"
+              du -sh /new 2>&1 || echo "du /new failed"
+              echo "--- total entries:"
+              find /new 2>&1 | wc -l
+              echo "--- per top-level entry:"
+              du -sh /new/* 2>&1 || true
+
+              echo "=== space"
+              df -h /old /new 2>&1 || true
+
+              echo "=== write probe on the destination"
+              if touch /new/.write-probe 2>&1; then echo "write ok"; rm -f /new/.write-probe; else echo "write failed"; fi
+
+              echo "=== re-attempting the copy verbosely, to capture where it stops"
+              cp -av /old/. /new/ > /tmp/cp.log 2>&1
+              echo "cp exit code: $?"
+              echo "--- last 25 lines of the copy:"
+              tail -25 /tmp/cp.log
+              echo "--- how many lines the copy logged in total:"
+              wc -l < /tmp/cp.log
+
+              echo "=== destination after the attempt"
+              du -sh /new 2>&1 || true
+              find /new 2>&1 | wc -l
+
+              echo "=== done"
+              exit 0
+          volumeMounts:
+            - name: old
+              mountPath: /old
+              readOnly: true
+            - name: new
+              mountPath: /new
+      volumes:
+        - name: old
+          persistentVolumeClaim:
+            claimName: meshmonitor-data
+        - name: new
+          persistentVolumeClaim:
+            claimName: meshmonitor-data-longhorn
