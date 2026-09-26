@@ -33,7 +33,7 @@ spec:
       labels:
         severity: warning
       annotations:
-        summary: "Loki log volume is {{ printf \"%.0f\" (mul $value 100) }}% full"
+        summary: "Loki log volume is {{ $value | humanizePercentage }} full"
         description: "kubelet_volume_stats_used_bytes is above 85% of the Longhorn PVC. At 7d retention the volume should sit near steady state.
           Sustained growth means the compactor is not deleting chunks (compactor.retention_enabled) or something is emitting far more logs than expected."
     - alert: LokiVolumeFull
@@ -44,7 +44,7 @@ spec:
       labels:
         severity: critical
       annotations:
-        summary: "Loki log volume is {{ printf \"%.0f\" (mul $value 100) }}% full"
+        summary: "Loki log volume is {{ $value | humanizePercentage }} full"
         description: "Loki has under 5% of its 10Gi PVC left and is about to start failing writes. Longhorn volumes can be grown online (singleBinary.persistence.size) or limits_config.retention_period shortened."
     # A StatefulSet, so the existing ProdServiceDown rule (deployments) does not cover
     # it. Selected on namespace and name, which are always present on this metric.
