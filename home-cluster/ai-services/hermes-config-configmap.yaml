@@ -28,6 +28,7 @@ data:
         # base_url defaults to https://openrouter.ai/api/v1
         # api_key comes from OPENROUTER_API_KEY env var (via ExternalSecret)
         models:
+        - "openrouter/free"
         - "anthropic/claude-sonnet-4"
         - "anthropic/claude-opus-4"
         - "google/gemini-2.5-pro"
