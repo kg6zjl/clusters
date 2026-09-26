@@ -11,19 +11,6 @@ data:
     model:
       provider: openrouter
       default: "deepseek/deepseek-v4.1-flash"
-      # base_url is not needed for OpenRouter (Hermes uses the official endpoint)
-
-    # Optional but recommended: keep your local models available for /model switching
-    providers:
-      lmstudio:                    # or rename this to something accurate
-        base_url: "http://192.168.1.161:11434/v1"
-        models:
-        - "GLM-4.6V-Flash-UD-Q4_K_XL"
-        - "Qwen3-14B-abliterated-Q4_K_M"
-        - "Qwen3.5-9B-Q4_K_M"
-        - "Qwen3.8-27B-ABLITERATED-Q3_K_M"
-        - "Qwen3.8-27B-ABLITERATED-Q4_K_M"
-        - "Qwen35-0.8B-Q4_K_M"
 
     cron:
       model: "deepseek/deepseek-v4.1-flash"
