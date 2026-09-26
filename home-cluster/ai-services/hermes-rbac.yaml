@@ -89,6 +89,13 @@ rules:
     resources: ["storageclasses", "csinodes", "csidrivers", "volumeattachments"]
     verbs: ["get", "list", "watch"]
 
+  # Longhorn CRDs (read-only) — volume/replica/engine state, node CRs,
+  # snapshots and backups. Needed to verify storage health without asking
+  # a human to run kubectl.
+  - apiGroups: ["longhorn.io"]
+    resources: ["*"]
+    verbs: ["get", "list", "watch"]
+
   # Policy / autoscaling / coordination / rbac audit (read-only)
   - apiGroups: ["policy"]
     resources: ["poddisruptionbudgets", "poddisruptionbudgets/status"]
