@@ -43,7 +43,10 @@ metadata:
   name: prowlarr
   namespace: media
 spec:
-  replicas: 1
+  # Stage 1 of the Longhorn migration: scaled to 0 so the copy job in
+  # prowlarr-config-migration.yaml can read the old hostpath volume without it
+  # being written to. Stage 2 restores this to 1 and repoints the claim.
+  replicas: 0
   revisionHistoryLimit: 5
   selector:
     matchLabels:
