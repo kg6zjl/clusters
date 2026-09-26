@@ -5,6 +5,12 @@ metadata:
   namespace: monitoring
 spec:
   interval: 1h
+  # The kube-prometheus-stack upgrade takes ~11 minutes. The Helm action timeout defaults to
+  # 5m0s, so every upgrade was abandoned before it could finish, the next reconcile started
+  # another one, and the release never settled (in-sync -> out-of-sync -> upgrade, endlessly).
+  # That loop - not the values themselves - is why no change to this release was safe to make.
+  # 20m lets the upgrade finish and the release settle.
+  timeout: 20m
   chart:
     spec:
       chart: kube-prometheus-stack
@@ -31,12 +37,9 @@ spec:
     #     metricLabelsAllowlist:
     #       - deployments=[alert-on-down]
     #
-    # Deliberately NOT applied yet. Touching these values restarts an upgrade loop on this
-    # release: the upgrade takes ~11 minutes, longer than the 5m action timeout, so each
-    # attempt overlaps the previous one and the release never settles
-    # (in-sync -> out-of-sync -> upgrade, endlessly). Churning the prod monitoring stack
-    # is worse than a missing label, so prod availability is covered by the
-    # ProdServiceDown rule in prometheus-rules.yaml, which needs no allowlist at all.
+    # Still not applied - that is a separate decision, and prod availability is already covered
+    # by the ProdServiceDown rule in prometheus-rules.yaml. What blocked it was the endless
+    # upgrade loop described on spec.timeout above, which is now fixed.
     prometheus:
       serviceMonitorSelectorNilUsesHelmValues: false
       podMonitorSelectorNilUsesHelmValues: false
@@ -128,6 +131,17 @@ spec:
     grafana:
       enabled: true
       replicas: 1
+      # Grafana's own state lived on an emptyDir: its database (users, API keys, annotations and
+      # the admin credential it stores on first boot) plus anything created in the UI. Without
+      # this, only ConfigMap-provisioned dashboards and datasources survive a pod restart, and
+      # the stored admin credential silently drifts from the secret. Longhorn PVC so the state
+      # outlives the pod and the node.
+      persistence:
+        enabled: true
+        storageClassName: longhorn
+        accessModes:
+          - ReadWriteOnce
+        size: 10Gi
       admin:
         existingSecret: grafana-admin-secret
         userKey: admin-user
