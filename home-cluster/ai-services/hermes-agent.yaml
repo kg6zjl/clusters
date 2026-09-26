@@ -173,8 +173,6 @@ spec:
           value: "hermes@stevearnett.com"
         # Default model must match a /v1/models id exactly. Beast llama-server
         # serves GLM-4.6V-Flash-UD-Q4_K_XL (local GGUF, native function calling).
-        - name: HERMES_MODEL_DEFAULT
-          value: "GLM-4.6V-Flash-UD-Q4_K_XL"
         envFrom:
         - secretRef:
             name: hermes-agent-secrets
