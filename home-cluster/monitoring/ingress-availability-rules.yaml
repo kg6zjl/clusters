@@ -1,0 +1,30 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: ingress-availability
+  namespace: monitoring
+  labels:
+    prometheus: kube-prometheus-stack-prometheus
+    app: kube-prometheus-stack-prometheus
+spec:
+  groups:
+  # Probes every public ingress through the blackbox exporter (job_name ingress-availability
+  # in kube-prometheus-stack-helmrelease.yaml) so a hostname that is announced but dead shows
+  # up here rather than being noticed by hand.
+  #
+  # This alert was declared under `additionalRules:` in the HelmRelease, which is not a value
+  # kube-prometheus-stack or the Prometheus operator reads: the group was never rendered into
+  # a PrometheusRule, and the object that is actually loaded in the cluster (named
+  # ingress-availability, matching this one) carries no Helm or Flux ownership labels. It is
+  # declared here so that the file in git is the thing that produces it, and editing it does
+  # something.
+  - name: ingress-availability
+    rules:
+    - alert: IngressDown
+      expr: probe_success{job="ingress-availability"} == 0
+      for: 2m
+      labels:
+        severity: critical
+      annotations:
+        summary: "Ingress {{ $labels.instance }} is down"
+        description: "Cannot reach {{ $labels.instance }} for 2 minutes"

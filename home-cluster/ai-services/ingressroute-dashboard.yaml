@@ -1,0 +1,35 @@
+---
+# LAN-only ingress for the Hermes web dashboard (skills / kanban board / chat).
+#
+# Auth is the dashboard's own basic-auth provider, terminated inside the
+# container from HERMES_DASHBOARD_BASIC_AUTH_* (1Password via ESO). Deliberately
+# NOT wrapped in the Traefik basic-auth middleware that comfy uses: a
+# non-loopback dashboard bind *requires* its own provider regardless (a hard
+# fail-closed check in the app, not a preference), so a middleware on top would
+# be a second password on the same door.
+#
+# No `tls:` block, matching every other IngressRoute in this repo. TLS comes from
+# the Traefik TLSStore default (home-cluster/traefik/tlsstore.yaml ->
+# wildcard-stevearnett-com-tls), whose certificate covers *.kube.stevearnett.com.
+#
+# NetworkPolicy: nothing new is needed. ai-services-allow-egress already admits
+# ingress from namespace `traefik` to every pod in this namespace on every port
+# (podSelector {}, ingress rule with no port restriction), and Traefik's probes
+# run in that namespace.
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: hermes-dashboard
+  namespace: ai-services
+  annotations:
+    external-dns.alpha.kubernetes.io/hostname: hermes.kube.stevearnett.com
+    external-dns.alpha.kubernetes.io/target: kube.stevearnett.com
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - match: Host(`hermes.kube.stevearnett.com`)
+      kind: Rule
+      services:
+        - name: hermes-dashboard
+          port: 9119
