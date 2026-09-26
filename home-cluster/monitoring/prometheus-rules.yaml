@@ -92,3 +92,21 @@ spec:
       annotations:
         summary: "OpenRouter exporter is not reporting"
         description: "openrouter_up has been 0 or absent for 15 minutes - OpenRouter spend is not being recorded."
+  # TEMPORARY - REMOVED IN THE VERY NEXT PR. A paging smoke test.
+  #
+  # Proves a severity=critical alert reaches the Discord receiver end to end. That cannot be
+  # shown from configuration: the notification counters carry no alertname, so a delivery
+  # proves it while an empty Discord channel proves nothing. Ignorable by design, and it
+  # cannot inhibit real warnings - the inhibit rules match on equal [namespace, alertname],
+  # and this alert carries neither.
+  - name: paging-smoke-test
+    rules:
+    - alert: TestPageDeliveryCheck
+      expr: vector(1) == 1
+      for: 1m
+      labels:
+        severity: critical
+        test: smoke
+      annotations:
+        summary: "TEST - paging smoke test, no action needed"
+        description: "Deliberately trivial. Exists only to prove that severity=critical reaches the Discord receiver. Removed in the next PR."
