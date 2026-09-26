@@ -9,12 +9,13 @@ metadata:
 data:
   config.yaml: |
     model:
-      default: "deepseek/deepseek-v4.1-flash"
       provider: openrouter
-      # context_length only matters for local providers; omit for OpenRouter
+      default: "deepseek/deepseek-v4.1-flash"
+      # base_url is not needed for OpenRouter (Hermes uses the official endpoint)
 
+    # Optional but recommended: keep your local models available for /model switching
     providers:
-      lmstudio:
+      lmstudio:                    # or rename this to something accurate
         base_url: "http://192.168.1.161:11434/v1"
         models:
         - "GLM-4.6V-Flash-UD-Q4_K_XL"
@@ -24,28 +25,11 @@ data:
         - "Qwen3.8-27B-ABLITERATED-Q4_K_M"
         - "Qwen35-0.8B-Q4_K_M"
 
-      openrouter:
-        # base_url defaults to https://openrouter.ai/api/v1
-        # api_key comes from OPENROUTER_API_KEY env var (via ExternalSecret)
-        models:
-        - "deepseek/deepseek-v4.1-flash"
-        - "cohere/north-mini-code:free"
-        - "openrouter/free"
-        - "nvidia/nemotron-3-ultra-550b-a55b:free"
-        - "poolside/laguna-s-2.1:free"
-        - "anthropic/claude-sonnet-4"
-        - "anthropic/claude-opus-4"
-        - "google/gemini-2.5-pro"
-        - "openai/gpt-4.1"
-
     cron:
-      model: "Qwen35-0.8B-Q4_K_M"
-      model_provider: lmstudio
+      model: "deepseek/deepseek-v4.1-flash"
+      model_provider: openrouter
 
     display:
-      # Per-platform (schema-canonical) tool_progress off: no tool-call bubbles
-      # on any gateway surface. Top-level display.tool_progress also works but
-      # is schema-flagged; the per-platform key is what /verbose saves and reads.
       platforms:
         discord:
           tool_progress: off
