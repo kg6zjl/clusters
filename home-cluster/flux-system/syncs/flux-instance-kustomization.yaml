@@ -1,0 +1,23 @@
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: flux-instance
+  namespace: flux-system
+spec:
+  dependsOn:
+    - name: flux-operator
+  interval: 10m0s
+  path: ./home-cluster/flux-instance
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: clusters
+  targetNamespace: flux-system
+  suspend: true
+  wait: true
+  timeout: 10m0s
+  healthChecks:
+    - apiVersion: fluxcd.controlplane.io/v1
+      kind: FluxInstance
+      name: flux
+      namespace: flux-system

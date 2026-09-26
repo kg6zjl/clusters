@@ -33,3 +33,5 @@ resources:
   - nodered-kustomization.yaml
   - security-scanning-kustomization.yaml
   - longhorn-system-kustomization.yaml
+  - flux-operator-kustomization.yaml
+  - flux-instance-kustomization.yaml
