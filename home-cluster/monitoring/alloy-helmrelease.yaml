@@ -1,0 +1,162 @@
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: alloy
+  namespace: monitoring
+spec:
+  interval: 1h
+  chart:
+    spec:
+      chart: alloy
+      version: 1.13.0
+      sourceRef:
+        kind: HelmRepository
+        name: grafana
+        namespace: flux-system
+  install:
+    timeout: 10m
+    remediation:
+      retries: 3
+  upgrade:
+    timeout: 10m
+    remediation:
+      retries: 3
+  values:
+    # Alloy replaces Promtail, which was removed from here in commit 43bc893 and is
+    # end-of-life upstream. It runs in `monitoring` alongside the Loki it pushes to
+    # (http://loki.monitoring.svc.cluster.local:3100), so the shipper-to-Loki hop is
+    # intra-namespace and needs no NetworkPolicy of its own.
+    crds:
+      # The chart ships CRDs for monitoring.grafana.com (PodLogs and friends) as an
+      # optional subchart. This config is a plain Alloy config file and uses no
+      # custom resources, so there is no reason to install cluster-wide CRDs for it.
+      create: false
+
+    controller:
+      # One Alloy per node. Each node's /var/log/pods is local to that node, so a
+      # Deployment would see a random third of the cluster's logs.
+      type: daemonset
+
+    alloy:
+      mounts:
+        # Mounts the host's /var/log read-only. This is a filesystem read on the
+        # node - it is not cross-namespace traffic and needs no NetworkPolicy rule -
+        # but it does need the mount, which the chart leaves off by default.
+        varlog: true
+
+      # Write-ahead log for tail positions. Left in the container filesystem: on
+      # restart Alloy re-reads whatever rotated log files are still on the node (at
+      # most ~50Mi per container) and may duplicate those lines. Bounded and cheap;
+      # a persistent positions file would mean a second hostPath write.
+      storagePath: /tmp/alloy
+
+      resources:
+        requests:
+          cpu: 50m
+          memory: 128M
+        limits:
+          cpu: 500m
+          memory: 256M
+
+      configMap:
+        create: true
+        # Rendered through tpl, so avoid Go template syntax in here.
+        content: |-
+          // Cluster log collection. Runs as a DaemonSet: every node tails its own
+          // container logs under /var/log/pods and pushes them to the single-binary
+          // Loki in this namespace.
+          //
+          // Target discovery goes through the Kubernetes API (discovery.kubernetes),
+          // which is what makes the log streams carry namespace/pod/container/node
+          // labels. The alternative - globbing /var/log/pods/*/*/*.log and parsing
+          // the labels out of the path - needs no API access, but it cannot label a
+          // stream with the node name or any pod label, and those are the labels you
+          // actually search on. monitoring-allow-all already permits the API server
+          // egress this needs.
+
+          discovery.kubernetes "pods" {
+            role = "pod"
+          }
+
+          discovery.relabel "pod_logs" {
+            targets = discovery.kubernetes.pods.targets
+
+            rule {
+              source_labels = ["__meta_kubernetes_namespace"]
+              target_label  = "namespace"
+            }
+            rule {
+              source_labels = ["__meta_kubernetes_pod_name"]
+              target_label  = "pod"
+            }
+            rule {
+              source_labels = ["__meta_kubernetes_pod_container_name"]
+              target_label  = "container"
+            }
+            rule {
+              source_labels = ["__meta_kubernetes_pod_node_name"]
+              target_label  = "node"
+            }
+
+            // The pod's log directory is keyed by UID, not by name, so the file path
+            // has to be built from the UID. The container name is appended because a
+            // pod with sidecars has one directory per container.
+            rule {
+              source_labels = ["__meta_kubernetes_pod_uid", "__meta_kubernetes_pod_container_name"]
+              separator     = "/"
+              action        = "replace"
+              replacement   = "/var/log/pods/*$1/*.log"
+              target_label  = "__path__"
+            }
+
+            // namespace/container as the job label: what a Grafana query filters on.
+            rule {
+              source_labels = ["__meta_kubernetes_namespace", "__meta_kubernetes_pod_container_name"]
+              separator     = "/"
+              action        = "replace"
+              replacement   = "$1/$2"
+              target_label  = "job"
+            }
+          }
+
+          local.file_match "pod_logs" {
+            path_targets = discovery.relabel.pod_logs.output
+          }
+
+          loki.source.file "pod_logs" {
+            targets    = local.file_match.pod_logs.targets
+            forward_to = [loki.process.pod_logs.receiver]
+          }
+
+          loki.process "pod_logs" {
+            // containerd writes logs in CRI format
+            // ("2026-09-26T21:00:00.0000000Z stdout F message"). Without this stage
+            // the timestamp, stream and flag prefix end up inside the log line and
+            // the entry keeps its arrival time instead of its real one.
+            stage.cri {}
+
+            // loki.source.file adds a `filename` label holding the full path, UID
+            // included. As a stream label that is a new stream per container
+            // restart, so it is dropped before the entry reaches Loki.
+            stage.label_drop {
+              values = ["filename"]
+            }
+
+            forward_to = [loki.write.local.receiver]
+          }
+
+          loki.write "local" {
+            endpoint {
+              url = "http://loki.monitoring.svc.cluster.local:3100/loki/api/v1/push"
+            }
+
+            external_labels = {
+              cluster = "home-cluster",
+            }
+          }
+
+    serviceMonitor:
+      # Alloy's own metrics, so the shipper is visible: loki_write_sent_* and
+      # loki_write_dropped_* are the difference between "Loki is up" and "logs are
+      # arriving".
+      enabled: true

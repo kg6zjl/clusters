@@ -85,6 +85,7 @@ graph TB
         PROM[Prometheus]
         GRAFANA[Grafana]
         LOKI[Loki]
+        ALLOY[Alloy<br/>DaemonSet]
         ALERTS[Alertmanager]
     end
 
@@ -157,6 +158,9 @@ graph TB
     PROM --> GRAFANA
     PROM --> LOKI
     PROM --> ALERTS
+
+    ALLOY --> LOKI
+    GRAFANA --> LOKI
 ```
 
 ### Media Stack Dependencies
@@ -461,7 +465,7 @@ namespaces:
   - name: cert-manager
     purpose: TLS certificates
   - name: monitoring
-    purpose: Observability
+    purpose: Observability (Prometheus, Grafana, Alertmanager, Loki, Alloy)
   - name: media
     purpose: Media management
   - name: vpn

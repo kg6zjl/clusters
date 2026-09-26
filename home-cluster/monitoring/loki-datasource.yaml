@@ -1,0 +1,33 @@
+# Grafana datasource for Loki.
+#
+# The kube-prometheus-stack Grafana runs a datasource sidecar (already enabled in
+# kube-prometheus-stack-helmrelease.yaml, HEALTH_PORT 8082) that scans its own
+# namespace for ConfigMaps labelled grafana_datasource=1. Loki is in monitoring
+# too, so this ConfigMap is all the wiring that is needed.
+#
+# Deliberately NOT grafana.additionalDataSources on kube-prometheus-stack: every
+# values change to that HelmRelease churns the prod monitoring stack for ~11
+# minutes against a 5 minute reconcile timeout (see the note in that file, and
+# ticket t_950d4049). Adding a ConfigMap to the monitoring Kustomization is a new
+# object with no effect on that release.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: loki-datasource
+  namespace: monitoring
+  labels:
+    grafana_datasource: "1"
+data:
+  loki-datasource.yaml: |-
+    apiVersion: 1
+    datasources:
+    - name: Loki
+      type: loki
+      uid: loki
+      access: proxy
+      url: http://loki.monitoring.svc.cluster.local:3100
+      isDefault: false
+      editable: false
+      jsonData:
+        httpMethod: POST
+        maxLines: 1000
