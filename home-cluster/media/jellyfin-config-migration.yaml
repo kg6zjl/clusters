@@ -1,0 +1,57 @@
+# Stage 1 of moving jellyfin's config off the node-pinned hostpath volume.
+#
+# The chart-managed jellyfin-config claim is on a hostpath PV with a nodeAffinity
+# for thinkcentre02, so the pod can only ever run there. This job copies it onto
+# the Longhorn claim declared alongside it, and the HelmRelease is scaled to 0 in
+# the same commit so the source is not written to while it is read.
+#
+# Stage 2 repoints values.persistence.config.existingClaim at the new claim,
+# scales back to 1, and deletes this file.
+#
+# The source claim is ReadWriteOnce and only one pod can hold it at a time; the
+# job lands on thinkcentre02 on its own because that is where the PV's
+# nodeAffinity points, which is also where the Longhorn volume attaches.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: jellyfin-config-migrate
+  namespace: media
+spec:
+  backoffLimit: 2
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: copy
+          image: alpine:3.24
+          command:
+            - /bin/sh
+            - -c
+            - |
+              set -euo pipefail
+              # the HelmRelease is scaled to 0 in the same commit; give the old
+              # pod time to release the ReadWriteOnce claim
+              sleep 20
+              echo "source (hostpath, node-pinned to thinkcentre02):"
+              du -sh /old
+              find /old | wc -l
+              cp -a /old/. /new/
+              echo "destination (longhorn):"
+              du -sh /new
+              find /new | wc -l
+              test -n "$(ls -A /new)"
+              test "$(find /new | wc -l)" -ge "$(find /old | wc -l)"
+              echo "copy ok"
+          volumeMounts:
+            - name: old
+              mountPath: /old
+              readOnly: true
+            - name: new
+              mountPath: /new
+      volumes:
+        - name: old
+          persistentVolumeClaim:
+            claimName: jellyfin-config
+        - name: new
+          persistentVolumeClaim:
+            claimName: jellyfin-config-longhorn
