@@ -9,7 +9,7 @@ metadata:
 data:
   config.yaml: |
     model:
-      default: "nvidia/nemotron-3-ultra-550b-a55b:free"
+      default: "openrouter/free"
       provider: openrouter
       # context_length only matters for local providers; omit for OpenRouter
 
