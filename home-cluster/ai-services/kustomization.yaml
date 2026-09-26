@@ -105,6 +105,7 @@ configMapGenerator:
       - software-development__codebase-inspection.md=hermes-skills/software-development/codebase-inspection/SKILL.md
       - software-development__dogfood.md=hermes-skills/software-development/dogfood/SKILL.md
       - software-development__git-auth-without-gh.md=hermes-skills/software-development/git-auth-without-gh/SKILL.md
+      - software-development__git-auth-without-gh__scripts__gh.sh=hermes-skills/software-development/git-auth-without-gh/scripts/gh.sh
       - software-development__github.md=hermes-skills/software-development/github/SKILL.md
       - software-development__hermes-agent-skill-authoring.md=hermes-skills/software-development/hermes-agent-skill-authoring/SKILL.md
       - software-development__inspecting-hermes-desktop-dom.md=hermes-skills/software-development/inspecting-hermes-desktop-dom/SKILL.md
