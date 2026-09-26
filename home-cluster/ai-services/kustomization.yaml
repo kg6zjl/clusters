@@ -50,6 +50,7 @@ configMapGenerator:
       - creative__popular-web-designs.md=hermes-skills/creative/popular-web-designs/SKILL.md
       - creative__songwriting-and-ai-music.md=hermes-skills/creative/songwriting-and-ai-music/SKILL.md
       - devops__alertmanager-notification-links.md=hermes-skills/devops/alertmanager-notification-links/SKILL.md
+      - devops__approval-free-commands.md=hermes-skills/devops/approval-free-commands/SKILL.md
       - devops__apiserver-endpoint-hygiene.md=hermes-skills/devops/apiserver-endpoint-hygiene/SKILL.md
       - devops__cluster-gitops.md=hermes-skills/devops/cluster-gitops/SKILL.md
       - devops__cluster-gitops__references__alertmanager-config-in-git.md=hermes-skills/devops/cluster-gitops/references/alertmanager-config-in-git.md
