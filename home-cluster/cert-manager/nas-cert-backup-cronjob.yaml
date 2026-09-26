@@ -7,11 +7,31 @@
 # so that Forbidden error produced zero-byte files and exit 0 -- a "successful"
 # run would have uploaded EMPTY cert files to the NAS over the real ones.
 #
-# The secret is now mounted as a volume instead: no kubectl, no RBAC grants, no
+# The secret is mounted as a volume instead: no kubectl, no RBAC grants, no
 # dependency on the API server, and cert-manager renewals flow through without
-# the job having to re-read anything. Both steps now run under `set -euo
-# pipefail` and refuse to proceed on missing or empty input, so a broken run
-# fails loudly instead of quietly writing garbage.
+# the job having to re-read anything.
+#
+# Follow-up from a live read of the deploy that shipped that fix:
+#
+#   * `fetch-certs` was an ordinary container, not an init container, and both
+#     containers share the `cert-storage` emptyDir. Containers of a pod start
+#     concurrently, so `push-to-nas` can sample /certs before `fetch-certs` has
+#     written it and abort with "missing or empty". It is now an initContainer,
+#     which makes the ordering explicit instead of relying on a race win. The
+#     meshtastic backup this pattern was copied from (meshmonitor-backup, in
+#     home-cluster/meshtastic/backup-cronjob.yaml) does the whole thing in one
+#     container, so it never had this ordering question.
+#
+#   * The push step still read `/creds/username` and `/creds/password` straight
+#     into the smbclient -U argument without checking they exist. An empty
+#     credentials secret is exactly what broke every historical run (the old
+#     kustomize secretGenerator emitted a Secret with no data), and the failure
+#     it produces is an opaque smbclient auth error. Both files are now checked
+#     first, so a broken credential sync fails with a named cause.
+#
+#   * Success used to mean only "smbclient exited 0". The upload is now read
+#     back and compared byte for byte against what was sent, so a run that
+#     cannot prove the NAS holds the current cert fails loudly.
 apiVersion: batch/v1
 kind: CronJob
 metadata:
@@ -19,6 +39,7 @@ metadata:
   namespace: cert-manager
 spec:
   schedule: "0 */12 * * *"
+  concurrencyPolicy: Forbid
   successfulJobsHistoryLimit: 2
   failedJobsHistoryLimit: 1
   jobTemplate:
@@ -36,7 +57,7 @@ spec:
             - name: nas-creds
               secret:
                 secretName: nas-smb-credentials
-          containers:
+          initContainers:
             - name: fetch-certs
               image: alpine:3.24
               command:
@@ -55,6 +76,7 @@ spec:
                 - name: wildcard-tls
                   mountPath: /tls
                   readOnly: true
+          containers:
             - name: push-to-nas
               image: alpine:3.24
               command:
@@ -65,10 +87,22 @@ spec:
                   for f in /certs/fullchain.pem /certs/privkey.pem; do
                     [ -s "$f" ] || { echo "FATAL: $f missing or empty, refusing to upload" >&2; exit 1; }
                   done
+                  for f in /creds/username /creds/password; do
+                    [ -s "$f" ] || { echo "FATAL: $f missing or empty - nas-smb-credentials did not sync" >&2; exit 1; }
+                  done
                   apk add --no-cache samba-client
+                  CREDS="$(cat /creds/username)%$(cat /creds/password)"
                   smbclient //192.168.1.176/cert \
-                    -W WORKGROUP -U "$(cat /creds/username)%$(cat /creds/password)" \
+                    -W WORKGROUP -U "$CREDS" \
                     -c "put /certs/fullchain.pem cert.pem; put /certs/privkey.pem privkey.pem"
+                  smbclient //192.168.1.176/cert \
+                    -W WORKGROUP -U "$CREDS" \
+                    -c "get cert.pem /tmp/cert.pem; get privkey.pem /tmp/privkey.pem"
+                  cmp -s /tmp/cert.pem /certs/fullchain.pem \
+                    || { echo "FATAL: NAS cert.pem does not match the cluster secret" >&2; exit 1; }
+                  cmp -s /tmp/privkey.pem /certs/privkey.pem \
+                    || { echo "FATAL: NAS privkey.pem does not match the cluster secret" >&2; exit 1; }
+                  echo "NAS copy verified against the cluster secret"
               volumeMounts:
                 - name: cert-storage
                   mountPath: /certs
