@@ -1,0 +1,204 @@
+---
+# Standalone kube-apiserver advertise-address check (+ opt-in fix).
+#
+# WHY THIS EXISTS
+# ---------------
+# The `kubernetes` Endpoints object in `default` is rebuilt by kubelite from
+# what each apiserver reports about ITSELF. Nothing in that path derives an
+# address from a node's current InternalIP.
+#
+# thinkcentre01 was re-IP'd (wifi 192.168.1.49 -> wired 192.168.1.144). The
+# Endpoints object still lists .49 -- a host that no longer answers -- and never
+# starts listing .144, so Prometheus permanently sees 1 of 4 apiserver targets
+# down and KubeAPIInstanceUnreachable repeats every 4h.
+#
+# Editing the Endpoints object with kubectl is pointless: it is not git-managed
+# and the next rebuild overwrites it. The stale address has to be corrected at
+# its source.
+#
+# CHECK ONLY by default -- nothing on the host is written unless you pass
+# `-e fix=true`. Either way the playbook prints the args it found, the
+# datastore/peer status, and the resulting Endpoints list, and it refuses to
+# touch anything if the args file does not look exactly as expected.
+#
+# Usage:
+#   ansible-playbook -i inventory/hosts.yml apiserver-address.yaml \
+#     --limit thinkcentre01
+#   ansible-playbook -i inventory/hosts.yml apiserver-address.yaml \
+#     --limit thinkcentre01 -e fix=true
+- name: Check kube-apiserver advertise address against the node's current IP
+  hosts: all
+  gather_facts: false
+  become: true
+
+  vars:
+    node_ip: "{{ ansible_host }}"
+    apiserver_args: /var/snap/microk8s/current/args/kube-apiserver
+    snap_bin: /snap/bin
+    microk8s_daemon_units:
+      - snap.microk8s.daemon-apiserver-kicker
+      - snap.microk8s.daemon-apiserver
+      - snap.microk8s.daemon-kubelite
+
+  tasks:
+    - name: Read kube-apiserver args
+      ansible.builtin.slurp:
+        src: "{{ apiserver_args }}"
+      register: apiserver_args_raw
+      failed_when: false
+
+    - name: Assert the kube-apiserver args file exists (control-plane host)
+      ansible.builtin.assert:
+        that: apiserver_args_raw.content is defined
+        fail_msg: >-
+          {{ apiserver_args }} does not exist on {{ inventory_hostname }}, so this
+          host does not run the MicroK8s control plane in the expected layout.
+          Nothing to check here.
+
+    - name: Address-related kube-apiserver args (what this host reports)
+      vars:
+        address_lines: >-
+          {{ (apiserver_args_raw.content | b64decode).splitlines()
+             | select('match', '^--(advertise-address|bind-address|secure-port)=')
+             | list }}
+      ansible.builtin.debug:
+        msg:
+          - "ansible_host (expected address): {{ node_ip }}"
+          - "{{ apiserver_args }}:"
+          - "{{ address_lines }}"
+
+    - name: MicroK8s status (read-only, datastore/peer diagnostics)
+      ansible.builtin.command:
+        argv: [microk8s, status, --format, yaml]
+      environment:
+        PATH: "{{ snap_bin }}:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+      changed_when: false
+      register: mk_status
+      failed_when: false
+
+    - name: MicroK8s status output
+      ansible.builtin.debug:
+        var: mk_status.stdout_lines
+
+    # Fail loudly rather than guess: if the args file has no single
+    # --advertise-address line, the stale endpoint is NOT sourced from this file
+    # and editing it would be cargo-cult.
+    - name: Assert the args file has exactly one --advertise-address line
+      vars:
+        advertise_lines: >-
+          {{ (apiserver_args_raw.content | b64decode).splitlines()
+             | select('match', '^--advertise-address=')
+             | list }}
+      ansible.builtin.assert:
+        that: advertise_lines | length == 1
+        fail_msg: >-
+          {{ apiserver_args }} has {{ advertise_lines | length }} '--advertise-address='
+          lines, so this file is not the source of the stale endpoint and this
+          playbook will not modify it. Use the `microk8s status` output above to
+          investigate kubelite/dqlite's own node registry instead.
+
+    - name: Record the current advertise address
+      vars:
+        advertise_addr: >-
+          {{ ((apiserver_args_raw.content | b64decode).splitlines()
+              | select('match', '^--advertise-address=')
+              | list | first) | regex_replace('^--advertise-address=', '') }}
+      ansible.builtin.set_fact:
+        advertise_now: "{{ advertise_addr }}"
+        advertise_ok: "{{ advertise_addr | trim == node_ip }}"
+
+    - name: Which microk8s daemon units exist on this host
+      ansible.builtin.command:
+        cmd: systemctl list-unit-files --no-legend --no-pager 'snap.microk8s.daemon-*'
+      changed_when: false
+      register: mk_units
+      failed_when: false
+
+    - name: Pick the unit that owns the apiserver
+      ansible.builtin.set_fact:
+        microk8s_apiserver_unit: >-
+          {{ microk8s_daemon_units | select('in', mk_units.stdout) | list | first | default('') }}
+
+    - name: Report the verdict
+      ansible.builtin.debug:
+        msg:
+          - "advertise-address = {{ advertise_now }} (node IP is {{ node_ip }}) -> {{ 'OK' if advertise_ok else 'STALE' }}"
+          - "would restart: {{ microk8s_apiserver_unit if microk8s_apiserver_unit else 'NOTHING FOUND -- investigate' }}"
+          - "fix requested: {{ fix | default(false) }}"
+
+    - name: Assert a daemon unit was found before any restart is attempted
+      ansible.builtin.assert:
+        that: microk8s_apiserver_unit | length > 0
+        fail_msg: >-
+          No unit from {{ microk8s_daemon_units }} exists on this host. Run
+          `systemctl list-units 'snap.microk8s.*'` by hand before continuing.
+      when: fix | default(false) | bool and not advertise_ok
+
+    - name: Rewrite --advertise-address to this node's current IP
+      ansible.builtin.replace:
+        path: "{{ apiserver_args }}"
+        regexp: '^--advertise-address=.*$'
+        replace: "--advertise-address={{ node_ip }}"
+        backup: true
+      when: fix | default(false) | bool and not advertise_ok
+      notify: Restart the microk8s daemon that owns the apiserver
+
+    - name: Apply the restart before verifying
+      ansible.builtin.meta: flush_handlers
+
+    - name: Wait for the local apiserver to answer again
+      ansible.builtin.uri:
+        url: https://127.0.0.1:16443/healthz
+        validate_certs: false
+        status_code: 200
+      register: apiserver_healthz
+      until: apiserver_healthz.status == 200
+      retries: 36
+      delay: 5
+      when: fix | default(false) | bool and not advertise_ok
+      changed_when: false
+
+    - name: Current `kubernetes` Endpoints addresses (authoritative check)
+      ansible.builtin.command:
+        argv:
+          - microk8s
+          - kubectl
+          - get
+          - endpoints
+          - kubernetes
+          - -n
+          - default
+          - -o
+          - jsonpath={.subsets[0].addresses[*].ip}
+      environment:
+        PATH: "{{ snap_bin }}:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+      changed_when: false
+      register: endpoints_now
+      until: >-
+        not (fix | default(false) | bool)
+        or node_ip in endpoints_now.stdout
+      retries: 24
+      delay: 5
+      failed_when: false
+
+    - name: Endpoints after
+      ansible.builtin.debug:
+        msg:
+          - "kubernetes Endpoints: {{ endpoints_now.stdout }}"
+          - "expected to contain: {{ node_ip }}"
+
+    - name: Confirm the fix landed
+      ansible.builtin.assert:
+        that: node_ip in endpoints_now.stdout
+        fail_msg: >-
+          {{ node_ip }} is still not in the kubernetes Endpoints after the
+          restart. The advertise-address was changed, so the endpoint list must
+          be rebuilt by something else -- investigate before reverting
+          (backup: {{ apiserver_args }}.????).
+      when: fix | default(false) | bool and not advertise_ok
+
+  handlers:
+    - name: Restart the microk8s daemon that owns the apiserver
+      ansible.builtin.systemd_service:
+        name: "{{ microk8s_apiserver_unit }}"
+        state: restarted
