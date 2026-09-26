@@ -92,3 +92,30 @@ spec:
       annotations:
         summary: "OpenRouter exporter is not reporting"
         description: "openrouter_up has been 0 or absent for 15 minutes - OpenRouter spend is not being recorded."
+  # Backup freshness for the two prod services. Configured is not the same as working:
+  # home-assistant carried a KubeStash BackupConfiguration for 201 days that never produced
+  # a single snapshot, while still reading as "backups are configured". This rule watches
+  # the result instead of the intent.
+  # home-assistant is watched through its own Prometheus integration, which exports the
+  # backup sensors as homeassistant_sensor_timestamp_seconds with the entity in a label.
+  # meshmonitor is watched through its CronJob last-successful time, selected by namespace
+  # and name - not by label, because kube-state-metrics only exposes allowlisted resource
+  # labels and that allowlist is deliberately not enabled (see the note in service-down).
+  # absent() is deliberate: if the metric disappears (sensor disabled, CronJob removed,
+  # pod recreated differently) a plain staleness expression goes quiet forever, which is
+  # the exact failure this rule exists to catch. When HA is simply down, ProdServiceDown
+  # reports that instead.
+  - name: prod-backups
+    rules:
+    - alert: ProdBackupStale
+      expr: |
+        (time() - homeassistant_sensor_timestamp_seconds{entity="sensor.backup_last_successful_automatic_backup"} > 108000)
+        or (time() - kube_cronjob_status_last_successful_time{namespace="meshtastic",cronjob="meshmonitor-backup"} > 108000)
+        or absent(homeassistant_sensor_timestamp_seconds{entity="sensor.backup_last_successful_automatic_backup"})
+        or absent(kube_cronjob_status_last_successful_time{namespace="meshtastic",cronjob="meshmonitor-backup"})
+      for: 30m
+      labels:
+        severity: critical
+      annotations:
+        summary: "PROD backup stale: {{ $labels.entity }}{{ $labels.cronjob }} in {{ $labels.namespace }}"
+        description: "No successful backup in over 30 hours, or the metric reporting it has gone away. home-assistant uploads to the NAS over SFTP (schedule ~24h); meshmonitor writes a nightly tarball to the NAS at 03:30."
