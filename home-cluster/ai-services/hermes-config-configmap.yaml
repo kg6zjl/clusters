@@ -28,6 +28,7 @@ data:
         # base_url defaults to https://openrouter.ai/api/v1
         # api_key comes from OPENROUTER_API_KEY env var (via ExternalSecret)
         models:
+        - "deepseek/deepseek-v4.1-flash"
         - "cohere/north-mini-code:free"
         - "openrouter/free"
         - "nvidia/nemotron-3-ultra-550b-a55b:free"
