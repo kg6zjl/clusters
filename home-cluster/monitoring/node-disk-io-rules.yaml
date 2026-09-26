@@ -1,0 +1,49 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: node-disk-io
+  namespace: monitoring
+  labels:
+    prometheus: kube-prometheus-stack-prometheus
+    app: kube-prometheus-stack-prometheus
+spec:
+  groups:
+  # Upstream's NodeDiskIOSaturation fires at aqu-sq > 10 on every device class. On this
+  # cluster that is below the noise floor for NVMe: thinkcentre03's nvme0n1 reports aqu-sq
+  # 23.6 at p50, 38.8 at p99 and a worst case of 45.7 over the measured window, purely from
+  # github-runner image builds doing fsync-heavy small writes to it (measured 2026-09-26:
+  # ~5 MB/s, 269 IOPS, node iowait 1.1%, disk busy 21%). A queue that deep at that low a
+  # throughput is not saturation, so the upstream threshold produced an alert that was
+  # effectively always firing and never actionable.
+  #
+  # Alertmanager never sees the upstream rule: kube-prometheus-stack-helmrelease.yaml drops
+  # it with an alert relabel on alertname. That drop is why these rules deliberately do NOT
+  # reuse the NodeDiskIOSaturation names - nothing here depends on how the drop pattern is
+  # anchored or could be caught by it by accident.
+  #
+  # The per-device-class split is deliberate. The spinning/USB devices on the same hosts sit
+  # at ~0, so they keep the upstream value of 10 and a disk that is genuinely behind is still
+  # reported; only the NVMe path gets the higher threshold.
+  - name: node-disk-io
+    rules:
+    - alert: NodeDiskQueueSaturationNvme
+      # 100 is ~2x the worst value ever observed on this cluster (45.7) and ~4x the p50 of
+      # the noisiest node, so CI load stays quiet while a device that has actually fallen
+      # over - a degraded NVMe pins this metric in the hundreds - still alerts.
+      expr: rate(node_disk_io_time_weighted_seconds_total{device=~"nvme.+",job="node-exporter"}[5m]) > 100
+      for: 30m
+      labels:
+        severity: warning
+      annotations:
+        summary: "NVMe disk IO queue is saturated on {{ $labels.instance }}"
+        description: "Queue depth (aqu-sq) on {{ $labels.device }} at {{ $labels.instance }} has been above 100 for 30 minutes, currently {{ printf \"%.2f\" $value }}. This cluster reaches ~45 under normal CI load, so treat this as a real device or workload problem."
+        runbook_url: https://runbooks.prometheus-operator.dev/runbooks/node/nodediskiosaturation
+    - alert: NodeDiskQueueSaturationOther
+      expr: rate(node_disk_io_time_weighted_seconds_total{device=~"(/dev/)?(mmcblk.p.+|rbd.+|sd.+|vd.+|xvd.+|dm-.+|md.+|dasd.+)",job="node-exporter"}[5m]) > 10
+      for: 30m
+      labels:
+        severity: warning
+      annotations:
+        summary: "Disk IO queue is high on {{ $labels.instance }}"
+        description: "Queue depth (aqu-sq) on {{ $labels.device }} at {{ $labels.instance }} has been above 10 for 30 minutes, currently {{ printf \"%.2f\" $value }}."
+        runbook_url: https://runbooks.prometheus-operator.dev/runbooks/node/nodediskiosaturation
