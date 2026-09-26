@@ -5,6 +5,8 @@ resources:
   - ingressroute-prometheus.yaml
   - ingressroute-alertmanager.yaml
   - prometheus-rules.yaml
+  - node-disk-io-rules.yaml
+  - ingress-availability-rules.yaml
   - dashboard-ugreen-nas.yaml
   - dashboard-beast.yaml
   - dashboard-trivy-operator.yaml
