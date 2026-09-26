@@ -19,11 +19,33 @@ All cluster changes MUST go through the Pull Request workflow. Direct kubectl wr
 
 ## Workflow
 
-1. **Clone/checkout** the repo
+1. **Work in your own git worktree — never the shared clone**
+
+   `/opt/data/workspace/clusters` is shared by every agent session, kanban worker, and cron job on
+   this pod. They check out their own branches in it, so its `HEAD` moves under you mid-task and your
+   commits can land on someone else's branch. Give every piece of work its own tree:
+
    ```bash
-   git clone https://github.com/kg6zjl/clusters.git
-   cd clusters/home-cluster
+   git -C /opt/data/workspace/clusters fetch origin
+   git -C /opt/data/workspace/clusters worktree add /opt/data/worktrees/<name> -b <branch> origin/main
+   cd /opt/data/worktrees/<name>
    ```
+
+   The shared clone exists only to hold the object store and mint worktrees. Do not edit or commit in
+   it. A worktree cut this way already contains `origin/main`, so the pre-commit rebase guard passes
+   without any further syncing.
+
+   **Pitfall:** starting work in the shared clone. The symptom is a `git log`/`git status` that does
+   not match what you just did, or a diff containing files you never touched — someone else's branch
+   is checked out. Do **not** `git checkout` in the shared clone to "fix" it; that yanks the branch
+   out from under a running agent. Re-read what branch it is on, leave it alone, and move to your own
+   worktree.
+
+   **Cleanup:** `hermes worktree list` classifies every tree (age, size, verdict, reason) and
+   `hermes worktree prune` removes the safe ones — a tree is never removed if it has uncommitted
+   tracked changes, unique unpushed commits, or is in use. Trees created by hand outside
+   `~/.hermes/.worktrees/` are registered as external and are **never** touched by prune, so clean
+   those up yourself when the PR merges.
 
 2. **Sync main** before starting work — and re-sync right before pushing
    ```bash
@@ -139,10 +161,15 @@ Pre-commit hooks should check:
 
 ## GitOps Enforcement
 
+- **Work in your own worktree** — never commit in the shared clone; `git worktree add
+  /opt/data/worktrees/<name> -b <branch> origin/main` from the shared clone for every piece of work
 - **Always pull main** before starting work — rebase your branch off main every single time
 - **Prefer what's on main** — use main as authoritative base for conflict resolution
 - **Protected branches** — main cannot be force-pushed, requires PR with all CI checks passing (no merge commits, 3 status checks required)
-- **Credential issues** — if `gh auth setup-git` fails with "Device or resource busy", use token-based API calls instead
+- **Credential issues** — `gh auth setup-git` is a dead end here, but `gh` itself is not: it lives at
+  `/opt/data/.local/bin/gh` (not on PATH) and reads `GH_TOKEN`, so use the wrapper at
+  `skills/software-development/git-auth-without-gh/scripts/gh.sh`. Plain `git push` already works via
+  the mounted credential helper. See the `git-auth-without-gh` skill.
 - **ConfigMap mounts** — runtime config (e.g., tool_progress) goes in repo ConfigMaps mounted to pod, NOT in local `~/.hermes/config.yaml`
   - Pattern: `hermes-config` ConfigMap with `config.yaml` → mount to `/opt/data/.hermes/config.yaml`
   - Example: `display.tool_progress: all` for CLI platforms, `off` for discord/telegram
