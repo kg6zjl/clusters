@@ -27,6 +27,10 @@ spec:
       podMonitorSelectorNilUsesHelmValues: false
       prometheusSpec:
         retention: 10d
+        # Without this, alert notifications carry Prometheus' in-cluster
+        # generatorURL (http://kube-prometheus-stack-prometheus.monitoring:9090/...),
+        # which is unreachable from a browser.
+        externalUrl: https://prometheus.kube.stevearnett.com
         serviceMonitorSelector: {}
         podMonitorSelector: {}
         ruleSelectorNilUsesHelmValues: false
