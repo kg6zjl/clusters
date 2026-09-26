@@ -176,6 +176,14 @@ spec:
     monitoring:
       serviceMonitor:
         enabled: true
+        # The live Prometheus CR selects ServiceMonitors by matchLabels
+        # {release: kube-prometheus-stack} - it does not select all of them, despite
+        # what serviceMonitorSelector: {} in kube-prometheus-stack-helmrelease.yaml
+        # implies. Without this label the ServiceMonitor exists, the operator reports
+        # it as valid, and no scrape job is ever rendered, so Loki is scraped by
+        # nobody. Every working ServiceMonitor on this cluster carries this label.
+        labels:
+          release: kube-prometheus-stack
       rules:
         # The chart's own recording rules and alerts (request errors, panics,
         # latency, canary latency, too many compactors).
