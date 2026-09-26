@@ -1,0 +1,194 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: openrouter-exporter-script
+  namespace: monitoring
+data:
+  exporter.py: |
+    #!/usr/bin/env python3
+    """Prometheus exporter for OpenRouter account/key usage and spend.
+
+    Polls the OpenRouter API and exposes the result in Prometheus text format.
+    Standard library only, so it runs on a stock python image with no pip install.
+    """
+
+    import json
+    import os
+    import sys
+    import threading
+    import time
+    import urllib.error
+    import urllib.request
+    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+    API_BASE = os.environ.get("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1").rstrip("/")
+    API_KEY = os.environ.get("OPENROUTER_API_KEY", "")
+    PORT = int(os.environ.get("PORT", "9101"))
+    INTERVAL = float(os.environ.get("SCRAPE_INTERVAL_SECONDS", "60"))
+    TIMEOUT = float(os.environ.get("HTTP_TIMEOUT_SECONDS", "15"))
+    POLL_CREDITS = os.environ.get("OPENROUTER_POLL_CREDITS", "false").lower() in ("1", "true", "yes")
+
+    GAUGES = {
+        "openrouter_up": "1 if the last OpenRouter API poll succeeded, 0 otherwise",
+        "openrouter_scrape_timestamp_seconds": "Unix timestamp of the last successful OpenRouter API poll",
+        "openrouter_scrape_errors_total": "Number of failed OpenRouter API polls since start",
+        "openrouter_usage_usd_total": "Credits used on this API key, all time (USD)",
+        "openrouter_usage_usd_daily": "Credits used on this API key, current UTC day (USD)",
+        "openrouter_usage_usd_weekly": "Credits used on this API key, current UTC week (USD)",
+        "openrouter_usage_usd_monthly": "Credits used on this API key, current UTC month (USD)",
+        "openrouter_byok_usage_usd_total": "External BYOK usage on this API key, all time (USD)",
+        "openrouter_credit_limit_usd": "Spend limit configured on this API key (USD), -1 when unlimited",
+        "openrouter_credit_limit_remaining_usd": "Remaining spend limit on this API key (USD), -1 when unlimited",
+        "openrouter_free_tier": "1 if the account has never purchased credits, 0 otherwise",
+        "openrouter_account_credits_total": "Total credits purchased on the account (USD), management key only",
+        "openrouter_account_usage_total": "Total credits used on the account (USD), management key only",
+    }
+
+    KEY_FIELDS = [
+        ("usage", "openrouter_usage_usd_total"),
+        ("usage_daily", "openrouter_usage_usd_daily"),
+        ("usage_weekly", "openrouter_usage_usd_weekly"),
+        ("usage_monthly", "openrouter_usage_usd_monthly"),
+        ("byok_usage", "openrouter_byok_usage_usd_total"),
+    ]
+
+    _lock = threading.Lock()
+    _values = {}
+    _errors = 0
+    _last_success = 0.0
+    _credits_disabled = not POLL_CREDITS
+
+
+    def log(msg):
+        print(f"[openrouter-exporter] {msg}", flush=True)
+
+
+    def api_get(path):
+        req = urllib.request.Request(
+            API_BASE + path,
+            headers={"Authorization": f"Bearer {API_KEY}", "Accept": "application/json"},
+        )
+        with urllib.request.urlopen(req, timeout=TIMEOUT) as resp:
+            return json.loads(resp.read().decode())
+
+
+    def as_float(value):
+        if isinstance(value, bool) or value is None:
+            return None
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return None
+
+
+    def poll_once():
+        global _errors, _last_success, _credits_disabled
+
+        values = {}
+        try:
+            data = api_get("/key")["data"]
+        except (urllib.error.URLError, urllib.error.HTTPError, OSError, ValueError, KeyError, json.JSONDecodeError) as exc:
+            code = getattr(exc, "code", None)
+            with _lock:
+                _errors += 1
+                _values["openrouter_up"] = 0.0
+                _values["openrouter_scrape_errors_total"] = float(_errors)
+            log(f"poll failed: {type(exc).__name__}{f' HTTP {code}' if code else ''}")
+            return
+
+        for field, metric in KEY_FIELDS:
+            number = as_float(data.get(field))
+            if number is not None:
+                values[metric] = number
+
+        limit = as_float(data.get("limit"))
+        remaining = as_float(data.get("limit_remaining"))
+        values["openrouter_credit_limit_usd"] = limit if limit is not None else -1.0
+        values["openrouter_credit_limit_remaining_usd"] = remaining if remaining is not None else -1.0
+
+        free_tier = data.get("is_free_tier")
+        if isinstance(free_tier, bool):
+            values["openrouter_free_tier"] = 1.0 if free_tier else 0.0
+
+        if not _credits_disabled:
+            try:
+                credits = api_get("/credits")["data"]
+                total = as_float(credits.get("total_credits"))
+                used = as_float(credits.get("total_usage"))
+                if total is not None:
+                    values["openrouter_account_credits_total"] = total
+                if used is not None:
+                    values["openrouter_account_usage_total"] = used
+            except (urllib.error.URLError, urllib.error.HTTPError, OSError, ValueError, KeyError, json.JSONDecodeError) as exc:
+                code = getattr(exc, "code", None)
+                if code in (401, 403):
+                    _credits_disabled = True
+                    log("/credits requires a management key - endpoint disabled until restart")
+                else:
+                    log(f"/credits poll failed: {type(exc).__name__}{f' HTTP {code}' if code else ''}")
+
+        now = time.time()
+        with _lock:
+            _values.update(values)
+            _values["openrouter_up"] = 1.0
+            _values["openrouter_scrape_timestamp_seconds"] = now
+            _values["openrouter_scrape_errors_total"] = float(_errors)
+            _last_success = now
+
+
+    def render():
+        with _lock:
+            snapshot = dict(_values)
+        lines = []
+        for metric, help_text in GAUGES.items():
+            lines.append(f"# HELP {metric} {help_text}")
+            lines.append(f"# TYPE {metric} gauge")
+            if metric in snapshot:
+                lines.append(f"{metric} {snapshot[metric]}")
+        return "\n".join(lines) + "\n"
+
+
+    class Handler(BaseHTTPRequestHandler):
+        protocol_version = "HTTP/1.1"
+
+        def do_GET(self):
+            if self.path.startswith("/metrics"):
+                body = render().encode()
+                self.send_response(200)
+            elif self.path.startswith("/healthz"):
+                body = b"ok\n"
+                self.send_response(200)
+            else:
+                body = b"not found\n"
+                self.send_response(404)
+            self.send_header("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def log_message(self, fmt, *args):
+            pass
+
+
+    def poll_loop():
+        while True:
+            try:
+                poll_once()
+            except Exception as exc:
+                log(f"unexpected poll error: {type(exc).__name__}: {exc}")
+            time.sleep(INTERVAL)
+
+
+    def main():
+        if not API_KEY:
+            log("OPENROUTER_API_KEY is empty - every poll will fail with 401")
+        log(f"polling {API_BASE} every {INTERVAL:.0f}s, serving /metrics on :{PORT}")
+        threading.Thread(target=poll_loop, daemon=True).start()
+        ThreadingHTTPServer(("", PORT), Handler).serve_forever()
+
+
+    if __name__ == "__main__":
+        try:
+            main()
+        except KeyboardInterrupt:
+            sys.exit(0)
