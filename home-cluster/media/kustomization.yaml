@@ -8,6 +8,8 @@ resources:
   - namespace.yaml
   - jellyfin-helmrepository.yaml
   - jellyfin-helmrelease.yaml
+  - jellyfin-config-longhorn-pvc.yaml
+  - jellyfin-config-migration.yaml
   - seerr.yaml
   - prowlarr.yaml
   - radarr.yaml
