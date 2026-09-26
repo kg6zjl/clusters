@@ -5,9 +5,7 @@ namespace: cert-manager
 resources:
   - network-policy.yaml
   - external-secrets.yaml
-  - nas-cert-backup-credentials.yaml
   - clusterissuer.yaml
-  - nas-cert-backup-cronjob.yaml
   - servicemonitor.yaml
 
 patches:
