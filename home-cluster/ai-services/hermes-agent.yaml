@@ -108,6 +108,13 @@ spec:
             mkdir -p "$(dirname "$dest")"
             cp "$f" "$dest" 2>/dev/null || true
           done
+          # This initContainer runs as root on a volume the runtime user owns
+          # (uid 10000). `cp` keeps the owner of a file it overwrites but creates
+          # new files as root, so a skill file that is already in the image stays
+          # hermes:hermes while one that is not yet lands root:root — ownership
+          # would otherwise depend on the image contents. Normalise the tree so a
+          # materialised skill is always owned by the user that reads it.
+          chown -R 10000:10000 /opt/data/skills
           # Seed the config file Hermes actually reads ($HERMES_HOME/config.yaml)
           # from the git-managed ConfigMap. Env vars (HERMES_MODEL_DEFAULT) are
           # NOT honored by the gateway; config.yaml wins. Keep it writable so
