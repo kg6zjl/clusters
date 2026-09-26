@@ -1,0 +1,82 @@
+# Posts pull request activity to the Discord "pull-requests" channel so the
+# gatekeeper can see what is waiting without polling GitHub or Headlamp.
+#
+# Notification only. There is deliberately no approve/merge path here: that
+# would make a Discord account a credential capable of merging to main, which
+# is a trust boundary this cluster does not need to open.
+#
+# The webhook URL is NOT in this repo. It lives in 1Password, and a human copies
+# it into the repository secret DISCORD_PR_WEBHOOK (Settings -> Secrets and
+# variables -> Actions). Until that secret exists the job logs a skip and
+# succeeds, so this file is safe to merge before the secret is created.
+#
+# https://github.com/<owner>/<repo>/settings/secrets/actions
+name: PR notify (Discord)
+
+on:
+  pull_request:
+    types: [opened, reopened, ready_for_review, closed, synchronize]
+
+# Nothing here needs to write anything anywhere.
+permissions:
+  contents: read
+
+jobs:
+  notify:
+    name: Post to Discord
+    runs-on: self-hosted
+    if: github.event.pull_request.draft == false
+    steps:
+      - name: Post PR activity
+        uses: actions/github-script@v9
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_PR_WEBHOOK }}
+        with:
+          script: |
+            const hook = process.env.DISCORD_WEBHOOK;
+            if (!hook) {
+              core.info('DISCORD_PR_WEBHOOK is not set on this repository; skipping. Nothing to do.');
+              return;
+            }
+
+            const pr = context.payload.pull_request;
+            const action = context.payload.action;
+            const merged = pr.merged === true;
+            const verb = merged ? 'merged' : action;
+            const colour = merged ? 0x2ecc71 : (action === 'closed' ? 0xe74c3c : 0x3498db);
+            const title = `${verb} #${pr.number}: ${pr.title}`;
+
+            const fields = [
+              { name: 'repo', value: `${context.repo.owner}/${context.repo.repo}`, inline: true },
+              { name: 'branch', value: pr.head.ref.slice(0, 100), inline: true },
+              { name: 'base', value: pr.base.ref.slice(0, 100), inline: true },
+            ];
+            if (pr.additions !== undefined) {
+              fields.push({ name: 'diff', value: `+${pr.additions} / -${pr.deletions} in ${pr.changed_files} file(s)`, inline: true });
+              fields.push({ name: 'commits', value: String(pr.commits), inline: true });
+              fields.push({ name: 'state', value: `${pr.state}${merged ? ' (merged)' : ''}`, inline: true });
+            }
+            if (pr.draft) fields.push({ name: 'draft', value: 'yes', inline: true });
+
+            const body = {
+              embeds: [{
+                title: title.slice(0, 250),
+                url: pr.html_url,
+                color: colour,
+                author: { name: pr.user.login },
+                fields: fields,
+                footer: { text: 'kg6zjl/clusters' },
+                timestamp: new Date().toISOString(),
+              }],
+            };
+
+            const res = await fetch(hook, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(body),
+            });
+            if (!res.ok) {
+              core.setFailed(`Discord webhook returned ${res.status}: ${(await res.text()).slice(0, 300)}`);
+            } else {
+              core.info(`posted to Discord: ${title}`);
+            }
