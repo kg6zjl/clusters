@@ -116,6 +116,12 @@ spec:
           cp /hermes-config/config.yaml /opt/data/config.yaml
           chown 10000:10000 /opt/data/config.yaml
           chmod 0640 /opt/data/config.yaml
+          # after the config.yaml copy
+          if [ -n "${OPENROUTER_API_KEY:-}" ]; then
+            printf 'OPENROUTER_API_KEY=%s\n' "$OPENROUTER_API_KEY" > /opt/data/.env
+            chown 10000:10000 /opt/data/.env
+            chmod 0600 /opt/data/.env
+          fi
         volumeMounts:
         - name: data
           mountPath: /opt/data
