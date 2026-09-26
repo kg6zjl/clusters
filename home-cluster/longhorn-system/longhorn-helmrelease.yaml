@@ -15,9 +15,16 @@ spec:
         namespace: flux-system
   install:
     createNamespace: true
+    # Flux's default is 5m. A cold first install has to pull the manager,
+    # instance-manager, share-manager and CSI sidecar images onto three nodes
+    # and wait for the manager DaemonSet to report ready; 5m is too tight and
+    # a failed install triggers the chart's pre-delete hook, which deletes the
+    # Longhorn CRDs. Give it room.
+    timeout: 15m
     remediation:
       retries: 3
   upgrade:
+    timeout: 15m
     remediation:
       retries: 3
   values:
