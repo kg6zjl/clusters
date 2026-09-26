@@ -69,19 +69,44 @@ spec:
           chmod +x /opt/data/.local/bin/*
           # Materialize the full skill tree from the git-managed hermes-skills
           # ConfigMap into $HERMES_HOME/skills (the live tree the gateway loads
-          # at startup). ConfigMap keys cannot contain '/', so keys are encoded
-          # as <category>__<skill>.md by the kustomize configMapGenerator.
-          # Git is the source of truth: these copies override the image-bundled
-          # skills, and any runtime edit is reset on next pod start.
+          # at startup). ConfigMap keys cannot contain '/', so keys encode the
+          # path with '__' as the separator:
+          #   <cat>__<skill>.md                     -> <cat>/<skill>/SKILL.md
+          #   <skill>.md                            -> <skill>/SKILL.md (categoryless)
+          #   <cat>__<skill>__<dir>__<file.ext>     -> <cat>/<skill>/<dir>/<file.ext>
+          # The extension is preserved on supporting files, so the trailing '.md'
+          # above is only a marker on SKILL.md keys. Git is the source of truth:
+          # these copies override the image-bundled skills, and any runtime edit
+          # is reset on next pod start.
           mkdir -p /opt/data/skills
           for f in /skills/*; do
             [ -f "$f" ] || continue
-            base="$(basename "$f" .md)"
-            cat="${base%%__*}"
-            name="${base#*__}"
-            [ "$cat" != "$base" ] && [ -n "$name" ] || continue
-            mkdir -p "/opt/data/skills/$cat/$name"
-            cp "$f" "/opt/data/skills/$cat/$name/SKILL.md" 2>/dev/null || true
+            key="$(basename "$f")"
+            case "$key" in
+              *__*) ;;
+              *)  # categoryless skill
+                  name="$(basename "$key" .md)"
+                  dest="/opt/data/skills/$name/SKILL.md"
+                  mkdir -p "$(dirname "$dest")"
+                  cp "$f" "$dest" 2>/dev/null || true
+                  continue
+                  ;;
+            esac
+            cat="${key%%__*}"
+            rest="${key#*__}"
+            case "$rest" in
+              *__*)  # supporting file: nested path, extension kept verbatim
+                  skill="${rest%%__*}"
+                  nested="$(printf '%s' "${rest#*__}" | sed 's|__|/|g')"
+                  dest="/opt/data/skills/$cat/$skill/$nested"
+                  ;;
+              *)     # skill: the trailing .md was a marker for SKILL.md
+                  skill="$(basename "$rest" .md)"
+                  dest="/opt/data/skills/$cat/$skill/SKILL.md"
+                  ;;
+            esac
+            mkdir -p "$(dirname "$dest")"
+            cp "$f" "$dest" 2>/dev/null || true
           done
           # Seed the config file Hermes actually reads ($HERMES_HOME/config.yaml)
           # from the git-managed ConfigMap. Env vars (HERMES_MODEL_DEFAULT) are
