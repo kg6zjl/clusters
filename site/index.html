@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>A home cluster that runs itself from git</title>
+<meta name="description" content="A three-node Kubernetes home lab that is entirely GitOps-driven, with an AI agent living inside it as a first-class cluster citizen.">
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<header class="hero">
+  <div class="wrap">
+    <p class="eyebrow">Home lab notes</p>
+    <h1>A home cluster that runs itself from git</h1>
+    <p class="lede">
+      Three small machines in a home rack running Kubernetes. Every workload, every
+      network rule and every secret is declared in a git repository, and a controller
+      reconciles the cluster to match. Nothing is applied by hand. An AI agent lives
+      inside the cluster as a first-class citizen, with read-only access and a written
+      path to change anything: a pull request.
+    </p>
+    <p class="small">
+      This page describes the design and the things that broke. It deliberately
+      contains no addresses, hostnames or other network detail.
+    </p>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <section id="hardware" aria-labelledby="hardware-h">
+    <h2 id="hardware-h">The hardware reality</h2>
+    <p>
+      The cluster is <strong>three mini-PC nodes</strong>, each a small low-power
+      desktop with a modest CPU, a single disk and a few gigabytes of RAM. They are
+      not servers, and the design is shaped by that. All three run the control plane,
+      so a majority of them must be alive for the cluster to accept writes.
+    </p>
+    <p>
+      There was a fourth node once: a <strong>single-board computer</strong> that
+      booted over Wi-Fi. It is being decommissioned. It was the only non-x86 machine
+      in the fleet, which made it the odd one out for anything that wants a
+      consistent CPU architecture — replicated storage in particular excludes it by
+      architecture selector so no replica ever lands there. A node that has to be
+      specially excluded from every storage decision, and that brings a slow network
+      and one small disk, stops being capacity and starts being maintenance. Retiring
+      it is a deliberate subtraction, not a failure.
+    </p>
+    <p>
+      Outside the cluster sits one <strong>bare-metal AI worker</strong>: a desktop
+      with a single consumer GPU, running directly under systemd rather than as a pod.
+      It serves a local chat backend and an image-generation backend, sharing the one
+      card between them with a small coordinator that stops the chat model while a
+      render is running. Keeping it off the cluster is deliberate — a GPU is easier to
+      hand to two workloads from the host than from inside a scheduler that assumes
+      pods are interchangeable.
+    </p>
+    <p>
+      Host configuration is not left to memory. An Ansible inventory provisions each
+      node identically: base packages, kernel tuning for Kubernetes networking,
+      wired-only networking, a pinned node address, and consistent mounts of a
+      <strong>shared file share on a NAS</strong> that holds bulk media. Everything
+      the hosts do goes through the same review path as the cluster manifests.
+    </p>
+  </section>
+
+  <section id="gitops" aria-labelledby="gitops-h">
+    <h2 id="gitops-h">The GitOps spine</h2>
+    <p>
+      There is no “apply to cluster” button, and there is no admin console that
+      writes. The only way a change reaches the cluster is:
+    </p>
+    <ol class="flow">
+      <li><strong>Branch.</strong> Every change starts on a branch cut from the current main.</li>
+      <li><strong>Pull request.</strong> CI runs on the change: YAML lint, a full
+        manifest build to catch broken references, and a secret scan over the diff.</li>
+      <li><strong>Review and merge.</strong> A human approves. Nothing self-approves.</li>
+      <li><strong>Reconcile.</strong> A GitOps controller inside the cluster notices
+        main moved and drives the cluster back to what git says. Different parts of
+        the tree reconcile on different intervals; nothing needs to be told.</li>
+    </ol>
+    <p>
+      The “never run <code>kubectl apply</code>” rule is not a style preference. If a
+      human or an agent edits the cluster directly, the controller sees drift and
+      reverts it — so the direct edit is not just discouraged, it is *pointless*.
+      Making the pipeline the only path that works is what makes it the only path
+      people use. It also means the repository is not a description of the cluster;
+      it is the cluster.
+    </p>
+    <div class="callout">
+      <h3>Why read-only makes the agent trustworthy</h3>
+      <p>
+        The in-cluster AI agent authenticates with a service account whose permissions
+        are <code>get</code>, <code>list</code> and <code>watch</code> — and nothing
+        else. It can look at essentially everything and change nothing. Its only write
+        path is a commit on a branch, which is subject to CI and a human review, the
+        same as anyone else's.
+      </p>
+      <p>
+        That inverts the usual worry. You do not have to trust the model's judgement,
+        because the worst outcome of a bad decision or a prompt injection is a
+        <em>proposed</em> change that a reviewer rejects. Read-only is also the honest
+        ceiling: everything the agent needs in order to <em>understand</em> the
+        cluster is available to it, and nothing it would need in order to
+        <em>break</em> it is. The permission boundary is the trust boundary.
+      </p>
+    </div>
+    <p>
+      CI itself runs on <strong>self-hosted runners inside the cluster</strong>,
+      scaled by a controller rather than kept warm at a fixed size. The machines that
+      validate a change are the same machines the change will land on.
+    </p>
+  </section>
+
+  <section id="agent" aria-labelledby="agent-h">
+    <h2 id="agent-h">The agent as a cluster citizen</h2>
+    <p>
+      The agent is an ordinary workload: a Deployment in its own namespace, CPU-only,
+      with a network policy that permits it to reach the API server read-only and not
+      much else. What makes it interesting is that it is <strong>built to be
+      disposable</strong>.
+    </p>
+    <ul class="cards">
+      <li>
+        <h3>Ephemeral by design</h3>
+        <p>
+          The pod keeps no precious local state. Its configuration and its entire
+          skill tree are re-materialised from git on every start by an init
+          container, so a restart is a clean rebuild, not a recovery operation. The
+          corollary is a rule the agent follows on itself: a change it makes to its
+          own skills is not finished until it is merged, because anything that only
+          exists in the running pod is gone at the next restart.
+        </p>
+      </li>
+      <li>
+        <h3>One workspace per task</h3>
+        <p>
+          Each task gets its own git worktree on its own branch, cut fresh from main.
+          Two agents working at once therefore cannot collide on a shared checkout or
+          a shared branch — git physically refuses to check the same branch out twice,
+          so a collision becomes a loud error instead of silent corruption.
+        </p>
+      </li>
+      <li>
+        <h3>Secrets it never sees in git</h3>
+        <p>
+          Credentials are stored in <strong>1Password</strong> and synced into the
+          cluster by the <strong>External Secrets Operator</strong>. The repository
+          contains references, never values, and a secret-scanning CI job keeps it
+          that way. The agent can be granted access to use a secret without that
+          secret ever existing in a file it could commit.
+        </p>
+      </li>
+      <li>
+        <h3>Loud on the way out</h3>
+        <p>
+          Opening or closing a pull request posts to a Discord channel, so the human
+          gatekeeper sees what is waiting without polling anything. Notifications are
+          one-way on purpose: there is no approve or merge path from chat, because
+          that would make a chat account a credential capable of merging to main — a
+          trust boundary this cluster does not need to open.
+        </p>
+      </li>
+    </ul>
+    <p>
+      The net effect is an agent whose footprint is a namespace, a service account
+      and a set of pull requests. Delete the namespace and nothing of it remains; the
+      parts worth keeping were committed before it ever mattered.
+    </p>
+  </section>
+
+  <section id="storage" aria-labelledby="storage-h">
+    <h2 id="storage-h">Storage: moving state onto replicated volumes</h2>
+    <p>
+      The cluster started with <strong>local host-path volumes</strong> — a directory
+      on one specific node's disk. That is cheap and it is a trap: the volume is
+      pinned to that node, so the pod that uses it can never move. Node maintenance,
+      rescheduling, any kind of failure recovery stops working for exactly the
+      workloads whose data you care about most.
+    </p>
+    <p>
+      The fix was to stand up <strong>replicated block storage</strong> in-cluster
+      (Longhorn, installed and kept current by the same GitOps pipeline as everything
+      else) and migrate onto it. <strong>Six stateful applications moved</strong> —
+      media servers, indexers and a photo gallery among them — from node-pinned
+      volumes to replicated ones, with <strong>zero data loss</strong>.
+    </p>
+    <p>
+      You cannot change a volume's storage class in place; the field is immutable and
+      the old data does not follow you if you could. So each application moved with
+      the same two-stage pattern:
+    </p>
+    <ol class="flow">
+      <li>
+        <strong>Stage one — create and copy.</strong> Ask for a new claim on the
+        replicated class, scale the workload down so nothing is writing, then run a
+        throwaway pod that mounts the old volume and the new one at once and copies
+        the data across. Never copy a live database file; stop the writer first.
+      </li>
+      <li>
+        <strong>Repoint and verify.</strong> Point the workload at the new claim,
+        start it, and confirm the application actually works — not merely that the
+        pod is Running.
+      </li>
+      <li>
+        <strong>Stage two — keep the fallback, then destroy it.</strong> The old
+        volume is left in place as a rollback target until the new one has soaked.
+        Only then is it deleted. Rollback, right up until the last step, is one line
+        of YAML.
+      </li>
+    </ol>
+    <p>
+      Regenerable cache volumes were handled the cheap way — recreated empty on the
+      new class, never copied — because copying a cache is spending risk to move
+      nothing that matters. And the acceptance test that actually proves the
+      migration worked is not “the pod is healthy”: it is deleting the pod and
+      confirming the replacement lands on a <em>different</em> node.
+    </p>
+    <div class="callout">
+      <p>
+        One thing the migration could not absorb: volumes that a Helm chart creates
+        from a template inside a StatefulSet. If the chart exposes no way to choose
+        the storage class, that volume is not ours to move, and patching the chart's
+        object directly would be drift, not progress. Those had to be identified and
+        left alone rather than forced.
+      </p>
+    </div>
+  </section>
+
+  <section id="monitoring" aria-labelledby="monitoring-h">
+    <h2 id="monitoring-h">Monitoring, alerting and scanning</h2>
+    <p>
+      <strong>Prometheus</strong> scrapes the cluster; <strong>Grafana</strong>
+      renders it; <strong>Alertmanager</strong> decides who to bother. On top of the
+      standard node and workload metrics there are <strong>blackbox probes</strong>
+      that reach out and check endpoints from the outside — so “the pod is Running”
+      and “the thing is actually reachable and answering correctly” are two separate
+      signals, both measured.
+    </p>
+    <p>
+      Alerts route to Discord, and the work that made them useful was not the routing
+      but the <em>links</em>: an alert notification that only says a thing is on fire
+      is a dead end, so each one carries a deep link to the specific alert and the
+      specific resource. Getting that right meant fixing the external URL the alert
+      payloads are generated with — without it, the links pointed at internal cluster
+      names that no browser can open.
+    </p>
+    <p>
+      <strong>Trivy</strong> runs continuously as an operator in-cluster, scanning
+      running images for known vulnerabilities against a locally-cached database and
+      publishing the results as metrics, which get their own Grafana dashboard.
+      Unfixed vulnerabilities are filtered out, and scan artefacts expire on a timer
+      so the cluster does not accumulate them.
+    </p>
+    <p>
+      The alerting that matters most is the alerting that is <em>quiet</em>. Over
+      time the rules were trimmed to remove the things that fired without meaning
+      anything, added inhibitors so one root cause produces one notification instead
+      of a cascade, and gave every message enough context to be actionable. An
+      alerting channel that cries wolf is worse than no channel at all.
+    </p>
+  </section>
+
+  <section id="unglamorous" aria-labelledby="unglamorous-h">
+    <h2 id="unglamorous-h">The unglamorous parts, which are the interesting ones</h2>
+    <p>
+      A page that only shows the finished state is marketing. These are the failure
+      modes that actually shaped this cluster — each one a design lesson that no
+      amount of reading about Kubernetes delivers up front.
+    </p>
+
+    <article class="story">
+      <h3>Every network problem is the network policy first</h3>
+      <p>
+        The cluster runs <strong>default-deny network policies</strong>: a pod can
+        reach nothing until a rule explicitly allows it. That is the right default
+        and it has one consequence — when something cannot talk to something else,
+        the policy is the prime suspect, not the last thing you check. Half of the
+        debugging time saved here came from making that the first step instead of the
+        fifth.
+      </p>
+      <p>
+        The one that gets everyone is the API server itself. It is a <em>host
+        process, not a pod</em>, so a rule that allows traffic to “other pods in the
+        cluster” does not cover it. A freshly deployed component can be perfectly
+        healthy except for one thing — it cannot reach the API server — and
+        crashloop on dial timeouts. The fix is a rule that names the API server's
+        address space explicitly. Nothing about the component was wrong; its
+        permission to exist on the network was.
+      </p>
+    </article>
+
+    <article class="story">
+      <h3>The API server advertised an address that no longer existed</h3>
+      <p>
+        One node was re-addressed when its connection moved from Wi-Fi to a wired
+        link. Several independent pieces of stale state came with that, each with a
+        different symptom, and fixing one did not fix the others. The kubelet's
+        serving certificate still listed the old address, so reading logs and
+        attaching to pods on that node failed while simply listing them worked fine.
+      </p>
+      <p>
+        Worse, the API server kept <em>advertising</em> the old address as its own.
+        The service that front-ends the API servers therefore carried an entry that
+        nothing could route to, and a fraction of all in-cluster API calls failed —
+        enough to look random, rare enough to look like anything but a stale address.
+        The tell is beautifully simple once you know it: the advertised endpoint list
+        and the node list differ by exactly one address, and the node whose address is
+        <em>missing</em> from the endpoints is the one announcing something else.
+      </p>
+      <p>
+        The lesson generalised into a rule: <strong>find the input, not the
+        symptom.</strong> The same stale address appeared in a host config, in a
+        derived API object, and in a certificate. Patching the derived object is
+        wasted effort — it is regenerated from the input within seconds, and a live
+        API server will happily re-publish an address that no longer exists. Fix the
+        advertised address on the host, or fix nothing.
+      </p>
+    </article>
+
+    <article class="story">
+      <h3>Volumes that outlive the node they lived on</h3>
+      <p>
+        When a node leaves a cluster, the volumes that were pinned to it go
+        <em>Released</em> — no longer attached to anything, but still present, and
+        still carrying a node-affinity pointer at a machine that no longer exists.
+        They pin nothing, which is precisely why they go unnoticed. What they do is
+        quietly corrupt every later capacity inventory and backup review: you cannot
+        reason about how much storage you have while phantom volumes are counted in
+        it.
+      </p>
+      <p>
+        Reclaiming them is inherently an imperative one-off — deleting a volume is a
+        cluster write, and the whole point of the pipeline is that cluster writes do
+        not happen — so it becomes a ticket with a verified list and an exact command
+        for a human to run. “We use GitOps” is not the same as “every operation is
+        expressible in YAML”, and admitting where the line is beats pretending it
+        isn't there.
+      </p>
+    </article>
+
+    <article class="story">
+      <h3>A Helm release stuck behind its own upgrade, with no way back</h3>
+      <p>
+        Installing a control-plane component as a managed Helm release went wrong in
+        a way that deserves to be written down. The chart ships its custom resource
+        definitions as <em>templates</em> rather than in the special directory that
+        Helm protects. When the install timed out and the controller's remediation
+        ran an uninstall, the uninstall deleted those definitions — and with them
+        every custom resource of that kind in the cluster. The chart's own cleanup
+        hook then timed out too, leaving the release record pinned in an
+        “uninstalling” state that the controller could only error-loop against.
+      </p>
+      <p>
+        There was no rollback target to return to: the release had never successfully
+        completed, so “roll back” had nowhere to go. Recovery was an ordered
+        unwinding — first widen the install timeout so a slow cold start cannot trip
+        the destructive path again, then clear the imperative state the controller
+        could not clear for itself, then request a fresh reconcile. The durable
+        lesson is the timeout: a default that is generous for a large cluster is
+        cruel on small nodes pulling large images for the first time, and the cost of
+        a too-short install timeout is not a slow install, it is a destructive clean
+        up.
+      </p>
+    </article>
+  </section>
+
+  <section id="closing" aria-labelledby="closing-h">
+    <h2 id="closing-h">What it adds up to</h2>
+    <p>
+      Three small machines, a git repository, and a controller that insists the two
+      agree. The constraint that everything must arrive as a reviewed pull request is
+      not friction around the interesting part — it <em>is</em> the interesting part.
+      It is what lets a fallible AI agent run inside the cluster with real read
+      access and a real ability to help, without anyone having to bet the cluster on
+      its judgement.
+    </p>
+    <p class="small">
+      This page is a hand-written static site served from the same repository the
+      cluster is built from, deployed by a workflow rather than an upload. It carries
+      no analytics, no trackers and no network detail.
+    </p>
+  </section>
+
+</main>
+
+<footer class="site-footer">
+  <div class="wrap">
+    <p>Home lab notes — described abstractly on purpose. No addresses, hostnames or secrets here.</p>
+  </div>
+</footer>
+</body>
+</html>
