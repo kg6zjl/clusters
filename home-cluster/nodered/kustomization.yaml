@@ -8,5 +8,4 @@ resources:
   - ingressroute.yaml
   - pvc.yaml
   - nodered-data-longhorn-pvc.yaml
-  - nodered-migration.yaml
   - dnsendpoint.yaml

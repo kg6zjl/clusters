@@ -22,6 +22,15 @@ spec:
       enabled: false
     crds:
       enabled: true
+    # kube-state-metrics exposes only an allowlist of resource labels. Without this
+    # entry, a Deployment's `alert-on-down: "true"` label never reaches Prometheus, and
+    # the ServiceDown rule in prometheus-rules.yaml matches nothing - which is exactly
+    # what happened: the rule sat loaded and healthy but could not fire, and a 20 minute
+    # outage of meshmonitor raised no alert. Allowlisted labels are renamed with a
+    # `label_` prefix, so the rule selects on label_alert_on_down.
+    kubeStateMetrics:
+      metricLabelsAllowlist:
+        - deployments=[alert-on-down]
     prometheus:
       serviceMonitorSelectorNilUsesHelmValues: false
       podMonitorSelectorNilUsesHelmValues: false
@@ -60,6 +69,7 @@ spec:
                   - https://ha.kube.stevearnett.com/
                   - https://grafana.kube.stevearnett.com/
                   - https://prometheus.kube.stevearnett.com/
+                  - https://meshmonitor.kube.stevearnett.com/
                 labels:
                   service: ingress
             relabel_configs:

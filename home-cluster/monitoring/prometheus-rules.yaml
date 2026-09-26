@@ -11,7 +11,13 @@ spec:
   - name: service-down
     rules:
     - alert: ServiceDown
-      expr: kube_deployment_status_replicas_available{alert_on_down="true"} == 0
+      # label_alert_on_down is the prefixed form: kube-state-metrics renames allowlisted
+      # resource labels with a `label_` prefix, and the bare `alert_on_down` this used to
+      # select on is never exposed at all. The selector matched zero series, so this rule
+      # could not fire - it sat healthy and silent until 2026-09-26, when meshmonitor ran
+      # at 0/1 for 20 minutes and no alert was raised. The allowlist that exposes the
+      # label is set under kubeStateMetrics in kube-prometheus-stack-helmrelease.yaml.
+      expr: kube_deployment_status_replicas_available{label_alert_on_down="true"} == 0
       for: 10m
       labels:
         severity: warning
