@@ -37,6 +37,21 @@ spec:
       storage: 2Gi
   storageClassName: microk8s-hostpath
 ---
+# Migrated off the node-pinned hostpath volume above. This is the claim the
+# Deployment now uses; the old one is kept only as the rollback path.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: prowlarr-config-longhorn
+  namespace: media
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 2Gi
+  storageClassName: longhorn
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
