@@ -1,0 +1,59 @@
+# Stage 1 of moving nodered off its node-pinned hostpath volume.
+#
+# nodered-data is a 2Gi microk8s-hostpath claim whose PV carries a nodeAffinity for
+# one node, so the pod can only run where its volume was created. The Deployment is
+# scaled to 0 in the same commit so nothing writes to the volume while it is read;
+# stage 2 repoints the claim, scales back to 1 and deletes this file.
+#
+# The job lands on the node holding the data by itself - the source claim's
+# nodeAffinity pulls it there - so it needs no nodeSelector of its own. The source is
+# mounted read-only: the copy only reads it, so a mistake cannot damage the original.
+#
+# A copy that cannot fit fails loudly (backoffLimit 2, non-zero exit) rather than
+# leaving a half-copied volume behind, and stage 2 only happens once the logs are
+# checked. No ttlSecondsAfterFinished: a self-deleting Job would be recreated by Flux
+# and the copy would re-run on a loop.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: nodered-data-migrate
+  namespace: nodered
+spec:
+  backoffLimit: 2
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: copy
+          image: alpine:3.24
+          command:
+            - /bin/sh
+            - -c
+            - |
+              set -euo pipefail
+              # the Deployment is scaled to 0 in the same commit; give the old pod
+              # time to release the ReadWriteOnce claim
+              sleep 20
+              echo "nodered source (hostpath):"
+              du -sh /old
+              find /old | wc -l
+              cp -a /old/. /new/
+              echo "nodered destination (longhorn):"
+              du -sh /new
+              find /new | wc -l
+              test -n "$(ls -A /new)"
+              test "$(find /new | wc -l)" -ge "$(find /old | wc -l)"
+              echo "nodered copy ok"
+          volumeMounts:
+            - name: old
+              mountPath: /old
+              readOnly: true
+            - name: new
+              mountPath: /new
+      volumes:
+        - name: old
+          persistentVolumeClaim:
+            claimName: nodered-data
+        - name: new
+          persistentVolumeClaim:
+            claimName: nodered-data-longhorn

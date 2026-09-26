@@ -4,6 +4,8 @@ resources:
   - network-policy.yaml
   - namespace.yaml
   - pvc.yaml
+  - netalertx-data-longhorn-pvc.yaml
+  - netalertx-migration.yaml
   - deployment.yaml
   - service.yaml
   - ingressroute.yaml

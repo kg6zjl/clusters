@@ -8,7 +8,10 @@ metadata:
     app: open-webui
     alert-on-down: "true"
 spec:
-  replicas: 1
+  # Scaled to 0 by the storage migration in open-webui-migration.yaml: nothing may
+  # write to open-webui-data while the copy job reads it. Restored to 1 in the
+  # stage-2 PR once the copy has been verified.
+  replicas: 0
   revisionHistoryLimit: 5
   strategy:
     type: Recreate
