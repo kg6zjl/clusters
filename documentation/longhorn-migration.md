@@ -345,3 +345,60 @@ kubectl -n media get pvc -w
 kubectl -n media logs -f pvc-copier
 kubectl -n media get pods -o wide
 ```
+
+---
+
+## 7. Known failure mode: the install times out and the uninstall hook deletes the CRDs
+
+**Symptom**
+
+- `kubectl -n longhorn-system get helmrelease longhorn` →
+  `Ready=False reason=StateError` with
+  `Could not determine release state: unable to determine state for release with status 'uninstalling'`
+- `longhorn-manager` pods sit at `1/2 Running` indefinitely and their readiness
+  probe (port 9502) fails continuously
+- `kubectl get crd | grep -c longhorn.io` returns **0**
+
+**Mechanism**
+
+1. Flux's default install timeout is 5m, and Helm waits for
+   `DaemonSet/longhorn-manager` and `Deployment/longhorn-driver-deployer` to
+   report ready.
+2. `longhorn-manager` cannot finish starting until it can list its own CRs. If
+   that fails it logs `Waiting for caches to sync` and stays silent:
+   `failed to list *v1beta2.Volume: the server could not find the requested resource`.
+   It has **no liveness probe**, so it never restarts and never recovers.
+3. The install times out. Flux's install remediation then runs the chart's
+   `pre-delete` hook job, `longhorn-uninstall`, which is itself slow enough to
+   time out.
+4. The CRDs are chart *templates*, so `helm uninstall` deletes them. The release
+   record is left in `uninstalling` and Flux can only error-loop from there.
+
+**Recovery** — all imperative; the HelmRelease cannot clear this itself:
+
+```bash
+kubectl -n longhorn-system delete job longhorn-uninstall --ignore-not-found
+kubectl -n longhorn-system delete pod --all
+kubectl -n longhorn-system delete secret sh.helm.release.v1.longhorn.v1 --ignore-not-found
+flux reconcile helmrelease longhorn -n longhorn-system
+```
+
+Deleting the pods is safe in this state: if the install never became ready, no
+Longhorn volume, replica or PV exists yet. Confirm with
+`kubectl get pv | grep longhorn` (expect nothing) before you clear it.
+
+**If the manager wedges again but the CRDs exist and are `Established`:**
+
+```bash
+kubectl -n longhorn-system rollout restart ds/longhorn-manager
+```
+
+The manager re-runs API discovery on startup and recovers; a reinstall is not
+needed.
+
+**Two rules that follow from this:**
+
+- Never let a partial uninstall run without checking `kubectl get crd | grep longhorn.io`
+  afterwards — deleting the CRDs destroys every Longhorn CR in the cluster.
+- The `install`/`upgrade` timeouts in `longhorn-helmrelease.yaml` are 15m, not
+  Flux's 5m default, precisely so a cold install cannot trip this path.
