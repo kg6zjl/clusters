@@ -6,10 +6,7 @@ metadata:
   labels:
     alert-on-down: "true"
 spec:
-  # Scaled to 0 by the storage migration in meshmonitor-migration.yaml: nothing may
-  # write to meshmonitor-data while the copy job reads it. Restored to 1 in the
-  # stage-2 PR once the copy has been verified.
-  replicas: 0
+  replicas: 1
   revisionHistoryLimit: 5
   selector:
     matchLabels:
