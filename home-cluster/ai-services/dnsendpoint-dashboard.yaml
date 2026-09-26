@@ -1,0 +1,15 @@
+# Note: the sibling files dnsendpoint.yaml and dnsendpoint-comfy.yaml each declare
+# `namespace: kube-system`, but the top-level `namespace: ai-services` in this
+# kustomization overrides it -- verified against the rendered output, where both
+# come out in ai-services. The declaration is therefore inert; it is omitted here
+# rather than copied, so the file does not claim something untrue.
+apiVersion: externaldns.k8s.io/v1alpha1
+kind: DNSEndpoint
+metadata:
+  name: hermes-dashboard
+spec:
+  endpoints:
+    - dnsName: hermes.kube.stevearnett.com
+      recordType: CNAME
+      targets:
+        - kube.stevearnett.com
