@@ -8,6 +8,8 @@
 # Print DRIFT lines (and exit 1) when they don't.
 set -euo pipefail
 
+SUMMARY_ONLY="${SUMMARY_ONLY:-0}"
+
 REPO="${REPO:-/opt/data/workspace/clusters/home-cluster}"
 SKILLS="${SKILLS:-/opt/data/skills}"
 
@@ -36,20 +38,27 @@ cut -d' ' -f1 "$TMP/git.txt"   > "$TMP/git.names"
 cut -d' ' -f1 "$TMP/local.txt" > "$TMP/local.names"
 
 drift=0
+mig="$(comm -13 "$TMP/git.names" "$TMP/local.names")"
+ml="$(comm -23 "$TMP/git.names" "$TMP/local.names")"
+mods="$(join "$TMP/git.txt" "$TMP/local.txt" | awk '$2 != $3 {print $1}')"
 
-while read -r name; do
-  echo "DRIFT missing-in-git: $name (created/edited locally, never PR'd)"
+n_mig=$(echo "$mig" | grep -c . || true)
+n_ml=$(echo "$ml" | grep -c . || true)
+n_mod=$(echo "$mods" | grep -c . || true)
+
+if [ "$n_mig" -gt 0 ]; then
+  echo "DRIFT: $n_mig skill(s) exist in the pod but are NOT in git (never PR'd):"
+  [ "$SUMMARY_ONLY" = "1" ] || echo "$mig" | sed 's/^/  - /'
   drift=1
-done < <(comm -13 "$TMP/git.names" "$TMP/local.names")
-
-while read -r name; do
-  echo "DRIFT missing-local: $name (in git, not on pod — check mount/restart)"
+fi
+if [ "$n_ml" -gt 0 ]; then
+  echo "DRIFT: $n_ml skill(s) in git but missing from pod (check mount/restart):"
+  [ "$SUMMARY_ONLY" = "1" ] || echo "$ml" | sed 's/^/  - /'
   drift=1
-done < <(comm -23 "$TMP/git.names" "$TMP/local.names")
-
-mods="$(join "$TMP/git.txt" "$TMP/local.txt" | awk '$2 != $3 {print "DRIFT modified: " $1 " (local != git)"}')"
-if [ -n "$mods" ]; then
-  echo "$mods"
+fi
+if [ "$n_mod" -gt 0 ]; then
+  echo "DRIFT: $n_mod skill(s) modified locally vs git:"
+  [ "$SUMMARY_ONLY" = "1" ] || echo "$mods" | sed 's/^/  - /'
   drift=1
 fi
 
