@@ -39,6 +39,45 @@ data:
     # If the pool wedges again, restart the pod rather than adding a fallback back:
     #   kubectl delete pod -n ai-services -l app=hermes-agent
 
+    # Bind the OpenRouter credential explicitly.
+    #
+    # Symptom this fixes: with no providers block, the gateway logged
+    #   "resolve_provider_client: openrouter requested but OpenRouter credential pool
+    #    has no usable entries"
+    # and every turn died with "No LLM provider configured", even though the credential
+    # was healthy. Ruled out, in the live pod, on 2026-09-26:
+    #   - OPENROUTER_API_KEY is present in the container env AND in s6's
+    #     /run/s6/container_environment, 74 bytes, correct prefix
+    #   - /opt/data/auth.json openrouter entry: last_status null, failure_reason absent
+    #   - `hermes auth list openrouter` reports the credential active
+    #   - a fresh python process calling _try_openrouter() returns a usable OpenAI client,
+    #     in BOTH the default and the -p microwavehotpotato profile scope
+    # ...yet the long-running gateway process still resolved no client. So the failure is
+    # in the gateway's own resolution path, not in the key, the pool file, or the env.
+    #
+    # key_env is the supported way to name the env var a provider authenticates from
+    # (hermes_cli/auth.py:362 reads key_env or api_key_env; the llamacpp block removed in
+    # #658 used the same key). Declaring it here makes the credential binding explicit
+    # instead of leaving it to pool/scope inference. No key material is committed: this
+    # only names OPENROUTER_API_KEY, which arrives from hermes-agent-secrets via envFrom.
+    #
+    # The models list also repopulates the /model catalog, which the removed block used
+    # to provide. It mirrors the openrouter.models list in the microwavehotpotato profile
+    # config so both scopes agree on what is selectable.
+    providers:
+      openrouter:
+        key_env: OPENROUTER_API_KEY
+        models:
+        - "deepseek/deepseek-v4.1-flash"
+        - "cohere/north-mini-code:free"
+        - "openrouter/free"
+        - "nvidia/nemotron-3-ultra-550b-a55b:free"
+        - "poolside/laguna-s-2.1:free"
+        - "anthropic/claude-sonnet-4"
+        - "anthropic/claude-opus-4"
+        - "google/gemini-2.5-pro"
+        - "openai/gpt-4.1"
+
     cron:
       model: "deepseek/deepseek-v4.1-flash"
       model_provider: openrouter
