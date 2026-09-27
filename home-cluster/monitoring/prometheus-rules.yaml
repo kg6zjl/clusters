@@ -175,25 +175,15 @@ spec:
       annotations:
         summary: "PROD backup stale: {{ $labels.entity }}{{ $labels.cronjob }} in {{ $labels.namespace }}"
         description: "No successful backup in over 30 hours, or the metric reporting it has gone away. home-assistant uploads to the NAS over SFTP (schedule ~24h); meshmonitor writes a nightly tarball to the NAS at 03:30."
-  # The CI runner pool is a single point of failure for the whole repository, not just for CI:
-  # Lint, Validate and Secret Scan are required checks on main and enforce_admins is true, so
-  # when no runner exists every PR queues forever and nobody can merge anything - not even a
-  # fix-forward PR. On 2026-09-27 the pool was empty from ~06:45 to ~14:15 (a duplicate ARC
-  # controller in github-runners was vetoing runner-pod creation with 401 Bad credentials) and
-  # it went unnoticed until a PR hit the frozen gate some seven hours later.
-  # absent_over_time() is load-bearing here, not stylistic: an empty pool leaves NO
-  # kube_pod_info series at all, so `count(...) == 0` returns no samples and stays silent
-  # forever. Verified against that incident - evaluated at 10:00Z inside the outage, count(...)
-  # returned the empty vector while absent_over_time(...[10m]) returned 1. The 10m window plus
-  # the 5m `for` keeps this quiet through the seconds of churn while the autoscaler replaces
-  # runners, and it would have reported the outage before it was noticed rather than after.
+  # An empty pool leaves no kube_pod_info series at all, so count(...) == 0 returns no samples and
+  # stays silent - absent_over_time is load-bearing, verified against the 2026-09-27 outage
+  # (1 at 10:00Z while count(...) was empty). The 10m window is the debounce; no `for` on top.
   - name: ci-runners
     rules:
     - alert: CIRunnerPoolEmpty
       expr: absent_over_time(kube_pod_info{namespace="github-runners",created_by_kind="Runner"}[10m])
-      for: 5m
       labels:
-        severity: warning
+        severity: critical
       annotations:
         summary: "CI runner pool is empty - no PR on this repo can merge"
         description: "No github-runner pods have existed for over 10 minutes. Lint, Validate and Secret Scan are required status checks on main with enforce_admins enabled, so every PR is now frozen - including a PR that would fix it. The pool normally holds at least the HorizontalRunnerAutoscaler floor of 4 (github-runner-autoscaler, min 4 / max 12). Check the controller in arc-systems (arc-operator-actions-runner-controller) and its logs for registration errors. Do NOT add a second ARC install as the fix: the chart hardcodes the webhook name, so two installs veto each other - that is exactly what caused the 2026-09-27 outage."
