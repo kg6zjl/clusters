@@ -13,6 +13,7 @@ metadata:
     # skill tree from these ConfigMaps, so a merge alone is otherwise a no-op
     # until the next unrelated restart. Reloader watches for changes.
     configmap.reloader.stakater.com/reload: "hermes-config,hermes-skills,hermes-soul"
+    secret.reloader.stakater.com/reload: "hermes-agent-secrets"
 spec:
   replicas: 1
   revisionHistoryLimit: 5
