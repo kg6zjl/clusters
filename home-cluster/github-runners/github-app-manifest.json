@@ -1,0 +1,17 @@
+{
+  "name": "arc-runners",
+  "url": "https://github.com/kg6zjl/clusters",
+  "hook_attributes": {
+    "url": "https://github.com/kg6zjl/clusters",
+    "active": false
+  },
+  "redirect_url": "https://github.com/kg6zjl/clusters",
+  "description": "GitHub App credentials for the Actions Runner Controller (ARC) in kg6zjl/clusters. Authenticates the ARC controller and autoscaler in place of a personal access token.",
+  "public": false,
+  "default_events": [],
+  "default_permissions": {
+    "metadata": "read",
+    "administration": "write",
+    "actions": "read"
+  }
+}
