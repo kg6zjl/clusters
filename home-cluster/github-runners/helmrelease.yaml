@@ -52,8 +52,12 @@ spec:
                     containers:
                       - name: manager
                         env:
+                          # valueFrom must be cleared explicitly: a strategic merge patch keeps
+                          # fields it does not mention, and the API server rejects an env entry
+                          # that sets both value and valueFrom.
                           - name: GITHUB_APP_PRIVATE_KEY
                             value: /etc/actions-runner-controller/github_app_private_key
+                            valueFrom: null
   values:
     authSecret:
       enabled: true
