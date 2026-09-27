@@ -2,20 +2,27 @@
 #
 # Store the ARC controller's GitHub App credentials in 1Password.
 #
-# The App (arc-runners-home-cluster) already exists in GitHub settings. This script does not
-# create it -- GitHub will not create an App from a non-interactive API call, and the first
-# private key has to be generated in the browser, because POST /app/{id}/private_keys
-# authenticates with a JWT signed by an existing key. So there is one unavoidable browser
-# step, then this script does the rest and keeps the private key out of git and out of any
-# transcript.
+# This script does not create the App. GitHub will not create one from a non-interactive API
+# call, and the first private key has to be generated in the browser, because
+# POST /app/{id}/private_keys authenticates with a JWT signed by an existing key -- so there
+# is no key available to sign the very first request with. Create the App by hand, then run
+# this to put its credentials in 1Password without the key passing through git or a transcript.
 #
 # Browser steps, in this order:
-#   1. Settings -> Developer settings -> GitHub Apps -> arc-runners-home-cluster
-#      Note the App ID at the bottom of the page, then "Generate private key" and save the .pem
-#   2. "Install App" -> install on kg6zjl/clusters only, then Configure
+#   1. https://github.com/settings/apps/new
+#      Name: arc-runners-home-cluster.  Any homepage and webhook URL will do.
+#      Repository permissions -- exactly what github-app-manifest.json declares:
+#        Administration: Read and write
+#        Actions:         Read
+#      Then "Create GitHub App". On its settings page, note the App ID at the bottom of the
+#      page and "Generate private key"; save the .pem.
+#   2. "Install App" -> install on kg6zjl only -> configure for kg6zjl/clusters only
 #
-# Then, once:
+# Then:
 #   ./bootstrap-github-app.sh adopt <app-id> <path-to-private-key.pem>
+#
+# The installation ID is not needed as an argument: the script derives it from the App's own
+# JWT, and refuses to write anything unless that installation really covers kg6zjl/clusters.
 #
 # What it writes: 1Password item "github-runner-app" in the "home-cluster" vault, with custom
 # fields app-id, installation-id and private-key -- the exact fields external-secrets.yaml reads.
