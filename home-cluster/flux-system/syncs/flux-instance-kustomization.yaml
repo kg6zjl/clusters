@@ -13,7 +13,7 @@ spec:
     kind: GitRepository
     name: clusters
   targetNamespace: flux-system
-  suspend: true
+  suspend: false
   wait: true
   timeout: 10m0s
   healthChecks:
