@@ -5,6 +5,8 @@ metadata:
   namespace: home-assistant
   labels:
     alert-on-down: "true"
+  annotations:
+    configmap.reloader.stakater.com/reload: "home-assistant-config"
 spec:
   strategy:
     type: Recreate

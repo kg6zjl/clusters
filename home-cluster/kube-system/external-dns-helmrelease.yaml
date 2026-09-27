@@ -18,6 +18,19 @@ spec:
   upgrade:
     remediation:
       retries: 3
+  postRenderers:
+    - kustomize:
+        patches:
+          - target:
+              kind: Deployment
+              name: external-dns
+            patch: |
+              apiVersion: apps/v1
+              kind: Deployment
+              metadata:
+                name: external-dns
+                annotations:
+                  secret.reloader.stakater.com/reload: "cloudflare-api-creds-root"
   values:
     provider: cloudflare
     cloudflare:
