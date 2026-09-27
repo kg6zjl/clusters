@@ -3,6 +3,8 @@ kind: Deployment
 metadata:
   name: meshtastic-bot
   namespace: meshtastic
+  annotations:
+    secret.reloader.stakater.com/reload: "meshtastic-bot-secrets"
 spec:
   replicas: 0
   revisionHistoryLimit: 5
