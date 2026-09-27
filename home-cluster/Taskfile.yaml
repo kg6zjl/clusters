@@ -17,7 +17,7 @@ tasks:
         echo "Generated cluster-secrets/.dockerconfigjson"
 
   rotate-cert:
-    desc: "Manually copy wildcard TLS cert from cert-manager to all namespaces (emergency use only — reflector should handle this automatically)"
+    desc: "Emergency fallback: copy the wildcard TLS cert into namespaces by hand. Normally unnecessary — Traefik serves it to every IngressRoute from the default TLSStore (traefik/default -> wildcard-stevearnett-com-tls). Previously this relied on reflector, which has been removed."
     cmds:
       - rm -rf ~/.kube/cache
       - echo "Checking cert-manager certificate validity..."
