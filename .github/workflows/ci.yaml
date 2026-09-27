@@ -1,18 +1,5 @@
 name: CI Lint
 
-# TEMP-ARC-BOOTSTRAP: these three jobs are pinned to `ubuntu-latest` instead of
-# `self-hosted`, and MUST be reverted once ARC is healthy.
-#
-# Why: the self-hosted runners are provided by Actions Runner Controller, and ARC
-# cannot register them because its GitHub App credentials had not been provisioned.
-# So every required check sat `pending` forever, and `enforce_admins` is true on
-# main, so an admin could not bypass them either. To land the fix that repairs ARC,
-# this one merge has to run on GitHub-hosted runners. The repo is public, so those
-# minutes are free.
-#
-# Revert: change all three `runs-on:` back to `self-hosted` and delete this block.
-# Tracked for revert in the PR that follows the ARC fix.
-
 on:
   pull_request:
     branches:
@@ -28,7 +15,7 @@ on:
 jobs:
   lint:
     name: Lint
-    runs-on: ubuntu-latest  # TEMP-ARC-BOOTSTRAP: see note below
+    runs-on: self-hosted
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -46,7 +33,7 @@ jobs:
 
   validate:
     name: Validate
-    runs-on: ubuntu-latest  # TEMP-ARC-BOOTSTRAP: see note below
+    runs-on: self-hosted
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -64,7 +51,7 @@ jobs:
 
   secrets:
     name: Secret Scan
-    runs-on: ubuntu-latest  # TEMP-ARC-BOOTSTRAP: see note below
+    runs-on: self-hosted
     steps:
       - name: Checkout
         uses: actions/checkout@v6
