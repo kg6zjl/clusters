@@ -123,7 +123,7 @@ spec:
         severity: warning
       annotations:
         summary: "OpenRouter burn rate is high ({{ printf \"%.2f\" $value }} USD in the last hour)"
-        description: "More than 1 USD of OpenRouter credit was spent in the last hour - a pace of 24 USD per day, about half the monthly key cap in a single day. Look for a runaway loop, a stuck retry, or an agent session that will not stop. Threshold is deliberate: normal bursts here run well under 1 USD per hour."
+        description: "More than 1 USD of OpenRouter credit was spent in the last hour - a pace of 24 USD per day, about half the monthly key cap in a single day. Look for a runaway loop, a stuck retry, or an agent session that will not stop. Threshold is deliberate: the busiest hour measured so far was 0.80 USD."
     - alert: OpenRouterDailySpendHigh
       expr: openrouter_usage_usd_daily > 10
       for: 10m
@@ -131,7 +131,7 @@ spec:
         severity: warning
       annotations:
         summary: "OpenRouter daily spend is high ({{ printf \"%.2f\" $value }} USD today)"
-        description: "Over 10 USD spent today on the OpenRouter key. A normal day here is about 3 USD, so this is roughly 3x normal and a 300 USD per month pace against a 50 USD cap. Coarse daily backstop for the balance of the day."
+        description: "Over 10 USD spent today on the OpenRouter key. Measured recent days run 3-7 USD, so this is well above normal and a 300 USD per month pace against a 50 USD monthly cap. Coarse daily backstop for whatever the hourly rule misses."
     - alert: OpenRouterBalanceDepletionImminent
       expr: predict_linear((openrouter_account_credits_total - openrouter_account_usage_total)[6h:1m], 86400) < 0
       for: 15m
