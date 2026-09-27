@@ -36,6 +36,11 @@ spec:
                 name: actions-runner-controller
                 annotations:
                   secret.reloader.stakater.com/reload: github-runner-secret
+              spec:
+                template:
+                  metadata:
+                    annotations:
+                      arc.stevearnett.com/credentials: github-app
   values:
     authSecret:
       enabled: true
