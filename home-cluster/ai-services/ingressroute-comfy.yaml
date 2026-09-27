@@ -8,6 +8,14 @@ metadata:
   annotations:
     external-dns.alpha.kubernetes.io/hostname: comfy.kube.stevearnett.com
     external-dns.alpha.kubernetes.io/target: kube.stevearnett.com
+    # Deliberately NOT blackbox-probed. This host is served by the `beast` box
+    # (comfy-local -> 192.168.1.161:8080), which is powered on and off on demand,
+    # so it is unreachable for long stretches; a probe would fire IngressDown
+    # continuously and train everyone to ignore the alert. The route also sits
+    # behind the basic-auth-comfy middleware, so even with beast powered on the
+    # probe would get a 401 and could never report success. The reconciler reads
+    # this annotation - there is no hostname allowlist in code.
+    blackbox.stevearnett.com/probe: "false"
 spec:
   entryPoints:
     - websecure

@@ -1,0 +1,223 @@
+# Discovers every ingress host in the cluster and reconciles one Prometheus
+# `Probe` per host against the blackbox-exporter, so each host is probed through
+# DNS -> Traefik -> TLS -> backend.
+#
+# Why a reconciler and not Prometheus service discovery: this cluster's ingresses
+# are almost all Traefik `IngressRoute` CRs (traefik.io/v1alpha1), and Prometheus'
+# kubernetes_sd_configs only understands the node/service/pod/endpoints/ingress
+# roles - it cannot see an IngressRoute. The Prometheus operator's `Probe` CR is
+# the right output (native, survives chart upgrades, gives probe_success and
+# probe_duration_seconds per target), but something has to enumerate the hosts
+# and stamp the Probes. This CronJob is that something. Adding an ingress makes
+# it appear in the next run; deleting one prunes its Probe.
+#
+# The script is in the ConfigMap next to this file and its annotation contract is
+# documented in blackbox-ingress-probes.md in this directory.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ingress-blackbox-reconciler
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: ingress-blackbox-reconciler
+    app.kubernetes.io/part-of: ingress-blackbox
+---
+# Cluster-wide READ ONLY of the two kinds that declare an ingress host. Nothing is
+# ever written outside the probes Role below, and nothing else is readable: the
+# reconciler needs hosts and annotations, not Secrets or workload specs.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: ingress-blackbox-reconciler-read
+  labels:
+    app.kubernetes.io/name: ingress-blackbox-reconciler
+    app.kubernetes.io/part-of: ingress-blackbox
+rules:
+  - apiGroups:
+      - traefik.io
+    resources:
+      - ingressroutes
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - networking.k8s.io
+    resources:
+      - ingresses
+    verbs:
+      - get
+      - list
+      - watch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: ingress-blackbox-reconciler-read
+  labels:
+    app.kubernetes.io/name: ingress-blackbox-reconciler
+    app.kubernetes.io/part-of: ingress-blackbox
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: ingress-blackbox-reconciler-read
+subjects:
+  - kind: ServiceAccount
+    name: ingress-blackbox-reconciler
+    namespace: monitoring
+---
+# WRITE access is scoped to Probe objects in the monitoring namespace only. The
+# reconciler cannot create, update or delete anything else anywhere - in
+# particular it has no access to Secrets, and the script never handles one.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: ingress-blackbox-reconciler-probes
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: ingress-blackbox-reconciler
+    app.kubernetes.io/part-of: ingress-blackbox
+rules:
+  - apiGroups:
+      - monitoring.coreos.com
+    resources:
+      - probes
+    verbs:
+      - get
+      - list
+      - watch
+      - create
+      - update
+      - patch
+      - delete
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: ingress-blackbox-reconciler-probes
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: ingress-blackbox-reconciler
+    app.kubernetes.io/part-of: ingress-blackbox
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: ingress-blackbox-reconciler-probes
+subjects:
+  - kind: ServiceAccount
+    name: ingress-blackbox-reconciler
+    namespace: monitoring
+---
+# The blackbox probes themselves are egress from blackbox-exporter, not from this
+# pod: the reconciler only talks to the Kubernetes API server and DNS. This policy
+# states that requirement explicitly so it survives the eventual removal of the
+# broad `monitoring-allow-all` policy (which today is what actually permits the
+# traffic - it selects every pod in monitoring and allows egress to every
+# namespace plus 0.0.0.0/0). Allow rules are additive, so this narrows nothing
+# today and cannot break the reconciler.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: ingress-blackbox-reconciler
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: ingress-blackbox-reconciler
+    app.kubernetes.io/part-of: ingress-blackbox
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: ingress-blackbox-reconciler
+  policyTypes:
+    - Egress
+  egress:
+    # CoreDNS, for resolving the API server name and nothing else.
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # The in-cluster API server service address (10.152.183.1:443), which is the
+    # address KUBERNETES_SERVICE_HOST points at inside a pod.
+    - to:
+        - ipBlock:
+            cidr: 10.152.183.0/24
+      ports:
+        - protocol: TCP
+          port: 443
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: ingress-blackbox-reconciler
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: ingress-blackbox-reconciler
+    app.kubernetes.io/part-of: ingress-blackbox
+spec:
+  # Five minutes bounds how long a newly added ingress host is unprobed. The cost
+  # is one short-lived pod that reads two list endpoints and writes at most a
+  # handful of Probe objects.
+  schedule: "*/5 * * * *"
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 120
+  successfulJobsHistoryLimit: 2
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      activeDeadlineSeconds: 240
+      ttlSecondsAfterFinished: 900
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: ingress-blackbox-reconciler
+            app.kubernetes.io/part-of: ingress-blackbox
+        spec:
+          restartPolicy: OnFailure
+          serviceAccountName: ingress-blackbox-reconciler
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65534
+            runAsGroup: 65534
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: reconcile
+              image: python:3.13-slim
+              command:
+                - python
+                - /app/reconcile.py
+              env:
+                - name: PYTHONDONTWRITEBYTECODE
+                  value: "1"
+                - name: PROBER_URL
+                  value: blackbox-exporter-prometheus-blackbox-exporter.monitoring.svc:9115
+                - name: PROBE_JOB_NAME
+                  value: ingress-availability
+                - name: PROBE_INTERVAL
+                  value: 60s
+              resources:
+                requests:
+                  cpu: 10m
+                  memory: 32Mi
+                limits:
+                  cpu: 200m
+                  memory: 128Mi
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop:
+                    - ALL
+              volumeMounts:
+                - name: script
+                  mountPath: /app
+                  readOnly: true
+          volumes:
+            - name: script
+              configMap:
+                name: ingress-blackbox-reconciler-script
