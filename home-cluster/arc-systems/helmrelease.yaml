@@ -18,12 +18,6 @@ spec:
   upgrade:
     remediation:
       retries: 3
-  # The ARC controller reads its GitHub token from the controller-manager Secret once at startup and
-  # never re-reads it, so rotating the token leaves it authenticating with a dead credential
-  # (401 Bad credentials) until someone restarts it by hand. This annotation makes reloader
-  # (already running in kube-system) restart the controller whenever that Secret changes. The chart
-  # template has no annotations field on the Deployment itself, so it is applied to the rendered
-  # output.
   postRenderers:
     - kustomize:
         patches:
