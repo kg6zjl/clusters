@@ -5,6 +5,8 @@ metadata:
   namespace: mqtt
   labels:
     alert-on-down: "true"
+  annotations:
+    configmap.reloader.stakater.com/reload: "mosquitto-config"
 spec:
   replicas: 1
   revisionHistoryLimit: 5

@@ -18,6 +18,20 @@ spec:
   upgrade:
     remediation:
       retries: 3
+  postRenderers:
+    - kustomize:
+        patches:
+          - target:
+              kind: Deployment
+              name: oauth2-proxy
+            patch: |
+              apiVersion: apps/v1
+              kind: Deployment
+              metadata:
+                name: oauth2-proxy
+                annotations:
+                  configmap.reloader.stakater.com/reload: "oauth2-proxy"
+                  secret.reloader.stakater.com/reload: "oauth2-proxy-secret,oauth2-proxy-emails"
   values:
     config:
       existingSecret: oauth2-proxy-secret
