@@ -21,7 +21,7 @@ data:
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${datasource}"
+            "uid": "prometheus"
           },
           "fieldConfig": {
             "defaults": {
@@ -77,7 +77,7 @@ data:
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "${datasource}"
+                "uid": "prometheus"
               },
               "expr": "openrouter_credit_limit_remaining_usd",
               "legendFormat": "",
@@ -90,7 +90,7 @@ data:
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${datasource}"
+            "uid": "prometheus"
           },
           "fieldConfig": {
             "defaults": {
@@ -138,7 +138,7 @@ data:
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "${datasource}"
+                "uid": "prometheus"
               },
               "expr": "openrouter_usage_usd_daily",
               "legendFormat": "",
@@ -151,7 +151,7 @@ data:
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${datasource}"
+            "uid": "prometheus"
           },
           "fieldConfig": {
             "defaults": {
@@ -199,7 +199,7 @@ data:
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "${datasource}"
+                "uid": "prometheus"
               },
               "expr": "openrouter_usage_usd_monthly",
               "legendFormat": "",
@@ -212,7 +212,7 @@ data:
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${datasource}"
+            "uid": "prometheus"
           },
           "fieldConfig": {
             "defaults": {
@@ -260,7 +260,7 @@ data:
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "${datasource}"
+                "uid": "prometheus"
               },
               "expr": "openrouter_usage_usd_total",
               "legendFormat": "",
@@ -273,7 +273,7 @@ data:
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${datasource}"
+            "uid": "prometheus"
           },
           "fieldConfig": {
             "defaults": {
@@ -325,7 +325,7 @@ data:
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "${datasource}"
+                "uid": "prometheus"
               },
               "expr": "openrouter_up",
               "legendFormat": "",
@@ -338,7 +338,7 @@ data:
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${datasource}"
+            "uid": "prometheus"
           },
           "fieldConfig": {
             "defaults": {
@@ -390,7 +390,7 @@ data:
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "${datasource}"
+                "uid": "prometheus"
               },
               "expr": "openrouter_scrape_errors_total",
               "legendFormat": "",
@@ -403,7 +403,7 @@ data:
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${datasource}"
+            "uid": "prometheus"
           },
           "fieldConfig": {
             "defaults": {
@@ -477,7 +477,7 @@ data:
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "${datasource}"
+                "uid": "prometheus"
               },
               "expr": "openrouter_usage_usd_daily",
               "legendFormat": "today",
@@ -486,7 +486,7 @@ data:
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "${datasource}"
+                "uid": "prometheus"
               },
               "expr": "openrouter_usage_usd_weekly",
               "legendFormat": "this week",
@@ -495,7 +495,7 @@ data:
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "${datasource}"
+                "uid": "prometheus"
               },
               "expr": "openrouter_usage_usd_monthly",
               "legendFormat": "this month",
@@ -508,7 +508,7 @@ data:
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${datasource}"
+            "uid": "prometheus"
           },
           "fieldConfig": {
             "defaults": {
@@ -582,7 +582,7 @@ data:
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "${datasource}"
+                "uid": "prometheus"
               },
               "expr": "openrouter_usage_usd_total",
               "legendFormat": "used (all time)",
@@ -591,7 +591,7 @@ data:
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "${datasource}"
+                "uid": "prometheus"
               },
               "expr": "openrouter_credit_limit_remaining_usd",
               "legendFormat": "limit remaining",
@@ -600,7 +600,7 @@ data:
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "${datasource}"
+                "uid": "prometheus"
               },
               "expr": "openrouter_credit_limit_usd",
               "legendFormat": "limit",
@@ -613,7 +613,7 @@ data:
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${datasource}"
+            "uid": "prometheus"
           },
           "fieldConfig": {
             "defaults": {
@@ -687,7 +687,7 @@ data:
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "${datasource}"
+                "uid": "prometheus"
               },
               "expr": "rate(openrouter_scrape_errors_total[5m]) * 60",
               "legendFormat": "errors/min",
@@ -700,7 +700,7 @@ data:
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${datasource}"
+            "uid": "prometheus"
           },
           "fieldConfig": {
             "defaults": {
@@ -774,7 +774,7 @@ data:
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "${datasource}"
+                "uid": "prometheus"
               },
               "expr": "openrouter_byok_usage_usd_total",
               "legendFormat": "byok usage",
