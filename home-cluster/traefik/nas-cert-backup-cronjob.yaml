@@ -1,0 +1,64 @@
+# NAS SMB backup: pushes the wildcard TLS cert to the NAS every 12 hours.
+#
+# This lives in the `traefik` namespace because that is where the secret is.
+# The Certificate wildcard-stevearnett-com-tls is declared in
+# home-cluster/traefik/certificate.yaml, and cert-manager writes the Secret it
+# names into that same namespace. A Kubernetes Secret cannot be mounted across
+# namespaces, and mounting a non-existent secret does not fail the pod - it
+# leaves it in ContainerCreating indefinitely, which is precisely how this job
+# sat dead for months while pointing at cert-manager.
+#
+# Reading the secret where it lives needs no RBAC grant, no kubectl and no API
+# server at run time. Both secret volumes are optional and every input is
+# checked, so a missing secret fails the Job loudly within seconds instead of
+# hanging. The private key is never written anywhere but the NAS.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: backup-wildcard-cert-to-nas
+  namespace: traefik
+spec:
+  schedule: "0 */12 * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 2
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: OnFailure
+          volumes:
+            - name: wildcard-tls
+              secret:
+                secretName: wildcard-stevearnett-com-tls
+                defaultMode: 0400
+                optional: true
+            - name: nas-creds
+              secret:
+                secretName: nas-smb-credentials
+                optional: true
+          containers:
+            - name: push-to-nas
+              image: alpine:3.24
+              command:
+                - /bin/sh
+                - -c
+                - |
+                  set -euo pipefail
+                  for f in /tls/tls.crt /tls/tls.key /creds/username /creds/password; do
+                    [ -s "$f" ] || { echo "FATAL: $f missing or empty, refusing to upload" >&2; exit 1; }
+                  done
+                  grep -q 'BEGIN CERTIFICATE' /tls/tls.crt
+                  grep -q 'PRIVATE KEY' /tls/tls.key
+                  echo "pushing $(wc -c < /tls/tls.crt) byte certificate"
+                  apk add --no-cache samba-client >/dev/null
+                  smbclient //192.168.1.176/cert \
+                    -W WORKGROUP -U "$(cat /creds/username)%$(cat /creds/password)" \
+                    -c "put /tls/tls.crt cert.pem; put /tls/tls.key privkey.pem"
+              volumeMounts:
+                - name: wildcard-tls
+                  mountPath: /tls
+                  readOnly: true
+                - name: nas-creds
+                  mountPath: /creds
+                  readOnly: true

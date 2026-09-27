@@ -117,7 +117,7 @@ the majority arrive over RF via the two radios.
 - Namespace `meshtastic`; Deployment `meshmonitor` (env: `MQTT_ADDRESS=mosquitto.mqtt.svc.cluster.local`,
   `MQTT_TOPIC_PREFIX=msh/US/bayarea`)
 - State in PVC `meshmonitor-data` → SQLite `/data/meshmonitor.db` (sources, messages, nodes).
-- Backups: CronJob `pvc-backup` (see `backup-*.yaml`).
+- Backups: CronJob `meshmonitor-backup` (see `backup-cronjob.yaml`).
 - Secrets: 1Password → ExternalSecret (`external-secrets.yaml`). **No credentials are
   stored in this file or any manifest** — the public Bay Area Mesh broker creds and all
   others come from the `home-cluster` 1Password vault via ESO.

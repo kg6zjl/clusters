@@ -3,12 +3,23 @@ kind: NetworkPolicy
 metadata:
   name: home-assistant-allow-egress
   namespace: home-assistant
+  annotations:
+    note: >-
+      This pod runs with hostNetwork true, so Calico does not apply pod NetworkPolicy
+      against it and its effective egress is the node's. The NAS rule below is declared
+      so that dropping hostNetwork cannot silently break the nightly SFTP backup.
 spec:
   podSelector: {}
   policyTypes:
   - Ingress
   - Egress
   egress:
+  - to:
+    - ipBlock:
+        cidr: 192.168.1.176/32
+    ports:
+    - protocol: TCP
+      port: 22
   - to:
     - namespaceSelector:
         matchLabels:

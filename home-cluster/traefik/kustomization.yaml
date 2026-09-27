@@ -12,3 +12,5 @@ resources:
   - helmrelease.yaml
   - certificate.yaml
   - tlsstore.yaml
+  - nas-cert-backup-credentials.yaml
+  - nas-cert-backup-cronjob.yaml

@@ -61,6 +61,19 @@ rules:
     resources: ["networkpolicies", "ingresses", "ingressclasses", "endpointslices"]
     verbs: ["get", "list", "watch"]
 
+  # EndpointSlices are the authoritative endpoint set for a Service. The legacy
+  # v1 Endpoints object can be stale (skip-mirror), which is exactly how a
+  # decommissioned IP stayed in the API service endpoints unnoticed.
+  - apiGroups: ["discovery.k8s.io"]
+    resources: ["endpointslices"]
+    verbs: ["get", "list", "watch"]
+
+  # CRD status: needed to tell "the CRD is missing" apart from "the CRD exists
+  # but is not Established", which look identical from a failed list call.
+  - apiGroups: ["apiextensions.k8s.io"]
+    resources: ["customresourcedefinitions"]
+    verbs: ["get", "list", "watch"]
+
   # Traefik CRDs (read-only)
   - apiGroups: ["traefik.io", "traefik.containo.us"]
     resources:
@@ -89,6 +102,13 @@ rules:
     resources: ["storageclasses", "csinodes", "csidrivers", "volumeattachments"]
     verbs: ["get", "list", "watch"]
 
+  # Longhorn CRDs (read-only) — volume/replica/engine state, node CRs,
+  # snapshots and backups. Needed to verify storage health without asking
+  # a human to run kubectl.
+  - apiGroups: ["longhorn.io"]
+    resources: ["*"]
+    verbs: ["get", "list", "watch"]
+
   # Policy / autoscaling / coordination / rbac audit (read-only)
   - apiGroups: ["policy"]
     resources: ["poddisruptionbudgets", "poddisruptionbudgets/status"]
@@ -104,8 +124,35 @@ rules:
     verbs: ["get", "list", "watch"]
 
   # Monitoring / observability CRDs (read-only)
+  # `prometheuses` is the one that matters for diagnosis: the Prometheus CR is the only
+  # place serviceMonitorSelector / serviceMonitorNamespaceSelector /
+  # serviceMonitorSelectorNilUsesHelmValues live. Without reading it, a scrape job that was
+  # never rendered is indistinguishable from a ServiceMonitor that was never selected, and
+  # the ServiceMonitor object itself looks perfectly correct either way. That gap produced
+  # exactly that mistake on the Loki scrape issue: a confident wrong root cause.
   - apiGroups: ["monitoring.coreos.com"]
-    resources: ["servicemonitors", "podmonitors", "prometheusrules", "probes"]
+    resources:
+      - servicemonitors
+      - podmonitors
+      - prometheusrules
+      - probes
+      - prometheuses
+      - prometheuses/status
+    verbs: ["get", "list", "watch"]
+
+  # Flux Operator CRDs (read-only). The FluxInstance is the object that will own the four Flux
+  # controllers once the takeover lands, so its status is the only place that says which
+  # distribution version is actually running and which components the operator believes it
+  # manages. Without read access the takeover's own verification checklist
+  # (`kubectl -n flux-system get fluxinstance flux`) is unusable to the agent doing the work,
+  # and a failed takeover would be indistinguishable from a successful one - which matters
+  # because a broken Flux cannot be repaired by this agent at all.
+  - apiGroups: ["fluxcd.controlplane.io"]
+    resources:
+      - fluxinstances
+      - fluxinstances/status
+      - fluxreports
+      - fluxreports/status
     verbs: ["get", "list", "watch"]
 
   # Secrets operators / cert-manager / external-dns (read-only)
@@ -117,6 +164,21 @@ rules:
     verbs: ["get", "list", "watch"]
   - apiGroups: ["externaldns.k8s.io"]
     resources: ["dnsendpoints"]
+    verbs: ["get", "list", "watch"]
+
+  # KubeStash / AppsCode backup CRDs (read-only) — this is the cluster's backup
+  # system: BackupConfigurations, BackupSessions, Repositories, Snapshots. None of it
+  # is described in git, so the cluster API is the only source of truth for what is
+  # actually backed up. Before this grant every list returned Forbidden, which made a
+  # protected volume indistinguishable from an unprotected one - and produced a wrong
+  # claim that home-assistant had no backup at all.
+  - apiGroups:
+      - core.kubestash.com
+      - storage.kubestash.com
+      - addons.kubestash.com
+      - appcatalog.appscode.com
+      - metrics.appscode.com
+    resources: ["*"]
     verbs: ["get", "list", "watch"]
 --- 
 apiVersion: rbac.authorization.k8s.io/v1

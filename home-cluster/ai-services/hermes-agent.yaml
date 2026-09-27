@@ -13,6 +13,7 @@ metadata:
     # skill tree from these ConfigMaps, so a merge alone is otherwise a no-op
     # until the next unrelated restart. Reloader watches for changes.
     configmap.reloader.stakater.com/reload: "hermes-config,hermes-skills,hermes-soul"
+    secret.reloader.stakater.com/reload: "hermes-agent-secrets"
 spec:
   replicas: 1
   revisionHistoryLimit: 5
@@ -69,19 +70,44 @@ spec:
           chmod +x /opt/data/.local/bin/*
           # Materialize the full skill tree from the git-managed hermes-skills
           # ConfigMap into $HERMES_HOME/skills (the live tree the gateway loads
-          # at startup). ConfigMap keys cannot contain '/', so keys are encoded
-          # as <category>__<skill>.md by the kustomize configMapGenerator.
-          # Git is the source of truth: these copies override the image-bundled
-          # skills, and any runtime edit is reset on next pod start.
+          # at startup). ConfigMap keys cannot contain '/', so keys encode the
+          # path with '__' as the separator:
+          #   <cat>__<skill>.md                     -> <cat>/<skill>/SKILL.md
+          #   <skill>.md                            -> <skill>/SKILL.md (categoryless)
+          #   <cat>__<skill>__<dir>__<file.ext>     -> <cat>/<skill>/<dir>/<file.ext>
+          # The extension is preserved on supporting files, so the trailing '.md'
+          # above is only a marker on SKILL.md keys. Git is the source of truth:
+          # these copies override the image-bundled skills, and any runtime edit
+          # is reset on next pod start.
           mkdir -p /opt/data/skills
           for f in /skills/*; do
             [ -f "$f" ] || continue
-            base="$(basename "$f" .md)"
-            cat="${base%%__*}"
-            name="${base#*__}"
-            [ "$cat" != "$base" ] && [ -n "$name" ] || continue
-            mkdir -p "/opt/data/skills/$cat/$name"
-            cp "$f" "/opt/data/skills/$cat/$name/SKILL.md" 2>/dev/null || true
+            key="$(basename "$f")"
+            case "$key" in
+              *__*) ;;
+              *)  # categoryless skill
+                  name="$(basename "$key" .md)"
+                  dest="/opt/data/skills/$name/SKILL.md"
+                  mkdir -p "$(dirname "$dest")"
+                  cp "$f" "$dest" 2>/dev/null || true
+                  continue
+                  ;;
+            esac
+            cat="${key%%__*}"
+            rest="${key#*__}"
+            case "$rest" in
+              *__*)  # supporting file: nested path, extension kept verbatim
+                  skill="${rest%%__*}"
+                  nested="$(printf '%s' "${rest#*__}" | sed 's|__|/|g')"
+                  dest="/opt/data/skills/$cat/$skill/$nested"
+                  ;;
+              *)     # skill: the trailing .md was a marker for SKILL.md
+                  skill="$(basename "$rest" .md)"
+                  dest="/opt/data/skills/$cat/$skill/SKILL.md"
+                  ;;
+            esac
+            mkdir -p "$(dirname "$dest")"
+            cp "$f" "$dest" 2>/dev/null || true
           done
           # Seed the config file Hermes actually reads ($HERMES_HOME/config.yaml)
           # from the git-managed ConfigMap. Env vars (HERMES_MODEL_DEFAULT) are
@@ -107,6 +133,11 @@ spec:
         ports:
         - containerPort: 8642
           name: api
+        # The dashboard listens on 9119 inside the same container, supervised by
+        # the image's own s6 service (docker/s6-rc.d/dashboard). Declared here so
+        # the Service and the IngressRoute have a named port to target.
+        - containerPort: 9119
+          name: dashboard
         env:
         - name: API_SERVER_ENABLED
           value: "true"
@@ -114,11 +145,27 @@ spec:
           value: "0.0.0.0"
         - name: API_SERVER_PORT
           value: "8642"
-        # Point at your existing llama.cpp on beast
-        - name: OPENAI_API_BASE_URL
-          value: "http://192.168.1.161:11434/v1"
-        - name: OPENAI_API_KEY
-          value: "no-key"
+        # Web dashboard (skills/kanban/chat surface). The image ships an s6 slot
+        # for it that starts ONLY when HERMES_DASHBOARD is truthy; with it unset
+        # the run script exits 0 and the finish script marks the slot permanently
+        # failed, so s6 does not restart-loop. Defaults are already 0.0.0.0:9119
+        # but both are set explicitly so we do not depend on image defaults.
+        #
+        # A non-loopback bind REQUIRES an auth provider -- HERMES_DASHBOARD_INSECURE
+        # is a no-op since the June 2026 hardening. The provider comes from the
+        # HERMES_DASHBOARD_BASIC_AUTH_* vars, which arrive via envFrom below from
+        # 1Password through ESO. Without them the dashboard fails closed and will
+        # not start, which is the intended behaviour.
+        - name: HERMES_DASHBOARD
+          value: "true"
+        - name: HERMES_DASHBOARD_HOST
+          value: "0.0.0.0"
+        - name: HERMES_DASHBOARD_PORT
+          value: "9119"
+        # No OPENAI_API_BASE_URL / OPENAI_API_KEY here: both existed only to point the
+        # gateway at beast's llama.cpp (192.168.1.161:11434) and fed the now-removed
+        # llamacpp provider. OpenRouter authenticates with OPENROUTER_API_KEY from
+        # hermes-agent-secrets via envFrom below.
         # Tools installed by install-tools initContainer into .local/bin (already on PATH)
         - name: KUBECONFIG
           value: /opt/data/.kube/config
@@ -140,10 +187,10 @@ spec:
           value: "Hermes"
         - name: GIT_COMMITTER_EMAIL
           value: "hermes@stevearnett.com"
-        # Default model must match a /v1/models id exactly. Beast llama-server
-        # serves GLM-4.6V-Flash-UD-Q4_K_XL (local GGUF, native function calling).
-        - name: HERMES_MODEL_DEFAULT
-          value: "GLM-4.6V-Flash-UD-Q4_K_XL"
+        # The default model is not set here on purpose: the gateway reads
+        # model.default from the seeded config.yaml and ignores
+        # HERMES_MODEL_DEFAULT. Changing the model means editing
+        # hermes-config-configmap.yaml, not this file.
         envFrom:
         - secretRef:
             name: hermes-agent-secrets
@@ -241,6 +288,23 @@ spec:
     targetPort: 8642
     protocol: TCP
     name: api
+  selector:
+    app: hermes-agent
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: hermes-dashboard
+  namespace: ai-services
+  labels:
+    app: hermes-agent
+spec:
+  type: ClusterIP
+  ports:
+  - port: 9119
+    targetPort: 9119
+    protocol: TCP
+    name: dashboard
   selector:
     app: hermes-agent
 ---

@@ -1,0 +1,69 @@
+# Longhorn-backed replacements for the four remaining node-pinned media config
+# claims.
+#
+# radarr, sonarr, lidarr and seerr each declare a 2Gi microk8s-hostpath claim
+# with a nodeAffinity tying them to whichever node the volume was created on
+# (thinkcentre01 for lidarr, thinkcentre02 for the other three). Longhorn cannot
+# adopt an existing volume and spec.storageClassName is immutable, so migration
+# means a new claim plus a copy - the same two-stage pattern used for prowlarr
+# (#617/#620) and jellyfin (#623/#625).
+#
+# Declared in a file of their own so they survive stage 2. If these lived in the
+# migration file that stage 2 deletes, Flux would prune Bound volumes out from
+# under the Deployments.
+#
+# 5Gi rather than the 2Gi they have now: hostpath claims never enforced their
+# request, so the real usage is unknown until the copy job reports it, and a
+# claim that is too small fails the copy with ENOSPC while the app is down.
+# Longhorn is thin-provisioned, so a larger request is headroom, not disk.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: radarr-config-longhorn
+  namespace: media
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+  storageClassName: longhorn
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: sonarr-config-longhorn
+  namespace: media
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+  storageClassName: longhorn
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: lidarr-config-longhorn
+  namespace: media
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+  storageClassName: longhorn
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: seerr-config-longhorn
+  namespace: media
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+  storageClassName: longhorn

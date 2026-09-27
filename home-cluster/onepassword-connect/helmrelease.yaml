@@ -12,7 +12,7 @@ spec:
       sourceRef:
         kind: HelmRepository
         name: onepassword
-        namespace: onepassword-connect
+        namespace: flux-system
   install:
     createNamespace: true
   upgrade:

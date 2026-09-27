@@ -7,6 +7,8 @@ metadata:
   labels:
     app: open-webui
     alert-on-down: "true"
+  annotations:
+    secret.reloader.stakater.com/reload: "hermes-agent-secrets,ai-services-secrets"
 spec:
   replicas: 1
   revisionHistoryLimit: 5
@@ -72,7 +74,7 @@ spec:
       volumes:
       - name: webui-data
         persistentVolumeClaim:
-          claimName: open-webui-data
+          claimName: open-webui-data-longhorn
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim

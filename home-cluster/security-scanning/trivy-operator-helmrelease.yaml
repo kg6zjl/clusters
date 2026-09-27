@@ -22,6 +22,19 @@ spec:
   upgrade:
     remediation:
       retries: -1
+  postRenderers:
+    - kustomize:
+        patches:
+          - target:
+              kind: Deployment
+              name: trivy-operator
+            patch: |
+              apiVersion: apps/v1
+              kind: Deployment
+              metadata:
+                name: trivy-operator
+                annotations:
+                  configmap.reloader.stakater.com/reload: "trivy-operator-config"
   values:
     operator:
       builtInTrivyServer: true

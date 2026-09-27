@@ -1,0 +1,25 @@
+# Longhorn-backed replacement for jellyfin's config claim.
+#
+# The chart-managed jellyfin-config claim sits on a microk8s-hostpath PV with a
+# nodeAffinity for thinkcentre02, which is the only node jellyfin can ever run
+# on. Longhorn cannot adopt an existing volume and spec.storageClassName is
+# immutable, so migration means a new claim plus a copy.
+#
+# Declared here rather than in the migration file so it survives stage 2: if the
+# claim lived in a file that stage 2 deletes, Flux would prune a Bound volume out
+# from under the Deployment.
+#
+# 880M in use, so 5Gi is generous headroom without replicating 10Gi of nothing
+# (Longhorn keeps 2 replicas of whatever is requested).
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: jellyfin-config-longhorn
+  namespace: media
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+  storageClassName: longhorn

@@ -7,6 +7,13 @@
 
 set -u
 
+dir="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+
+# Rebase guard runs first and unconditionally: it needs no network and no
+# pre-commit install, so a stale branch is caught on every commit (the guard
+# scopes itself to this repo and fails open when it cannot judge).
+"$dir/check-rebased-on-main.sh" || exit 1
+
 if ! command -v pre-commit >/dev/null 2>&1; then
 	exit 0
 fi

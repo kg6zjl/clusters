@@ -108,7 +108,7 @@ kubectl logs -n <namespace> <pod>
 kubectl describe <resource> -n <namespace>
 
 # Check certificate validity
-kubectl get secret wildcard-stevearnett-com-tls -n cert-manager -o jsonpath='{.data.tls\.crt}' | base64 -d | openssl x509 -noout -dates
+kubectl get secret wildcard-stevearnett-com-tls -n traefik -o jsonpath='{.data.tls\.crt}' | base64 -d | openssl x509 -noout -dates
 
 # Check Flux reconciliation status
 kubectl get kustomizations -n flux-system
@@ -231,6 +231,22 @@ env:
 
 ## Git Workflow (IMPORTANT)
 
+### WORK IN YOUR OWN GIT WORKTREE (non-negotiable)
+
+**Never do branch work in the shared clone at `/opt/data/workspace/clusters`.** Every agent session,
+kanban worker, and cron job on this pod checks out its own branch in that one clone — so its `HEAD`
+moves under you mid-task and your commits can land on someone else's branch.
+
+```bash
+git -C /opt/data/workspace/clusters fetch origin
+git -C /opt/data/workspace/clusters worktree add /opt/data/worktrees/<name> -b <branch> origin/main
+cd /opt/data/worktrees/<name>
+```
+
+The shared clone exists only to hold the object store and mint worktrees. If `git log`/`git status`
+in it does not match what you just did, someone else's branch is checked out — **do not `git checkout`
+it to fix it**, move to your own worktree instead.
+
 ### ALWAYS PULL MAIN FIRST (non-negotiable)
 
 **Before starting ANY change, sync to the latest remote state.** Working from a stale
@@ -243,6 +259,9 @@ git checkout main
 git pull origin main --ff-only
 git checkout -b <new-branch>
 ```
+
+Prefer the worktree form above — it gives you `origin/main` as the base without moving the shared
+clone's `HEAD` at all.
 
 Verify your base is current *right before* pushing too:
 ```bash
@@ -275,9 +294,16 @@ If this check fails, fix it immediately before committing.
 
 **TODO**: Add `trufflehog` or `detect-secrets` for intelligent key-value pair detection in addition to gitleaks.
 
-Manual backup can be triggered with:
+Manual NAS backups are handled by the two backup CronJobs defined in this repo
+(there is no generic `pvc-backup` CronJob and no `backup` namespace):
+
+- `backup-wildcard-cert-to-nas` in `traefik` (`home-cluster/traefik/nas-cert-backup-cronjob.yaml`)
+- `meshmonitor-backup` in `meshtastic` (`home-cluster/meshtastic/backup-cronjob.yaml`)
+
+To run one on demand instead of waiting for its schedule, create a one-off Job
+from the existing CronJob by name:
 ```bash
-kubectl create job -n backup --from=cronjob/pvc-backup pvc-backup-manual
+kubectl create job -n meshtastic --from=cronjob/meshmonitor-backup meshmonitor-backup-manual
 ```
 
 ### Environment Variables in ConfigMaps

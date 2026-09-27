@@ -8,6 +8,8 @@ resources:
   - namespace.yaml
   - jellyfin-helmrepository.yaml
   - jellyfin-helmrelease.yaml
+  - jellyfin-config-longhorn-pvc.yaml
+  - media-config-longhorn-pvcs.yaml
   - seerr.yaml
   - prowlarr.yaml
   - radarr.yaml
@@ -20,5 +22,4 @@ resources:
   - ingressroute-prowlarr.yaml
   - ingressroute-radarr.yaml
   - ingressroute-sonarr.yaml
-  - jellyfin-cache-pvc.yaml
   - external-secrets.yaml

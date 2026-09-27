@@ -5,6 +5,12 @@ metadata:
   namespace: monitoring
 spec:
   interval: 1h
+  # The kube-prometheus-stack upgrade takes ~11 minutes. The Helm action timeout defaults to
+  # 5m0s, so every upgrade was abandoned before it could finish, the next reconcile started
+  # another one, and the release never settled (in-sync -> out-of-sync -> upgrade, endlessly).
+  # That loop - not the values themselves - is why no change to this release was safe to make.
+  # 20m lets the upgrade finish and the release settle.
+  timeout: 20m
   chart:
     spec:
       chart: kube-prometheus-stack
@@ -22,11 +28,27 @@ spec:
       enabled: false
     crds:
       enabled: true
+    # NOTE: exposing the `alert-on-down` resource label needs the SUBCHART's values, i.e.
+    # `kube-state-metrics:` - not `kubeStateMetrics:`, which at this level is only the
+    # component toggle. Setting the allowlist under `kubeStateMetrics:` is accepted
+    # silently and does nothing, which is how ServiceDown stayed dead:
+    #
+    #   kube-state-metrics:
+    #     metricLabelsAllowlist:
+    #       - deployments=[alert-on-down]
+    #
+    # Still not applied - that is a separate decision, and prod availability is already covered
+    # by the ProdServiceDown rule in prometheus-rules.yaml. What blocked it was the endless
+    # upgrade loop described on spec.timeout above, which is now fixed.
     prometheus:
       serviceMonitorSelectorNilUsesHelmValues: false
       podMonitorSelectorNilUsesHelmValues: false
       prometheusSpec:
         retention: 10d
+        # Without this, alert notifications carry Prometheus' in-cluster
+        # generatorURL (http://kube-prometheus-stack-prometheus.monitoring:9090/...),
+        # which is unreachable from a browser.
+        externalUrl: https://prometheus.kube.stevearnett.com
         serviceMonitorSelector: {}
         podMonitorSelector: {}
         ruleSelectorNilUsesHelmValues: false
@@ -47,24 +69,25 @@ spec:
             static_configs:
               - targets:
                   - 192.168.1.176:9100
-          - job_name: ingress-availability
-            metrics_path: /probe
-            params:
-              module: [http_2xx]
+          # The hand-maintained `ingress-availability` job that used to live here
+          # listed four of the twenty-eight ingress hosts and left the other
+          # twenty-four silently unprobed. It is replaced by per-host Probe CRs
+          # reconciled from the live IngressRoute/Ingress objects by the
+          # ingress-blackbox-reconciler CronJob (blackbox-probe-reconciler.yaml).
+          # The Probes set jobName: ingress-availability, so the IngressDown rule
+          # in ingress-availability-rules.yaml keeps working unchanged - it now
+          # evaluates 27 hosts instead of 4. Do not re-add a static target list
+          # here: that would double-probe the listed hosts and put a second,
+          # hand-maintained source of truth back.
+          - job_name: openrouter-exporter
+            scrape_interval: 60s
             static_configs:
               - targets:
-                  - https://ha.kube.stevearnett.com/
-                  - https://grafana.kube.stevearnett.com/
-                  - https://prometheus.kube.stevearnett.com/
-                labels:
-                  service: ingress
-            relabel_configs:
-              - source_labels: [__address__]
-                target_label: __param_target
-              - source_labels: [__param_target]
-                target_label: instance
-              - target_label: __address__
-                replacement: blackbox-exporter-prometheus-blackbox-exporter.monitoring.svc:9115
+                  - openrouter-exporter.monitoring.svc.cluster.local:9101
+        additionalAlertRelabelConfigs:
+          - source_labels: [alertname]
+            regex: NodeDiskIOSaturation
+            action: drop
         additionalRules:
           - name: ingress-availability
             rules:
@@ -76,9 +99,40 @@ spec:
                 annotations:
                   summary: "Ingress {{ $labels.instance }} is down"
                   description: "Cannot reach {{ $labels.instance }} for 2 minutes"
+          - name: node-disk-io
+            rules:
+              - alert: NodeDiskIOSaturationNvme
+                expr: rate(node_disk_io_time_weighted_seconds_total{device=~"nvme.+",job="node-exporter"}[5m]) > 50
+                for: 30m
+                labels:
+                  severity: warning
+                annotations:
+                  summary: "NVMe disk IO queue is deep"
+                  description: "Queue depth (aqu-sq) on {{ $labels.device }} at {{ $labels.instance }} above 50 for 30 minutes, currently {{ printf \"%.2f\" $value }}"
+                  runbook_url: https://runbooks.prometheus-operator.dev/runbooks/node/nodediskiosaturation
+              - alert: NodeDiskIOSaturationOther
+                expr: rate(node_disk_io_time_weighted_seconds_total{device=~"(/dev/)?(mmcblk.p.+|rbd.+|sd.+|vd.+|xvd.+|dm-.+|md.+|dasd.+)",job="node-exporter"}[5m]) > 10
+                for: 30m
+                labels:
+                  severity: warning
+                annotations:
+                  summary: "Disk IO queue is high"
+                  description: "Queue depth (aqu-sq) on {{ $labels.device }} at {{ $labels.instance }} above 10 for 30 minutes, currently {{ printf \"%.2f\" $value }}"
+                  runbook_url: https://runbooks.prometheus-operator.dev/runbooks/node/nodediskiosaturation
     grafana:
       enabled: true
       replicas: 1
+      # Grafana's own state lived on an emptyDir: its database (users, API keys, annotations and
+      # the admin credential it stores on first boot) plus anything created in the UI. Without
+      # this, only ConfigMap-provisioned dashboards and datasources survive a pod restart, and
+      # the stored admin credential silently drifts from the secret. Longhorn PVC so the state
+      # outlives the pod and the node.
+      persistence:
+        enabled: true
+        storageClassName: longhorn
+        accessModes:
+          - ReadWriteOnce
+        size: 10Gi
       admin:
         existingSecret: grafana-admin-secret
         userKey: admin-user

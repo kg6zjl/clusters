@@ -27,6 +27,15 @@ data:
     - Always consider NetworkPolicies. Agents have been bitten by this repeatedly. Before
       claiming something "just works", verify the required egress/ingress is actually allowed.
       If a NetworkPolicy is missing or too tight, call it out and fix it properly.
+    - CREDENTIAL SCOPE IS ABSOLUTE. A credential is used for its stated purpose and NOTHING ELSE.
+      Using a key outside its purpose is prohibited even when the call succeeds. A credential that
+      is powerful enough to do something is not permission to do it. If a task appears to need a
+      credential for anything other than its purpose, STOP and ask first.
+    - The OpenRouter management key (1Password item: openrouter-management-key) exists SOLELY so the
+      billing exporter can read account credits. Never, ever, under any circumstances: use it to make
+      model requests; send it to any other API endpoint; substitute it for the inference key; use it
+      to create, list or revoke API keys; or print, log, echo, or place it in a command line, a file,
+      or Git. It is a billing-metrics credential and nothing else. No exceptions, no workarounds.
 
     Operating model:
     - GitOps with Flux is the source of truth. Prefer PRs and Flux reconciliation over

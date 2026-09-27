@@ -9,24 +9,64 @@ metadata:
 data:
   config.yaml: |
     model:
-      default: "deepseek/deepseek-v4.1-flash"
       provider: openrouter
-      # context_length only matters for local providers; omit for OpenRouter
+      default: "deepseek/deepseek-v4.1-flash"
 
+    # OpenRouter only. The local llama.cpp fallback chain was removed on 2026-09-26.
+    #
+    # Why: the chain did not degrade gracefully, it degraded into garbage. Measured against
+    # beast (192.168.1.161:11434) on 2026-09-26, the rung-1 model produced no tool call at
+    # all and timed out at 90s, while the 0.8B rung answered a get_events tool call in 2.2s.
+    # In live use rung 1 emitted a turn containing 183 repeated identical `terminal` tool
+    # calls, stalled the stream past the 900s stale threshold, and the killed connection
+    # was then misreported by hermes as "Context size has been exceeded" — hermes itself
+    # logged that the rejection "is not explained by request size (~18,344 of 131,072
+    # tokens)". A fallback that returns looping garbage is worse than a clean failure.
+    #
+    # The chain was masking a real bug rather than fixing it: hermes keeps OpenRouter
+    # health in a single in-memory credential pool, an upstream 429 on ONE model marks
+    # that credential unusable for EVERY model, and the failure record carries no reset
+    # time. So the pool wedges and never recovers on its own. The credential itself is
+    # fine — verified 2026-09-26: the OpenRouter key authenticates, $60 credits /
+    # $47.58 used, model id `deepseek/deepseek-v4.1-flash` present in
+    # GET /api/v1/models, and a live completion returned 200 in 1.77s. A pod restart
+    # clears the wedged pool.
+    #
+    # TRADE-OFF: with no chain declared, a wedged pool means every turn hard-fails with
+    # "No LLM provider configured" rather than silently degrading. That is the intended
+    # trade — a loud failure is debuggable, a slow wrong answer is not.
+    #
+    # If the pool wedges again, restart the pod rather than adding a fallback back:
+    #   kubectl delete pod -n ai-services -l app=hermes-agent
+
+    # Bind the OpenRouter credential explicitly.
+    #
+    # Symptom this fixes: with no providers block, the gateway logged
+    #   "resolve_provider_client: openrouter requested but OpenRouter credential pool
+    #    has no usable entries"
+    # and every turn died with "No LLM provider configured", even though the credential
+    # was healthy. Ruled out, in the live pod, on 2026-09-26:
+    #   - OPENROUTER_API_KEY is present in the container env AND in s6's
+    #     /run/s6/container_environment, 74 bytes, correct prefix
+    #   - /opt/data/auth.json openrouter entry: last_status null, failure_reason absent
+    #   - `hermes auth list openrouter` reports the credential active
+    #   - a fresh python process calling _try_openrouter() returns a usable OpenAI client,
+    #     in BOTH the default and the -p microwavehotpotato profile scope
+    # ...yet the long-running gateway process still resolved no client. So the failure is
+    # in the gateway's own resolution path, not in the key, the pool file, or the env.
+    #
+    # key_env is the supported way to name the env var a provider authenticates from
+    # (hermes_cli/auth.py:362 reads key_env or api_key_env; the llamacpp block removed in
+    # #658 used the same key). Declaring it here makes the credential binding explicit
+    # instead of leaving it to pool/scope inference. No key material is committed: this
+    # only names OPENROUTER_API_KEY, which arrives from hermes-agent-secrets via envFrom.
+    #
+    # The models list also repopulates the /model catalog, which the removed block used
+    # to provide. It mirrors the openrouter.models list in the microwavehotpotato profile
+    # config so both scopes agree on what is selectable.
     providers:
-      lmstudio:
-        base_url: "http://192.168.1.161:11434/v1"
-        models:
-        - "GLM-4.6V-Flash-UD-Q4_K_XL"
-        - "Qwen3-14B-abliterated-Q4_K_M"
-        - "Qwen3.5-9B-Q4_K_M"
-        - "Qwen3.8-27B-ABLITERATED-Q3_K_M"
-        - "Qwen3.8-27B-ABLITERATED-Q4_K_M"
-        - "Qwen35-0.8B-Q4_K_M"
-
       openrouter:
-        # base_url defaults to https://openrouter.ai/api/v1
-        # api_key comes from OPENROUTER_API_KEY env var (via ExternalSecret)
+        key_env: OPENROUTER_API_KEY
         models:
         - "deepseek/deepseek-v4.1-flash"
         - "cohere/north-mini-code:free"
@@ -39,13 +79,10 @@ data:
         - "openai/gpt-4.1"
 
     cron:
-      model: "Qwen35-0.8B-Q4_K_M"
-      model_provider: lmstudio
+      model: "deepseek/deepseek-v4.1-flash"
+      model_provider: openrouter
 
     display:
-      # Per-platform (schema-canonical) tool_progress off: no tool-call bubbles
-      # on any gateway surface. Top-level display.tool_progress also works but
-      # is schema-flagged; the per-platform key is what /verbose saves and reads.
       platforms:
         discord:
           tool_progress: off

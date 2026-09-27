@@ -1,0 +1,52 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: ingress-availability
+  namespace: monitoring
+  labels:
+    prometheus: kube-prometheus-stack-prometheus
+    app: kube-prometheus-stack-prometheus
+spec:
+  groups:
+  # Every ingress host in the cluster is probed through the blackbox exporter by
+  # a per-host Prometheus `Probe` CR. Those CRs are created, updated and pruned
+  # from the live IngressRoute/Ingress objects by the ingress-blackbox-reconciler
+  # CronJob (blackbox-probe-reconciler.yaml) - discovery is not a list in git, and
+  # the old hand-maintained job in kube-prometheus-stack-helmrelease.yaml is gone.
+  # The Probes set `jobName: ingress-availability`, which is what puts the
+  # existing job="ingress-availability" identity on the metrics, so the rule below
+  # is unchanged and now covers 27 hosts instead of 4.
+  #
+  # This alert was declared under `additionalRules:` in the HelmRelease, which is
+  # not a value kube-prometheus-stack or the Prometheus operator reads: the group
+  # was never rendered into a PrometheusRule, and the object that is actually
+  # loaded in the cluster (named ingress-availability, matching this one) carries
+  # no Helm or Flux ownership labels. It is declared here so that the file in git
+  # is the thing that produces it, and editing it does something.
+  - name: ingress-availability
+    rules:
+    - alert: IngressDown
+      expr: probe_success{job="ingress-availability"} == 0
+      for: 2m
+      labels:
+        severity: critical
+      annotations:
+        summary: "Ingress {{ $labels.instance }} is down"
+        description: "Cannot reach {{ $labels.instance }} for 2 minutes"
+    # The Probes are the output of the reconciler, so they only track reality while
+    # it keeps running. If it stops, the Probes that already exist are still
+    # scraped (IngressDown keeps working for known hosts) but a newly added ingress
+    # is never probed and nothing else would say so. absent() is deliberate, for
+    # the same reason it is used in prometheus-rules.yaml: a plain staleness
+    # expression on a series that has disappeared goes quiet forever, which is the
+    # exact failure this rule exists to catch.
+    - alert: IngressProbeReconcilerStale
+      expr: |
+        (time() - kube_cronjob_status_last_successful_time{namespace="monitoring",cronjob="ingress-blackbox-reconciler"} > 1800)
+        or absent(kube_cronjob_status_last_successful_time{namespace="monitoring",cronjob="ingress-blackbox-reconciler"})
+      for: 15m
+      labels:
+        severity: warning
+      annotations:
+        summary: "Ingress blackbox reconciler is not running"
+        description: "The ingress-blackbox-reconciler CronJob has not succeeded in 30 minutes. Existing probes are still scraped, but new ingress hosts are no longer probed and removed ones are no longer pruned."

@@ -15,7 +15,16 @@ spec:
         namespace: flux-system
   install:
     createNamespace: true
+    # Flux's default Helm action timeout is 5m. csi-smb-node is a DaemonSet with
+    # maxSurge 0 / maxUnavailable 1, so it rolls one node at a time; across three
+    # nodes - including nodes that were themselves joining - that rollout has taken
+    # longer than 5m and the upgrade was aborted at exactly 5m0.8s. Because every
+    # aborted attempt left only failed revisions in the release history, the
+    # remediation below had no target to roll back to and the release wedged in
+    # Stalled/MissingRollbackTarget instead of retrying. Give the roll room.
+    timeout: 15m
   upgrade:
+    timeout: 15m
     remediation:
       retries: 3
   values:

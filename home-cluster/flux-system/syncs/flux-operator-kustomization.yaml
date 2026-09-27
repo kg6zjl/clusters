@@ -1,0 +1,20 @@
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: flux-operator
+  namespace: flux-system
+spec:
+  interval: 10m0s
+  path: ./home-cluster/flux-operator
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: clusters
+  targetNamespace: flux-system
+  wait: true
+  timeout: 5m0s
+  healthChecks:
+    - apiVersion: apps/v1
+      kind: Deployment
+      name: flux-operator
+      namespace: flux-system
