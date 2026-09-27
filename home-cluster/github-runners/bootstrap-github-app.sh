@@ -191,7 +191,7 @@ write_item() {
     say "Replacing the existing '$ITEM' item."
     op item delete "$ITEM" --vault "$VAULT" >/dev/null || die "could not remove the old item '$ITEM'"
   fi
-  op item create --category=credential --title="$ITEM" --vault="$VAULT" \
+  op item create --category=login --title="$ITEM" --vault="$VAULT" \
     "app-id[text]=$app_id" \
     "installation-id[text]=$installation_id" \
     "private-key[text]=$(cat "$key_file")" >/dev/null \
