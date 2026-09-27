@@ -13,10 +13,6 @@ spec:
         kind: HelmRepository
         name: prometheus-community
         namespace: flux-system
-  # The blackbox exporter reads its probe-modules ConfigMap only at startup, so a merged module
-  # change is a no-op until the pod happens to restart. This annotation makes reloader (already
-  # running in kube-system) restart the exporter whenever that ConfigMap changes. The chart template
-  # has no annotations field on the Deployment itself, so it is applied to the rendered output.
   postRenderers:
     - kustomize:
         patches:
