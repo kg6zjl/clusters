@@ -109,13 +109,13 @@ spec:
         summary: "OpenRouter account balance nearly exhausted ({{ printf \"%.2f\" $value }} USD left)"
         description: "Under 3 USD of purchased OpenRouter credit remains. Top up now: at zero, every agent on the cluster starts failing with HTTP 402 at the same moment."
     - alert: OpenRouterCreditsUnavailable
-      expr: absent(openrouter_account_credits_total)
+      expr: absent(openrouter_account_credits_total) and on() (openrouter_up == 1)
       for: 30m
       labels:
         severity: warning
       annotations:
         summary: "OpenRouter account credit metrics are missing"
-        description: "No openrouter_account_credits_total is being published, so the account balance is invisible and the balance alerts above cannot fire. Either the exporter is down (OpenRouterExporterDown will also fire) or /credits is disabled: check that OPENROUTER_POLL_CREDITS is true and that the management key in the 1Password item openrouter-management-key is valid - a 401 or 403 disables the endpoint until the pod restarts."
+        description: "The exporter is up but publishing no openrouter_account_credits_total, so the account balance is invisible and the balance alerts above cannot fire. Check that OPENROUTER_POLL_CREDITS is true and that the management key in the 1Password item openrouter-management-key is valid - a 401 or 403 disables the /credits endpoint until the pod restarts. A full exporter outage is deliberately excluded here; OpenRouterExporterDown covers that."
   # Backup freshness for the two prod services. Configured is not the same as working:
   # home-assistant carried a KubeStash BackupConfiguration for 201 days that never produced
   # a single snapshot, while still reading as "backups are configured". This rule watches
