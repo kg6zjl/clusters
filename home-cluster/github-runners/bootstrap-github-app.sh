@@ -45,6 +45,7 @@ note() { printf '%s\n' "${DIM}$*${RST}" >&2; }
 # resolve_installation is called in a command substitution, so its diagnostics must go to
 # stderr or they end up captured as the returned installation ID.
 info() { printf '%s\n' "$*" >&2; }
+warn() { printf '%s%s%s\n' "$YLW" "$*" "$RST" >&2; }
 need() { command -v "$1" >/dev/null 2>&1 || die "missing required tool: $1"; }
 
 b64url() { openssl base64 -A | tr '+/' '-_' | tr -d '='; }
@@ -136,20 +137,36 @@ $(printf '%s' "$body" | jq -r '.message // .' 2>/dev/null || printf '%s' "$body"
   [ -n "$inst_token" ] || die "no token in the access_tokens response:
 $(printf '%s' "$body" | jq -r '.message // .' 2>/dev/null || printf '%s' "$body")"
 
+  # Prove the App can do the one thing the controller actually needs: list runners on the repo
+  # with the installation token. Deliberately the same auth and the same Actions permission the
+  # controller uses at registration time, so a 200 here means registration will work.
+  #
+  # Note: do not use GET /repos/{repo}/installation here. It authenticates only as an app JWT and
+  # rejects installation tokens outright with 401 "A JSON web token could not be decoded".
   resp=$(curl -sS -w $'\n%{http_code}' \
     -H "Accept: application/vnd.github+json" \
     -H "X-GitHub-Api-Version: 2022-11-28" \
     -H "Authorization: Bearer $inst_token" \
-    "$API/repos/$REPO/installation") \
-    || die "could not reach $API while checking the installation on $REPO"
+    "$API/repos/$REPO/actions/runners?per_page=1") \
+    || die "could not reach $API while checking runner access on $REPO"
   code=${resp##*$'\n'}
+  body=${resp%$'\n'*}
   case "$code" in
-    200) info "Confirmed: the App is installed on $REPO (installation $target)." ;;
-    404) die "the App is NOT installed on $REPO.
-https://github.com/settings/installations -> arc-runners-home-cluster -> Configure
-add $REPO to the repository list, then re-run." ;;
-    *) die "checking the installation on $REPO returned HTTP $code:
-$(printf '%s' "${resp%$'\n'*}" | jq -r '.message // .' 2>/dev/null || printf '%s' "${resp%$'\n'*}")" ;;
+    200) info "Confirmed: the App can list runners on $REPO (installation $target)." ;;
+    404)
+      # GitHub returns 404 -- not 403 -- both for "app is not installed on this repo" and for
+      # "app is installed but lacks the permission", and deliberately does not say which. Not
+      # being able to tell those apart is a reason to report it, not a reason to block: the
+      # 1Password item is correct either way, and if the permission really is missing the
+      # controller's own registration attempt will say so just as clearly.
+      warn "the App cannot list runners on $REPO yet. Either it is not installed on the repo,
+  or it lacks Actions: Read. Both are fixed in one place:
+  https://github.com/settings/installations -> arc-runners-home-cluster -> Configure
+  then App settings -> Permissions -> Repository permissions -> Actions = Read.
+  Continuing anyway -- the credentials below are still correct."
+      ;;
+    *) die "listing runners on $REPO returned HTTP $code:
+$(printf '%s' "$body" | jq -r '.message // .' 2>/dev/null || printf '%s' "$body")" ;;
   esac
 
   printf '%s' "$target"
