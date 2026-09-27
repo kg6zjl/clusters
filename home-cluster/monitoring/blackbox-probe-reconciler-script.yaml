@@ -1,0 +1,349 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ingress-blackbox-reconciler-script
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: ingress-blackbox-reconciler
+    app.kubernetes.io/part-of: ingress-blackbox
+data:
+  reconcile.py: |
+    #!/usr/bin/env python3
+    """Reconcile one Prometheus Probe per ingress host, against blackbox-exporter.
+
+    Every host declared by a Traefik IngressRoute (traefik.io/v1alpha1) or a
+    standard Ingress (networking.k8s.io/v1) anywhere in the cluster is probed
+    through the blackbox-exporter in this namespace. Discovery is dynamic: there is
+    no host list in git and no host list in the Prometheus scrape config. Add an
+    ingress and it is probed by the next run; delete it and its Probe is pruned.
+
+    Opt a single object out of probing with:
+
+        blackbox.stevearnett.com/probe: "false"
+
+    Optionally override, per object:
+
+        blackbox.stevearnett.com/module: http_2xx_insecure   # default http_2xx
+        blackbox.stevearnett.com/target: https://host/path   # default https://<host>/
+
+    If a host is declared by more than one object (an IngressRoute and a leftover
+    Ingress, for example) it is probed once. The IngressRoute is treated as the
+    source of truth for the override annotations, because that is the object the
+    external-dns annotations live on; an opt-out on any object declaring the host
+    wins regardless.
+
+    Standard library only (urllib against the in-cluster API server), so it runs on
+    a stock python image with nothing to pip install and nothing third-party to
+    keep patched.
+    """
+
+    import hashlib
+    import json
+    import os
+    import re
+    import ssl
+    import sys
+    import traceback
+    import urllib.error
+    import urllib.parse
+    import urllib.request
+
+    SA_DIR = "/var/run/secrets/kubernetes.io/serviceaccount"
+    API = "https://%s:%s" % (
+        os.environ["KUBERNETES_SERVICE_HOST"],
+        os.environ.get("KUBERNETES_SERVICE_PORT", "443"),
+    )
+    HTTP_TIMEOUT = float(os.environ.get("HTTP_TIMEOUT_SECONDS", "30"))
+
+    PROBE_NAMESPACE = os.environ.get("PROBE_NAMESPACE", "monitoring")
+    PROBE_NAME_PREFIX = os.environ.get("PROBE_NAME_PREFIX", "bb")
+    JOB_NAME = os.environ.get("PROBE_JOB_NAME", "ingress-availability")
+    PROBER_URL = os.environ.get(
+        "PROBER_URL", "blackbox-exporter-prometheus-blackbox-exporter.monitoring.svc:9115"
+    )
+    PROBER_SCHEME = os.environ.get("PROBER_SCHEME", "http")
+    DEFAULT_MODULE = os.environ.get("DEFAULT_MODULE", "http_2xx")
+    PROBE_INTERVAL = os.environ.get("PROBE_INTERVAL", "60s")
+
+    MANAGED_BY_LABEL = "app.kubernetes.io/managed-by"
+    MANAGED_BY_VALUE = "ingress-blackbox-reconciler"
+    PART_OF_LABEL = "app.kubernetes.io/part-of"
+    PART_OF_VALUE = "ingress-blackbox"
+
+    # The Prometheus in this cluster selects Probes with
+    # probeSelector.matchLabels.release=kube-prometheus-stack, so a Probe without
+    # this label is accepted by the API server but never rendered into a scrape
+    # config - it would silently probe nothing.
+    SELECTOR_LABEL = "release"
+    SELECTOR_VALUE = "kube-prometheus-stack"
+
+    ANNOTATION_PREFIX = "blackbox.stevearnett.com/"
+    ANN_PROBE = ANNOTATION_PREFIX + "probe"
+    ANN_MODULE = ANNOTATION_PREFIX + "module"
+    ANN_TARGET = ANNOTATION_PREFIX + "target"
+    ANN_HOST = ANNOTATION_PREFIX + "host"
+    ANN_SOURCE = ANNOTATION_PREFIX + "source"
+
+    # Host(`example.com`) / Host("example.com") / Host('example.com') in a Traefik
+    # route match rule. HostRegexp is deliberately not matched: it is a pattern,
+    # not a hostname that can be probed.
+    HOST_RE = re.compile(r"""Host\((?P<q>[`"'])(?P<host>[^`"']+)(?P=q)\)""")
+    FALSEY = {"false", "0", "no", "off", "disabled"}
+    URL_SCHEME_RE = re.compile(r"^[a-zA-Z][a-zA-Z0-9+.-]*://")
+
+    TOKEN = ""
+    TLS = None
+
+
+    def log(message):
+        print("[ingress-blackbox] %s" % message, flush=True)
+
+
+    def is_falsey(value):
+        return str(value).strip().lower() in FALSEY
+
+
+    def fingerprint(spec):
+        """The subset of a Probe spec this reconciler owns.
+
+        Compared before writing so an unchanged Probe is not rewritten on every
+        run. Only fields we set are included: defaults the operator or the API
+        server add (a status block, a generated scrape class) must not read as
+        drift.
+        """
+        static_config = (spec.get("targets") or {}).get("staticConfig") or {}
+        prober = spec.get("prober") or {}
+        return json.dumps(
+            {
+                "jobName": spec.get("jobName"),
+                "interval": spec.get("interval"),
+                "module": spec.get("module"),
+                "prober": {k: prober.get(k) for k in ("url", "scheme", "path")},
+                "static": static_config.get("static"),
+                "labels": static_config.get("labels"),
+            },
+            sort_keys=True,
+        )
+
+
+    def api(method, path, body=None):
+        data = None if body is None else json.dumps(body).encode()
+        request = urllib.request.Request(API + path, data=data, method=method)
+        request.add_header("Authorization", "Bearer " + TOKEN)
+        request.add_header("Accept", "application/json")
+        if data is not None:
+            request.add_header("Content-Type", "application/json")
+        try:
+            with urllib.request.urlopen(request, context=TLS, timeout=HTTP_TIMEOUT) as response:
+                raw = response.read()
+                return json.loads(raw) if raw else {}
+        except urllib.error.HTTPError as exc:
+            detail = exc.read().decode(errors="replace")[:600]
+            raise RuntimeError("%s %s -> HTTP %s: %s" % (method, path, exc.code, detail)) from exc
+
+
+    def list_objects(path, params=None):
+        """GET every page of a list endpoint."""
+        query = dict(params or {})
+        query["limit"] = "500"
+        items = []
+        while True:
+            payload = api("GET", path + "?" + urllib.parse.urlencode(query))
+            items.extend(payload.get("items") or [])
+            cont = str((payload.get("metadata") or {}).get("continue") or "")
+            if not cont:
+                return items
+            query["continue"] = cont
+
+
+    def discover_hosts():
+        """Map every declared ingress host to the objects that declare it.
+
+        Returns {host: [candidate, ...]}, where each candidate carries the object's
+        annotations plus a rank used when more than one object declares the same
+        host (lower wins: IngressRoute before Ingress).
+        """
+        candidates = []
+
+        for obj in list_objects("/apis/traefik.io/v1alpha1/ingressroutes"):
+            meta = obj.get("metadata") or {}
+            found = set()
+            for route in ((obj.get("spec") or {}).get("routes") or []):
+                for match in HOST_RE.finditer(route.get("match") or ""):
+                    found.add(match.group("host"))
+            for host in sorted(found):
+                candidates.append(
+                    {
+                        "host": host,
+                        "rank": 0,
+                        "kind": "IngressRoute",
+                        "namespace": meta.get("namespace") or "",
+                        "name": meta.get("name") or "",
+                        "annotations": meta.get("annotations") or {},
+                    }
+                )
+
+        for obj in list_objects("/apis/networking.k8s.io/v1/ingresses"):
+            meta = obj.get("metadata") or {}
+            spec = obj.get("spec") or {}
+            found = set()
+            for rule in (spec.get("rules") or []):
+                if rule.get("host"):
+                    found.add(rule["host"])
+            for tls in (spec.get("tls") or []):
+                for host in (tls.get("hosts") or []):
+                    if host:
+                        found.add(host)
+            for host in sorted(found):
+                candidates.append(
+                    {
+                        "host": host,
+                        "rank": 1,
+                        "kind": "Ingress",
+                        "namespace": meta.get("namespace") or "",
+                        "name": meta.get("name") or "",
+                        "annotations": meta.get("annotations") or {},
+                    }
+                )
+
+        hosts = {}
+        for candidate in candidates:
+            hosts.setdefault(candidate["host"], []).append(candidate)
+        return hosts
+
+
+    def probe_names(hosts):
+        """Stable, unique, DNS-label-safe Probe name per host."""
+        slugs = {}
+        for host in hosts:
+            slugs.setdefault(re.sub(r"[^a-z0-9]+", "-", host.lower()).strip("-"), []).append(host)
+        names = {}
+        for slug, members in slugs.items():
+            for host in members:
+                if len(members) > 1:
+                    slug = "%s-%s" % (slug, hashlib.sha1(host.encode()).hexdigest()[:8])
+                names[host] = ("%s-%s" % (PROBE_NAME_PREFIX, slug))[:63].strip("-")
+        return names
+
+
+    def build_probe(name, host, primary):
+        module = str(primary["annotations"].get(ANN_MODULE) or "").strip() or DEFAULT_MODULE
+        target = str(primary["annotations"].get(ANN_TARGET) or "").strip() or ("https://%s/" % host)
+        if not URL_SCHEME_RE.match(target):
+            target = "https://" + target
+        return {
+            "apiVersion": "monitoring.coreos.com/v1",
+            "kind": "Probe",
+            "metadata": {
+                "name": name,
+                "namespace": PROBE_NAMESPACE,
+                "labels": {
+                    SELECTOR_LABEL: SELECTOR_VALUE,
+                    MANAGED_BY_LABEL: MANAGED_BY_VALUE,
+                    PART_OF_LABEL: PART_OF_VALUE,
+                },
+                "annotations": {
+                    ANN_HOST: host,
+                    ANN_SOURCE: "%s/%s/%s" % (primary["kind"], primary["namespace"], primary["name"]),
+                },
+            },
+            "spec": {
+                "jobName": JOB_NAME,
+                "interval": PROBE_INTERVAL,
+                "module": module,
+                "prober": {"url": PROBER_URL, "scheme": PROBER_SCHEME, "path": "/probe"},
+                "targets": {
+                    "staticConfig": {
+                        "static": [target],
+                        "labels": {"service": "ingress"},
+                    }
+                },
+            },
+        }
+
+
+    def metadata_matches(existing, desired):
+        labels = ((existing.get("metadata") or {}).get("labels")) or {}
+        for key, value in desired["metadata"]["labels"].items():
+            if labels.get(key) != value:
+                return False
+        return True
+
+
+    def main():
+        dry_run = os.environ.get("DRY_RUN", "").strip().lower() in ("1", "true", "yes")
+
+        hosts = discover_hosts()
+        names = probe_names(hosts)
+
+        desired = {}
+        opted_out = []
+        for host in sorted(hosts):
+            candidates = sorted(hosts[host], key=lambda c: (c["rank"], c["namespace"], c["name"]))
+            if any(is_falsey(c["annotations"].get(ANN_PROBE, "")) for c in candidates):
+                opted_out.append((host, candidates[0]))
+                continue
+            desired[names[host]] = build_probe(names[host], host, candidates[0])
+
+        log("discovered %d distinct ingress host(s)" % len(hosts))
+        log("probing %d, opted out %d" % (len(desired), len(opted_out)))
+        for host, source in opted_out:
+            log("  opted out: %s (%s/%s/%s)" % (host, source["kind"], source["namespace"], source["name"]))
+        for name in sorted(desired):
+            log("  probe %s -> %s" % (name, desired[name]["spec"]["targets"]["staticConfig"]["static"][0]))
+
+        if dry_run:
+            log("DRY_RUN set - no objects written")
+            return 0
+
+        probe_path = "/apis/monitoring.coreos.com/v1/namespaces/%s/probes" % PROBE_NAMESPACE
+        existing = {
+            obj["metadata"]["name"]: obj
+            for obj in list_objects(
+                probe_path, {"labelSelector": "%s=%s" % (MANAGED_BY_LABEL, MANAGED_BY_VALUE)}
+            )
+        }
+
+        created = updated = unchanged = 0
+        for name in sorted(desired):
+            want = desired[name]
+            current = existing.get(name)
+            if current is None:
+                api("POST", probe_path, want)
+                created += 1
+                continue
+            if fingerprint(current.get("spec") or {}) == fingerprint(want["spec"]) and metadata_matches(
+                current, want
+            ):
+                unchanged += 1
+                continue
+            want = json.loads(json.dumps(want))
+            want["metadata"]["resourceVersion"] = (current.get("metadata") or {}).get("resourceVersion")
+            api("PUT", "%s/%s" % (probe_path, name), want)
+            updated += 1
+
+        pruned = 0
+        for name in sorted(existing):
+            if name not in desired:
+                api("DELETE", "%s/%s" % (probe_path, name))
+                pruned += 1
+
+        log("applied: created=%d updated=%d unchanged=%d pruned=%d" % (created, updated, unchanged, pruned))
+        return 0
+
+
+    if __name__ == "__main__":
+        TOKEN = open(os.path.join(SA_DIR, "token")).read().strip()
+        TLS = ssl.create_default_context(cafile=os.path.join(SA_DIR, "ca.crt"))
+        # This cluster's API server CA carries no keyUsage extension (microk8s),
+        # which OpenSSL rejects under X509_V_FLAG_X509_STRICT. Python 3.13 turns
+        # that flag on in create_default_context, so the certificate chain fails
+        # with "CA cert does not include key usage extension" while kubectl (Go's
+        # TLS stack) accepts it. Drop only that strictness flag: the chain is still
+        # verified against the mounted CA and the hostname is still checked.
+        TLS.verify_flags &= ~ssl.VERIFY_X509_STRICT
+        try:
+            sys.exit(main())
+        except Exception:
+            traceback.print_exc()
+            sys.exit(1)

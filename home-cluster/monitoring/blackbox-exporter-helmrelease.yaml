@@ -16,7 +16,22 @@ spec:
   values:
     config:
       modules:
+        # Transport failure or a non-2xx final status fails the probe. Redirects
+        # are followed, which matters here: oauth2-proxy and Grafana hand back
+        # 30x before the 200, so without this most hosts would read as down.
         http_2xx:
           prober: http
           http:
             follow_redirects: true
+        # Opt-in alternative for a target whose certificate the exporter does not
+        # trust. Selected per ingress with:
+        #   blackbox.stevearnett.com/module: http_2xx_insecure
+        # Every host routed by Traefik uses the wildcard cert from the
+        # traefik/default TLSStore, so nothing needs this today and nothing uses
+        # it by default.
+        http_2xx_insecure:
+          prober: http
+          http:
+            follow_redirects: true
+            tls_config:
+              insecure_skip_verify: true

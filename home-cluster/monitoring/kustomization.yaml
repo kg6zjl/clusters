@@ -22,6 +22,8 @@ resources:
   - openrouter-exporter.yaml
   - kube-prometheus-stack-helmrelease.yaml
   - blackbox-exporter-helmrelease.yaml
+  - blackbox-probe-reconciler-script.yaml
+  - blackbox-probe-reconciler.yaml
 
 configMapGenerator:
 
