@@ -18,6 +18,25 @@ spec:
   upgrade:
     remediation:
       retries: 3
+  # oauth2-proxy reads its client-secret and authenticated-emails Secrets, and its config ConfigMap,
+  # only at startup, so a rotation or a config edit is a no-op until the pod happens to restart.
+  # These annotations make reloader (already running in kube-system) restart oauth2-proxy whenever
+  # either changes. The chart template has no annotations field on the Deployment itself, so they
+  # are applied to the rendered output.
+  postRenderers:
+    - kustomize:
+        patches:
+          - target:
+              kind: Deployment
+              name: oauth2-proxy
+            patch: |
+              apiVersion: apps/v1
+              kind: Deployment
+              metadata:
+                name: oauth2-proxy
+                annotations:
+                  configmap.reloader.stakater.com/reload: "oauth2-proxy"
+                  secret.reloader.stakater.com/reload: "oauth2-proxy-secret,oauth2-proxy-emails"
   values:
     config:
       existingSecret: oauth2-proxy-secret

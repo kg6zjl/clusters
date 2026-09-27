@@ -18,6 +18,24 @@ spec:
   upgrade:
     remediation:
       retries: 3
+  # external-dns reads its Cloudflare API token from cloudflare-api-creds-root once at startup and
+  # never re-reads it, so rotating the token leaves it unable to update DNS until someone restarts
+  # it by hand. This annotation makes reloader (already running in kube-system) restart it whenever
+  # that Secret changes. The chart template has no annotations field on the Deployment itself, so it
+  # is applied to the rendered output.
+  postRenderers:
+    - kustomize:
+        patches:
+          - target:
+              kind: Deployment
+              name: external-dns
+            patch: |
+              apiVersion: apps/v1
+              kind: Deployment
+              metadata:
+                name: external-dns
+                annotations:
+                  secret.reloader.stakater.com/reload: "cloudflare-api-creds-root"
   values:
     provider: cloudflare
     cloudflare:
