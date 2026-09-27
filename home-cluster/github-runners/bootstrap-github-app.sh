@@ -113,21 +113,45 @@ Pick one and re-run with:  $0 adopt <app-id> <pem> <installation-id>"
     fi
   fi
 
-  # Final check: does that installation really cover the repo? A repo-level install that
-  # excludes it will 401 at runner registration time, which is a slow way to find out.
-  local repos covered
-  repos=$(curl -sS \
+  # Definitive coverage check. Mint an installation token, then ask GitHub whether this App is
+  # installed on this one repo. Better than listing the installation's repositories: it gives
+  # an unambiguous yes/no for the repo that actually matters, and it exercises token minting,
+  # which is the capability the controller depends on at runtime.
+  local resp code body inst_token
+  resp=$(curl -sS -w $'\n%{http_code}' -X POST \
     -H "Accept: application/vnd.github+json" \
     -H "X-GitHub-Api-Version: 2022-11-28" \
     -H "Authorization: Bearer $jwt" \
-    "$API/app/installations/$target/repositories?per_page=100") \
-    || die "could not list repositories for installation $target"
-  covered=$(printf '%s' "$repos" | jq -r --arg r "$REPO" \
-    'if (.repositories | map(.full_name) | index($r)) then "yes" else "no" end')
-  [ "$covered" = "yes" ] || die "installation $target does not cover $REPO.
-Edit the App's installation to grant access to $REPO, then re-run."
+    "$API/app/installations/$target/access_tokens") \
+    || die "could not reach $API while minting an installation token (network or TLS problem)"
+  code=${resp##*$'\n'}
+  body=${resp%$'\n'*}
+  case "$code" in
+    200|201) inst_token=$(printf '%s' "$body" | jq -r '.token // empty') ;;
+    403) die "GitHub refused to mint an installation token for $target (403).
+The App needs Metadata: Read (granted automatically) -- check its permissions in settings." ;;
+    *) die "minting an installation token returned HTTP $code:
+$(printf '%s' "$body" | jq -r '.message // .' 2>/dev/null || printf '%s' "$body")" ;;
+  esac
+  [ -n "$inst_token" ] || die "no token in the access_tokens response:
+$(printf '%s' "$body" | jq -r '.message // .' 2>/dev/null || printf '%s' "$body")"
 
-  info "Installation $target covers $REPO."
+  resp=$(curl -sS -w $'\n%{http_code}' \
+    -H "Accept: application/vnd.github+json" \
+    -H "X-GitHub-Api-Version: 2022-11-28" \
+    -H "Authorization: Bearer $inst_token" \
+    "$API/repos/$REPO/installation") \
+    || die "could not reach $API while checking the installation on $REPO"
+  code=${resp##*$'\n'}
+  case "$code" in
+    200) info "Confirmed: the App is installed on $REPO (installation $target)." ;;
+    404) die "the App is NOT installed on $REPO.
+https://github.com/settings/installations -> arc-runners-home-cluster -> Configure
+add $REPO to the repository list, then re-run." ;;
+    *) die "checking the installation on $REPO returned HTTP $code:
+$(printf '%s' "${resp%$'\n'*}" | jq -r '.message // .' 2>/dev/null || printf '%s' "${resp%$'\n'*}")" ;;
+  esac
+
   printf '%s' "$target"
 }
 
