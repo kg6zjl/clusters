@@ -34,3 +34,4 @@ resources:
   - longhorn-system-kustomization.yaml
   - flux-operator-kustomization.yaml
   - flux-instance-kustomization.yaml
+  - flux-notifications-kustomization.yaml

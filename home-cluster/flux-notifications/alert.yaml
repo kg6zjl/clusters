@@ -1,0 +1,156 @@
+apiVersion: notification.toolkit.fluxcd.io/v1beta3
+kind: Alert
+metadata:
+  name: flux-failures
+  namespace: flux-system
+spec:
+  providerRef:
+    name: discord
+  # Only failures. Flux controllers classify events by severity via
+  # eventTypeToSeverity() in github.com/fluxcd/pkg/runtime/events: a
+  # corev1.EventTypeWarning event becomes severity=error, everything else
+  # severity=info (or trace). Every reconciliation-failure path emits a Warning
+  # event, so `error` selects exactly the failures and drops successful
+  # reconciles, "Progressing", dependency-not-ready and other Normal events:
+  #   helm-controller    install/upgrade failure -> Warning (InstallFailed / UpgradeFailed)
+  #   kustomize-controller   reconcile failure   -> Warning (severity==error => Warning)
+  #   source-controller      fetch/verify failure-> Warning (regex/artifact errors)
+  # So Ready=False on a HelmRelease/Kustomization/GitRepository surfaces here.
+  eventSeverity: error
+  eventMetadata:
+    summary: "Flux reconciliation failure"
+    cluster: home-cluster
+  #
+  # NOTE ON NAMESPACES (important): Flux Alerts match event sources on an EXACT
+  # namespace — there is no cluster-wide wildcard. In notification-controller
+  # v1.8.2, eventMatchesAlertSource() requires
+  # `event.InvolvedObject.Namespace == source.Namespace`, and when a source omits
+  # `namespace` it defaults to the Alert's own namespace (flux-system). Listing a
+  # source with no namespace therefore covers flux-system only. The cluster-wide
+  # effect below is achieved by enumerating namespaces explicitly.
+  # (Refs: fluxcd/notification-controller#71, fluxcd/helm-controller#350.)
+  #
+  eventSources:
+    # All Kustomizations, GitRepositories and OCIRepositories live in flux-system.
+    - kind: Kustomization
+      name: '*'
+      namespace: flux-system
+    - kind: GitRepository
+      name: '*'
+      namespace: flux-system
+    - kind: OCIRepository
+      name: '*'
+      namespace: flux-system
+    # HelmRepositories are declared both in flux-system and in the namespaces
+    # that consume them.
+    - kind: HelmRepository
+      name: '*'
+      namespace: flux-system
+    - kind: HelmRepository
+      name: '*'
+      namespace: auth
+    - kind: HelmRepository
+      name: '*'
+      namespace: clustersecret
+    - kind: HelmRepository
+      name: '*'
+      namespace: external-secrets
+    - kind: HelmRepository
+      name: '*'
+      namespace: media
+    - kind: HelmRepository
+      name: '*'
+      namespace: renovate
+    - kind: HelmRepository
+      name: '*'
+      namespace: security-scanning
+    # HelmReleases are spread across the application namespaces. This is the
+    # maintenance point of this file: HelmReleases only exist in these
+    # namespaces, so a NEW namespace that gains a HelmRelease must be added
+    # here or its failures will not notify. The list is the union of the
+    # namespaces that hold HelmReleases today and the namespaces this repo
+    # deploys into (targetNamespace of the sync Kustomizations).
+    - kind: HelmRelease
+      name: '*'
+      namespace: flux-system
+    - kind: HelmRelease
+      name: '*'
+      namespace: adsb
+    - kind: HelmRelease
+      name: '*'
+      namespace: ai-services
+    - kind: HelmRelease
+      name: '*'
+      namespace: arc-systems
+    - kind: HelmRelease
+      name: '*'
+      namespace: auth
+    - kind: HelmRelease
+      name: '*'
+      namespace: cert-manager
+    - kind: HelmRelease
+      name: '*'
+      namespace: cloudflared
+    - kind: HelmRelease
+      name: '*'
+      namespace: clustersecret
+    - kind: HelmRelease
+      name: '*'
+      namespace: external-secrets
+    - kind: HelmRelease
+      name: '*'
+      namespace: github-runners
+    - kind: HelmRelease
+      name: '*'
+      namespace: headlamp
+    - kind: HelmRelease
+      name: '*'
+      namespace: home-assistant
+    - kind: HelmRelease
+      name: '*'
+      namespace: kube-system
+    - kind: HelmRelease
+      name: '*'
+      namespace: local-services
+    - kind: HelmRelease
+      name: '*'
+      namespace: longhorn-system
+    - kind: HelmRelease
+      name: '*'
+      namespace: media
+    - kind: HelmRelease
+      name: '*'
+      namespace: meshtastic
+    - kind: HelmRelease
+      name: '*'
+      namespace: metallb-system
+    - kind: HelmRelease
+      name: '*'
+      namespace: monitoring
+    - kind: HelmRelease
+      name: '*'
+      namespace: mqtt
+    - kind: HelmRelease
+      name: '*'
+      namespace: netalertx
+    - kind: HelmRelease
+      name: '*'
+      namespace: nodered
+    - kind: HelmRelease
+      name: '*'
+      namespace: onepassword-connect
+    - kind: HelmRelease
+      name: '*'
+      namespace: renovate
+    - kind: HelmRelease
+      name: '*'
+      namespace: security-scanning
+    - kind: HelmRelease
+      name: '*'
+      namespace: speedtest
+    - kind: HelmRelease
+      name: '*'
+      namespace: traefik
+    - kind: HelmRelease
+      name: '*'
+      namespace: vpn

@@ -1,0 +1,12 @@
+apiVersion: notification.toolkit.fluxcd.io/v1beta3
+kind: Provider
+metadata:
+  name: discord
+  namespace: flux-system
+spec:
+  type: discord
+  # No `address` here on purpose: the webhook URL is a secret and must never be
+  # committed. notification-controller reads it from the `address` key of the
+  # referenced Secret, which ESO renders from 1Password.
+  secretRef:
+    name: flux-discord-webhook
