@@ -3,7 +3,11 @@ kind: Kustomization
 generatorOptions:
   disableNameSuffixHash: true
 resources:
-  - helmrelease.yaml
+  # namespace.yaml was previously absent here: the namespace was created implicitly by
+  # `install.createNamespace` on the (now removed) HelmRelease below. The controller that
+  # serves the runner-pod admission webhook lives in arc-systems, so nothing creates this
+  # namespace implicitly any more and it has to be declared.
+  - namespace.yaml
   - rbac.yaml
   - runner-deployment.yaml
   - runner-autoscaler.yaml
