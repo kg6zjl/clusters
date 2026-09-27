@@ -116,6 +116,30 @@ spec:
       annotations:
         summary: "OpenRouter account credit metrics are missing"
         description: "The exporter is up but publishing no openrouter_account_credits_total, so the account balance is invisible and the balance alerts above cannot fire. Check that OPENROUTER_POLL_CREDITS is true and that the management key in the 1Password item openrouter-management-key is valid - a 401 or 403 disables the /credits endpoint until the pod restarts. A full exporter outage is deliberately excluded here; OpenRouterExporterDown covers that."
+    - alert: OpenRouterBurnRateHigh
+      expr: sum(increase(openrouter_usage_usd_total[1h])) > 1
+      for: 10m
+      labels:
+        severity: warning
+      annotations:
+        summary: "OpenRouter burn rate is high ({{ printf \"%.2f\" $value }} USD in the last hour)"
+        description: "More than 1 USD of OpenRouter credit was spent in the last hour - a pace of 24 USD per day, about half the monthly key cap in a single day. Look for a runaway loop, a stuck retry, or an agent session that will not stop. Threshold is deliberate: the busiest hour measured so far was 0.80 USD."
+    - alert: OpenRouterDailySpendHigh
+      expr: openrouter_usage_usd_daily > 10
+      for: 10m
+      labels:
+        severity: warning
+      annotations:
+        summary: "OpenRouter daily spend is high ({{ printf \"%.2f\" $value }} USD today)"
+        description: "Over 10 USD spent today on the OpenRouter key. Measured recent days run 3-7 USD, so this is well above normal and a 300 USD per month pace against a 50 USD monthly cap. Coarse daily backstop for whatever the hourly rule misses."
+    - alert: OpenRouterBalanceDepletionImminent
+      expr: predict_linear((openrouter_account_credits_total - openrouter_account_usage_total)[6h:1m], 86400) < 0
+      for: 15m
+      labels:
+        severity: critical
+      annotations:
+        summary: "OpenRouter account balance projected to reach zero within 24h"
+        description: "At the burn rate of the last 6 hours, the account balance reaches zero within 24 hours. After that every key on the account fails with HTTP 402 and every LLM-backed agent on this cluster stops at once. This is a projection, not the current balance - top up before it lands. Note the account balance, not the per-key spend cap, is the binding limit."
   # Backup freshness for the two prod services. Configured is not the same as working:
   # home-assistant carried a KubeStash BackupConfiguration for 201 days that never produced
   # a single snapshot, while still reading as "backups are configured". This rule watches
