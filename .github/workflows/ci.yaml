@@ -6,6 +6,7 @@ on:
       - main
     paths:
       - 'home-cluster/**'
+      - 'node-config/**'
       - 'renovate.json'
       - '.github/workflows/**'
       - '.gitleaks.toml'
