@@ -41,6 +41,50 @@ spec:
                   metadata:
                     annotations:
                       arc.stevearnett.com/credentials: github-app
+                  spec:
+                    containers:
+                      - name: env-debug
+                        image: busybox:1.36
+                        command: ["sh", "-c"]
+                        args:
+                          - |
+                            echo "GITHUB_* as resolved by kubelet (values never printed):"
+                            env | grep -E '^GITHUB' | sort | awk -F= '{printf "%-34s len=%d\n", $1, length($2)}'
+                            echo "--- full env var NAMES present ---"
+                            env | cut -d= -f1 | sort | tr '\n' ' '
+                            echo
+                            sleep 3600
+                        env:
+                          - name: GITHUB_TOKEN
+                            valueFrom:
+                              secretKeyRef:
+                                name: github-runner-secret
+                                key: github_token
+                                optional: true
+                          - name: GITHUB_APP_ID
+                            valueFrom:
+                              secretKeyRef:
+                                name: github-runner-secret
+                                key: github_app_id
+                                optional: true
+                          - name: GITHUB_APP_INSTALLATION_ID
+                            valueFrom:
+                              secretKeyRef:
+                                name: github-runner-secret
+                                key: github_app_installation_id
+                                optional: true
+                          - name: GITHUB_APP_PRIVATE_KEY
+                            valueFrom:
+                              secretKeyRef:
+                                name: github-runner-secret
+                                key: github_app_private_key
+                                optional: true
+                          - name: GITHUB_BASICAUTH_PASSWORD
+                            valueFrom:
+                              secretKeyRef:
+                                name: github-runner-secret
+                                key: github_basicauth_password
+                                optional: true
   values:
     authSecret:
       enabled: true
