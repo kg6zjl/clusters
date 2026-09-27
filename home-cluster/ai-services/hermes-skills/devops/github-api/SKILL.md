@@ -93,6 +93,16 @@ Build the PR payload JSON with a second script (read the markdown body from a fi
 the `-d @file` curl shape is fine, the `$(cat token)` in the same line is not. `git push` needs none of
 this: the credential helper at `/opt/data/git-credential-helper` works.
 
+`scripts/open_pr.py` in this skill is that script written once:
+
+```bash
+python3 /opt/data/skills/devops/github-api/scripts/open_pr.py \
+  kg6zjl/clusters <head-branch> "<PR title>" /opt/data/tmp/<body>.md
+```
+
+It does the idempotency GET first (so a re-run cannot duplicate a PR that a hung call already created),
+then the POST, and prints `PR #<n> <url>` plus the head SHA to check against your commit.
+
 ## Read the status code before proposing an ask
 
 For a fine-grained PAT the code separates two different asks, and conflating them sends the user to the
