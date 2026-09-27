@@ -64,6 +64,7 @@ configMapGenerator:
       - devops__cluster-gitops__references__storage-and-pvcs.md=hermes-skills/devops/cluster-gitops/references/storage-and-pvcs.md
       - devops__cluster-operations.md=hermes-skills/devops/cluster-operations/SKILL.md
       - devops__github-api.md=hermes-skills/devops/github-api/SKILL.md
+      - devops__github-api__scripts__open_pr.py=hermes-skills/devops/github-api/scripts/open_pr.py
       - devops__github-status.md=hermes-skills/devops/github-status/SKILL.md
       - devops__gitops-cluster-management.md=hermes-skills/devops/gitops-cluster-management/SKILL.md
       - devops__kubernetes-object-ownership.md=hermes-skills/devops/kubernetes-object-ownership/SKILL.md
