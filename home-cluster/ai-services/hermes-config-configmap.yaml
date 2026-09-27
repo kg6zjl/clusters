@@ -82,6 +82,51 @@ data:
       model: "deepseek/deepseek-v4.1-flash"
       model_provider: openrouter
 
+    # Inbound webhooks, for intra-net senders only: Alertmanager, the CI runners, a
+    # detector CronJob, LAN tooling. Nothing here faces the internet - the pod sits
+    # behind the LAN and hermes-agent-allow-webhook is the whole allowlist. The HMAC
+    # signing key arrives as WEBHOOK_SECRET from hermes-agent-secrets (see
+    # hermes-external-secret.yaml); no key material is committed here.
+    #
+    # Reachable at http://hermes-webhook.ai-services.svc.cluster.local:8644/webhooks/<route>
+    # from inside the cluster. A LAN device would additionally need a NodePort or an
+    # Ingress, which the network policy already allows for.
+    platforms:
+      webhook:
+        enabled: true
+        extra:
+          port: 8644
+          routes:
+            credential-leak:
+              # Woken by a leak report rather than a generic alert: the ask is a
+              # suggested resolution that gets recorded, not just a notification.
+              deliver: discord
+              skills: [credential-rotation, monitoring-alerting]
+              prompt: |
+                A credential leak was reported to Hermes. This is not a routine alert: the
+                user wants a suggested resolution, recorded so it stays pending instead of
+                being lost in a notification.
+
+                Payload:
+                {__raw__}
+
+                Work in this order, and do not stop at describing the problem:
+                1. Identify the leak from the payload: repository, where it is (commit, issue
+                   body, comment, PR), the secret type, and whether it is publicly visible.
+                2. Determine whether the exposed credential is still live. Do this WITHOUT
+                   using the credential and WITHOUT reading or printing its value. If liveness
+                   cannot be established that way, say so plainly instead of guessing.
+                3. Propose the resolution as concrete steps: revoke/rotate the credential in
+                   its provider, remove it from whatever leaked it, store the new value in
+                   1Password, then force-sync the ExternalSecret(s) that consume it so
+                   reloader restarts the consumers.
+                4. Open a kanban ticket recording the leak, the evidence found and the
+                   proposed steps, so the work is pending and traceable.
+                5. Reply in Discord with the short version: what leaked, whether it is live,
+                   what is proposed, and the ticket id.
+
+                Never print, echo or commit the credential value or any secret. If the
+                payload contains the secret itself, do not repeat it back.
     display:
       platforms:
         discord:
