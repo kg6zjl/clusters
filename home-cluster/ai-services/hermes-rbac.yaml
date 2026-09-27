@@ -140,6 +140,21 @@ rules:
       - prometheuses/status
     verbs: ["get", "list", "watch"]
 
+  # Flux Operator CRDs (read-only). The FluxInstance is the object that will own the four Flux
+  # controllers once the takeover lands, so its status is the only place that says which
+  # distribution version is actually running and which components the operator believes it
+  # manages. Without read access the takeover's own verification checklist
+  # (`kubectl -n flux-system get fluxinstance flux`) is unusable to the agent doing the work,
+  # and a failed takeover would be indistinguishable from a successful one - which matters
+  # because a broken Flux cannot be repaired by this agent at all.
+  - apiGroups: ["fluxcd.controlplane.io"]
+    resources:
+      - fluxinstances
+      - fluxinstances/status
+      - fluxreports
+      - fluxreports/status
+    verbs: ["get", "list", "watch"]
+
   # Secrets operators / cert-manager / external-dns (read-only)
   - apiGroups: ["external-secrets.io"]
     resources: ["externalsecrets", "secretstores", "clustersecretstores"]
