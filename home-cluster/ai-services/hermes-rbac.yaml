@@ -193,6 +193,19 @@ rules:
       - rbacassessmentreports
       - clusterrbacassessmentreports
     verbs: ["get", "list", "watch"]
+
+  # Crossplane pilot (read-only): the Provider's install state and the managed RepositoryWebhook.
+  # Without these, the objects can only be inferred from the provider pod's liveness.
+  - apiGroups: ["pkg.crossplane.io"]
+    resources:
+      - providers
+      - providerrevisions
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["repo.github.m.upbound.io", "github.m.upbound.io"]
+    resources:
+      - repositorywebhooks
+      - providerconfigs
+    verbs: ["get", "list", "watch"]
 --- 
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
