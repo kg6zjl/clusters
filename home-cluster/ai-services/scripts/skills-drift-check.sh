@@ -84,6 +84,6 @@ if [ "$drift" -eq 0 ]; then
   echo "OK: pod skill tree matches kg6zjl/skills."
 else
   echo ""
-  echo "Reminder: open a PR against kg6zjl/skills (branch + PR, never push main). Do not sync skill content into the clusters hermes-skills ConfigMap any more — that is the legacy path, not the source of truth."
+  echo "Reminder: open a PR against kg6zjl/skills (branch + PR, never push main). The pod tree is delivered from that repo at pod start, so runtime edits are reset on the next restart - git is the only durable copy."
 fi
 exit 0
