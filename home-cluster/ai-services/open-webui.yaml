@@ -71,6 +71,21 @@ spec:
         # so the Ollama-style ids in the old picker were ghosts of the previous backend.
         - name: DEFAULT_MODELS
           value: "Qwen3-14B-abliterated-Q4_K_M"
+        # There is no Ollama on this host. Port 11434 is llama-server, which open-webui
+        # reaches as an OpenAI-compatible endpoint above, so the Ollama integration has
+        # nothing to talk to and only produces errors.
+        #
+        # This is set in env rather than left to the admin panel because ollama.enable
+        # is a ConfigVar: like OPENAI_API_BASE_URLS it is persisted to webui.db on first
+        # boot, and the DB wins on subsequent boots. webui.db lives on a Longhorn PVC, so
+        # a stale "true" survives pod restarts and PVC restores. With
+        # ENABLE_PERSISTENT_CONFIG=false below, env wins over the DB, which is what makes
+        # this stick where toggling it in Settings > Connections did not.
+        #
+        # Symptom when this regresses: "Connection error: Cannot connect to host
+        # host.docker.internal:11434 ... [Name or service not known]" on every page load.
+        - name: ENABLE_OLLAMA_API
+          value: "false"
         - name: ENABLE_IMAGE_GENERATION
           value: "True"
         - name: IMAGE_GENERATION_ENGINE
