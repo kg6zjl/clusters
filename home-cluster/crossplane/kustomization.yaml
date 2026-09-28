@@ -1,11 +1,11 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
+# Install layer only. The Provider lives in provider/ and the managed resources in config/,
+# each synced once the CRDs they need exist. A CR whose CRD only arrives from the chart in this
+# directory fails the entire apply's dry-run, which deadlocks the install that ships the CRD.
 resources:
   - namespace.yaml
   - networkpolicy.yaml
   - external-secret.yaml
   - helmrelease.yaml
-  - provider.yaml
-  - provider-config.yaml
-  - repository-webhook.yaml

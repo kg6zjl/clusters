@@ -37,3 +37,5 @@ resources:
   - flux-notifications-kustomization.yaml
   - crossplane-helmrepository.yaml
   - crossplane-kustomization.yaml
+  - crossplane-provider-kustomization.yaml
+  - crossplane-config-kustomization.yaml
