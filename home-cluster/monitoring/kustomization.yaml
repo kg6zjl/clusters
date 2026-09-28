@@ -12,6 +12,7 @@ resources:
   - dashboard-beast.yaml
   - dashboard-trivy-operator.yaml
   - dashboard-openrouter.yaml
+  - dashboard-spegel.yaml
   - alertmanager-external-secret.yaml
   - external-secrets.yaml
   - loki-datasource.yaml

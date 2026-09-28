@@ -24,10 +24,10 @@ spec:
       enabled: true
       labels:
         release: kube-prometheus-stack
+    # Grafana's sidecar watches only the monitoring namespace, so the chart's copy in
+    # this namespace is never loaded. The same JSON ships as a ConfigMap in monitoring/.
     grafanaDashboard:
-      enabled: true
-      labels:
-        grafana_dashboard: "1"
+      enabled: false
     spegel:
       # MicroK8s runs containerd from a snap, so none of the chart's defaults exist.
       containerdSock: /var/snap/microk8s/common/run/containerd.sock
