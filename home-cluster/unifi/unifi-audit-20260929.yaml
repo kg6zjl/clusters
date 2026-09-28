@@ -4,7 +4,7 @@ metadata:
   # Bump the suffix to run again; Job names are immutable. Delete this file when the
   # run is finished and Flux prunes the Job. Deliberately no ttlSecondsAfterFinished:
   # a self-deleting Job looks like a missing resource to Flux and re-runs forever.
-  name: unifi-audit-20260928
+  name: unifi-audit-20260929
   namespace: unifi
 spec:
   backoffLimit: 1
@@ -20,25 +20,15 @@ spec:
       containers:
       - name: audit
         image: python:3.13-alpine
-        envFrom:
-        - secretRef:
-            name: unifi-ro-creds
-        securityContext:
-          allowPrivilegeEscalation: false
-          readOnlyRootFilesystem: true
-          capabilities:
-            drop:
-            - ALL
-        volumeMounts:
-        - name: tmp
-          mountPath: /tmp
+        # The official python images define CMD, not ENTRYPOINT, so without this the
+        # first arg becomes the command and the pod dies with `exec: "-c": not found`.
+        command:
+        - python3
         args:
         - -c
         - |
           # Reads the gateway config with the read-only account and prints a whitelisted
           # subset. Never prints credentials, cookies or the CSRF token.
-          # UNVERIFIED: the login path and /rest/* names below are unexercised; dump the
-          # response keys on the first run before trusting them.
           import http.cookiejar, json, os, ssl, urllib.request
 
           BASE = "https://192.168.1.1"  # self-signed CN=unifi.local, so verification is off by design
@@ -59,6 +49,7 @@ spec:
               headers={"Content-Type": "application/json"},
           )
           csrf = opener.open(login).headers.get("X-CSRF-Token", "")
+          print("login: ok, csrf header present:", bool(csrf))
 
           KEEP = ("_id", "name", "enabled", "description", "domains", "regions",
                   "network", "target_devices", "target_subnets", "match_ip",
@@ -67,15 +58,31 @@ spec:
           for path in (
               "/proxy/network/api/s/default/rest/trafficroute",
               "/proxy/network/api/s/default/rest/trafficrule",
+              "/proxy/network/api/s/default/rest/networkconf",
           ):
               try:
                   req = urllib.request.Request(BASE + path, headers={"X-CSRF-Token": csrf})
                   payload = json.load(opener.open(req))
               except Exception as exc:
-                  print(path, "ERROR", type(exc).__name__)
+                  print(path, "ERROR", type(exc).__name__, getattr(exc, "code", ""))
                   continue
-              for item in payload.get("data", []):
-                  print(path, json.dumps({k: item[k] for k in KEEP if k in item}, default=str))
+              items = payload.get("data", [])
+              print(path, "items:", len(items),
+                    "keys:", sorted(items[0].keys())[:24] if items else [])
+              for item in items:
+                  print(" ", json.dumps({k: item[k] for k in KEEP if k in item}, default=str))
+        envFrom:
+        - secretRef:
+            name: unifi-ro-creds
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+        volumeMounts:
+        - name: tmp
+          mountPath: /tmp
       volumes:
       - name: tmp
         emptyDir: {}
