@@ -5,6 +5,9 @@ metadata:
   namespace: meshtastic
   labels:
     alert-on-down: "true"
+  annotations:
+    configmap.reloader.stakater.com/reload: "meshmonitor-scripts"
+    secret.reloader.stakater.com/reload: "meshtastic-admin"
 spec:
   replicas: 1
   revisionHistoryLimit: 5

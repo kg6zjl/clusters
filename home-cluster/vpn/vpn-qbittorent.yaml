@@ -25,6 +25,9 @@ metadata:
   labels:
     app: gluetun
     alert-on-down: "true"
+  annotations:
+    configmap.reloader.stakater.com/reload: "qbittorrent-config"
+    secret.reloader.stakater.com/reload: "vpn-secret,qbittorrent-secret,expressvpn-ovpn"
 spec:
   replicas: 1
   revisionHistoryLimit: 3

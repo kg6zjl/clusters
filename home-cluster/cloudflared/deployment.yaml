@@ -3,6 +3,8 @@ kind: Deployment
 metadata:
   name: cloudflared
   namespace: cloudflared
+  annotations:
+    secret.reloader.stakater.com/reload: "cloudflared-tunnel-token"
 spec:
   replicas: 0
   revisionHistoryLimit: 3

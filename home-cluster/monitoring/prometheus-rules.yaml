@@ -202,3 +202,16 @@ spec:
       annotations:
         summary: "kube-apiserver is returning sustained 5xx ({{ printf \"%.2f\" $value }}/s)"
         description: "Over 0.1 failed API requests per second for 20 minutes - too long to be the self-healing datastore contention that retries within a minute. Check which resource is failing (sum by (verb,resource) (rate(apiserver_request_total{code=~\"5..\"}[10m]))), the control-plane nodes' k8s-dqlite logs, and the controllers' own logs for the matching write path (kubectl -n flux-system logs deploy/kustomize-controller --since=30m | grep 'database is locked')."
+  # An empty pool leaves no kube_pod_info series at all, so count(...) == 0 returns no samples and
+  # stays silent - absent_over_time is load-bearing, verified against the 2026-09-27 outage
+  # (1 at 10:00Z while count(...) was empty). The 10m window is the debounce; no `for` on top.
+  - name: ci-runners
+    rules:
+    - alert: CIRunnerPoolEmpty
+      expr: absent_over_time(kube_pod_info{namespace="github-runners",created_by_kind="Runner"}[10m])
+      labels:
+        severity: critical
+      annotations:
+        summary: "CI runner pool is empty - no PR on this repo can merge"
+        description: "No github-runner pods have existed for over 10 minutes. Lint, Validate and Secret Scan are required status checks on main with enforce_admins enabled, so every PR is now frozen - including a PR that would fix it. The pool normally holds at least the HorizontalRunnerAutoscaler floor of 4 (github-runner-autoscaler, min 4 / max 12). Check the controller in arc-systems (arc-operator-actions-runner-controller) and its logs for registration errors. Do NOT add a second ARC install as the fix: the chart hardcodes the webhook name, so two installs veto each other - that is exactly what caused the 2026-09-27 outage."
+        runbook_url: "https://github.com/kg6zjl/clusters/settings/variables/actions"

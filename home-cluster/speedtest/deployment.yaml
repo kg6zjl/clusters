@@ -5,6 +5,8 @@ metadata:
   namespace: speedtest
   labels:
     alert-on-down: "true"
+  annotations:
+    configmap.reloader.stakater.com/reload: "speedtest-env"
 spec:
   replicas: 1
   revisionHistoryLimit: 3
