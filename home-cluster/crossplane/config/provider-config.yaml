@@ -9,4 +9,4 @@ spec:
     secretRef:
       name: crossplane-github
       namespace: crossplane-system
-      key: token
+      key: credentials
