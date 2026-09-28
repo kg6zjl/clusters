@@ -4,7 +4,7 @@ metadata:
   # Bump the suffix to run again; Job names are immutable. Delete this file when the
   # run is finished and Flux prunes the Job. Deliberately no ttlSecondsAfterFinished:
   # a self-deleting Job looks like a missing resource to Flux and re-runs forever.
-  name: unifi-pbr-audit-20260928
+  name: unifi-client-audit-20260928
   namespace: unifi
 spec:
   backoffLimit: 1
@@ -27,8 +27,9 @@ spec:
         args:
         - -c
         - |
-          # Reads the gateway's policy-based routes with the read-only account and prints
-          # a whitelisted subset. Never prints credentials, cookies or the CSRF token.
+          # Reads the gateway's policy-based routes and the client list with the read-only
+          # account, and prints a whitelisted subset. Never prints credentials, cookies or
+          # the CSRF token.
           import http.cookiejar, json, os, ssl, urllib.request
 
           BASE = "https://192.168.1.1"  # self-signed CN=unifi.local, so verification is off by design
@@ -66,12 +67,11 @@ spec:
               print("networkconf ERROR", type(exc).__name__, getattr(exc, "code", ""))
 
           # Policy-based routes are v2, not classic: /rest/trafficroute returns HTTP 400.
-          KEEP = ("route_id", "_id", "name", "description", "enabled", "matching_target",
-                  "network_id", "next_hop", "kill_switch_enabled", "domain_count",
-                  "ip_address_count", "ip_range_count", "region_count",
-                  "target_device_count", "target_devices", "target_subnets", "domains",
-                  "ip_addresses", "ip_ranges", "regions")
+          ROUTE_KEEP = ("_id", "description", "enabled", "matching_target", "network_id",
+                        "next_hop", "kill_switch_enabled", "target_devices", "domains",
+                        "ip_addresses", "ip_ranges", "regions")
 
+          routes = []
           for path in (
               "/proxy/network/v2/api/site/default/trafficroutes",
               "/proxy/network/v2/api/site/default/trafficrules",
@@ -81,14 +81,58 @@ spec:
               except Exception as exc:
                   print(path, "ERROR", type(exc).__name__, getattr(exc, "code", ""))
                   continue
-              routes = payload.get("data", []) if isinstance(payload, dict) else payload
-              print(path, "items:", len(routes))
-              for r in routes:
-                  row = {k: r[k] for k in KEEP if k in r}
+              items = payload.get("data", []) if isinstance(payload, dict) else payload
+              print(path, "items:", len(items))
+              routes.extend(items)
+              for r in items:
+                  row = {k: r[k] for k in ROUTE_KEEP if k in r}
                   if row.get("network_id") in networks:
                       row["network_name"] = networks[row["network_id"]]
                   print("  ", json.dumps(row, default=str))
-                  print("     all keys:", sorted(r.keys()))
+
+          routed_macs = {
+              d.get("client_mac")
+              for r in routes
+              for d in (r.get("target_devices") or [])
+              if d.get("client_mac")
+          }
+          print("routed client MACs:", sorted(routed_macs))
+
+          # The node/beast addresses as the cluster reports them, so a renamed client is
+          # still found by address.
+          WANTED_IPS = {"192.168.1.144", "192.168.1.121", "192.168.1.146", "192.168.1.161"}
+          CLIENT_KEEP = ("name", "hostname", "ip", "mac", "is_wired", "network_id",
+                         "last_seen", "uptime")
+
+          def matches(c):
+              blob = " ".join(str(c.get(k, "")) for k in ("name", "hostname", "ip")).lower()
+              return "thinkcentre" in blob or "beast" in blob or c.get("ip") in WANTED_IPS
+
+          for label, path in (
+              ("active", "/proxy/network/api/s/default/stat/sta"),
+              ("known", "/proxy/network/api/s/default/rest/user"),
+          ):
+              try:
+                  rows = get(path).get("data", [])
+              except Exception as exc:
+                  print(label, path, "ERROR", type(exc).__name__, getattr(exc, "code", ""))
+                  continue
+              hits = [c for c in rows if matches(c)]
+              print(f"{label} clients: {len(rows)}  matched: {len(hits)}")
+              for c in hits:
+                  row = {k: c[k] for k in CLIENT_KEEP if k in c}
+                  if row.get("network_id") in networks:
+                      row["network_name"] = networks[row["network_id"]]
+                  row["in_policy_route"] = c.get("mac") in routed_macs
+                  print("  ", json.dumps(row, default=str))
+              if label == "known" and not hits:
+                  # Nothing matched by name or address: dump the active list so the names in
+                  # this console are visible instead of guessed.
+                  print("no match; active client names:")
+                  for c in rows:
+                      print("   ", json.dumps(
+                          {k: c[k] for k in ("name", "hostname", "ip", "mac") if k in c},
+                          default=str))
         envFrom:
         - secretRef:
             name: unifi-ro-creds
