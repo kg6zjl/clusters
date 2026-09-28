@@ -1,0 +1,31 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: flux-controllers
+  namespace: monitoring
+  # The live Prometheus CR selects pod monitors with matchLabels release=kube-prometheus-stack
+  # (checked on the cluster: spec.podMonitorSelector={"matchLabels":{"release":"kube-prometheus-stack"}}),
+  # which is why every existing ServiceMonitor here carries it. The `podMonitorSelector: {}`
+  # in kube-prometheus-stack-helmrelease.yaml does NOT relax that - see the note there and
+  # the ticket about ServiceMonitors being silently unscraped. Without this label the
+  # PodMonitor is accepted by the API and never scraped, which looks exactly like metrics
+  # that do not exist.
+  labels:
+    release: kube-prometheus-stack
+spec:
+  # A PodMonitor, not a ServiceMonitor: the flux Services only expose port 80 (the
+  # controllers' metrics port 8080 is not published by any Service), so scraping has to
+  # target the pods directly. Upstream does the same (fluxcd/flux2-monitoring-example,
+  # monitoring/configs/podmonitor.yaml).
+  namespaceSelector:
+    matchNames:
+      - flux-system
+  selector:
+    matchExpressions:
+      - key: app.kubernetes.io/part-of
+        operator: In
+        values:
+          - flux
+  podMetricsEndpoints:
+    - port: http-prom
+      interval: 30s
