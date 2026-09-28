@@ -22,6 +22,9 @@ resources:
   - openrouter-exporter-external-secret.yaml
   - openrouter-exporter-configmap.yaml
   - openrouter-exporter.yaml
+  - cluster-egress-exporter-configmap.yaml
+  - cluster-egress-exporter.yaml
+  - cluster-egress-rules.yaml
   - beast-status-exporter-configmap.yaml
   - beast-status-exporter.yaml
   - kube-prometheus-stack-helmrelease.yaml
