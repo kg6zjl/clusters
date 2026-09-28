@@ -32,6 +32,7 @@ resources:
   - adsb-kustomization.yaml
   - nodered-kustomization.yaml
   - security-scanning-kustomization.yaml
+  - spegel-helmrepository.yaml
   - spegel-kustomization.yaml
   - longhorn-system-kustomization.yaml
   - flux-operator-kustomization.yaml
