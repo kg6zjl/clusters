@@ -1,0 +1,23 @@
+apiVersion: repo.github.m.upbound.io/v1alpha1
+kind: RepositoryWebhook
+metadata:
+  name: clusters-pr-notify
+  namespace: crossplane-system
+spec:
+  forProvider:
+    active: true
+    events:
+      - pull_request
+    # Repository name only, same as the skills hook: the provider infers the owner from the
+    # credential. Replaces the pr-notify-discord Actions job, whose URL lived in a repo secret
+    # that a human copied out of 1Password and nothing could rotate.
+    repository: clusters
+    configuration:
+      - contentType: json
+        insecureSsl: false
+        urlSecretRef:
+          name: discord-pull-requests-webhook
+          key: url
+  providerConfigRef:
+    kind: ProviderConfig
+    name: default

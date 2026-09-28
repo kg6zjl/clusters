@@ -4,3 +4,4 @@ kind: Kustomization
 resources:
   - provider-config.yaml
   - repository-webhook.yaml
+  - repository-webhook-clusters.yaml
