@@ -17,6 +17,7 @@ resources:
   - loki-helmrelease.yaml
   - alloy-helmrelease.yaml
   - loki-alerts.yaml
+  - longhorn-alerts.yaml
   - openrouter-exporter-external-secret.yaml
   - openrouter-exporter-configmap.yaml
   - openrouter-exporter.yaml
