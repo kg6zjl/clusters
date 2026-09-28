@@ -54,12 +54,17 @@ spec:
         # open-webui can no longer infer per-model load state, so the picker stops showing
         # which model is currently resident in VRAM.
         #
-        # The 27B Q4 is deliberately absent. Its weights alone are 16032 MiB on a
-        # 16303 MiB card, so it cannot load at any context size unless llama-server's
-        # --fit is allowed to spill layers to system RAM, which needs -ngl 99 dropped
-        # from llama-server.service. Offering it just produces a 500 on selection.
+        # Two 27B quants are deliberately absent:
+        #   Q4_K_M - weights alone are 16032 MiB on a 16303 MiB card, so it cannot
+        #     load at any context size unless llama-server's --fit may spill layers to
+        #     system RAM, which needs -ngl 99 dropped from llama-server.service.
+        #   Q3_K_M - it does fit, but at 15196 MiB it leaves only ~650 MiB of headroom,
+        #     and ComfyUI idles at 456 MiB and spikes above that whenever it
+        #     generates, so a ComfyUI burst could OOM the LLM mid-request. Q3_K_S
+        #     serves the same 131072 total context at 14026 MiB instead.
+        # Neither is worth offering: both just risk a 500 on selection.
         - name: OPENAI_API_CONFIGS
-          value: '{"0": {"enable": true, "model_ids": ["Qwen3-14B-abliterated-Q4_K_M", "Qwen3.8-27B-ABLITERATED-Q3_K_M"]}}'
+          value: '{"0": {"enable": true, "model_ids": ["Qwen3-14B-abliterated-Q4_K_M", "Qwen3.8-27B-ABLITERATED-Q3_K_S"]}}'
         # New chats open on the local 14B. This must be one of the ids above, spelled exactly
         # as the router reports it. It used to be the Ollama-era "qwen3-14b-abliterated:latest",
         # which this router has never served - port 11434 changed from Ollama to llama-server,
