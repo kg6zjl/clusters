@@ -9,10 +9,10 @@ metadata:
     alert-on-down: "true"
   annotations:
     # Roll the pod when any of the git-managed config that only takes effect at
-    # container start changes: the initContainer re-seeds config.yaml and the
-    # skill tree from these ConfigMaps, so a merge alone is otherwise a no-op
-    # until the next unrelated restart. Reloader watches for changes.
-    configmap.reloader.stakater.com/reload: "hermes-config,hermes-skills,hermes-soul"
+    # container start changes: the initContainer re-seeds config.yaml from this
+    # ConfigMap and pulls the skill tree from kg6zjl/skills, so a merge alone is
+    # otherwise a no-op until the next unrelated restart. Reloader watches for changes.
+    configmap.reloader.stakater.com/reload: "hermes-config,hermes-soul"
     secret.reloader.stakater.com/reload: "hermes-agent-secrets"
 spec:
   replicas: 1
@@ -68,47 +68,40 @@ spec:
           # PATH wrapper for pre-commit (—target puts the console script in pylib/bin)
           printf '#!/bin/sh\nexec python3 -m pre_commit "$@"\n' > /opt/data/.local/bin/pre-commit
           chmod +x /opt/data/.local/bin/*
-          # Materialize the full skill tree from the git-managed hermes-skills
-          # ConfigMap into $HERMES_HOME/skills (the live tree the gateway loads
-          # at startup). ConfigMap keys cannot contain '/', so keys encode the
-          # path with '__' as the separator:
-          #   <cat>__<skill>.md                     -> <cat>/<skill>/SKILL.md
-          #   <skill>.md                            -> <skill>/SKILL.md (categoryless)
-          #   <cat>__<skill>__<dir>__<file.ext>     -> <cat>/<skill>/<dir>/<file.ext>
-          # The extension is preserved on supporting files, so the trailing '.md'
-          # above is only a marker on SKILL.md keys. Git is the source of truth:
-          # these copies override the image-bundled skills, and any runtime edit
-          # is reset on next pod start.
-          mkdir -p /opt/data/skills
-          for f in /skills/*; do
-            [ -f "$f" ] || continue
-            key="$(basename "$f")"
-            case "$key" in
-              *__*) ;;
-              *)  # categoryless skill
-                  name="$(basename "$key" .md)"
-                  dest="/opt/data/skills/$name/SKILL.md"
-                  mkdir -p "$(dirname "$dest")"
-                  cp "$f" "$dest" 2>/dev/null || true
-                  continue
-                  ;;
-            esac
-            cat="${key%%__*}"
-            rest="${key#*__}"
-            case "$rest" in
-              *__*)  # supporting file: nested path, extension kept verbatim
-                  skill="${rest%%__*}"
-                  nested="$(printf '%s' "${rest#*__}" | sed 's|__|/|g')"
-                  dest="/opt/data/skills/$cat/$skill/$nested"
-                  ;;
-              *)     # skill: the trailing .md was a marker for SKILL.md
-                  skill="$(basename "$rest" .md)"
-                  dest="/opt/data/skills/$cat/$skill/SKILL.md"
-                  ;;
-            esac
-            mkdir -p "$(dirname "$dest")"
-            cp "$f" "$dest" 2>/dev/null || true
-          done
+          # Skills come from kg6zjl/skills, which is the source of truth. The ConfigMap
+          # delivery is retired: its keys were hand-maintained, so anything not listed
+          # silently never shipped, and it could not propagate a deletion.
+          # The branch tarball is fetched with the read token already mounted for the main
+          # container (this image has no git). /opt/data/skills also holds image-bundled
+          # skills that are not in the repo, so removals are limited to the paths listed in
+          # .repo_delivered by the previous start, which never removes a bundled skill.
+          # A fetch failure with a tree already on the PVC warns and continues: an
+          # unreachable GitHub must not stop the agent from booting.
+          if curl -fsSL -m 60 -H "Authorization: Bearer $(cat /etc/hermes/github-token)" \
+              https://codeload.github.com/kg6zjl/skills/tar.gz/refs/heads/main -o /tmp/skills.tgz; then
+            rm -rf /tmp/skills-repo
+            mkdir -p /tmp/skills-repo
+            tar xzf /tmp/skills.tgz -C /tmp/skills-repo --strip-components=1
+            if cd /tmp/skills-repo/skills; then
+              find . -type f | sed 's|^\./||' | sort > /tmp/skills-delivered.txt
+              while read -r rel; do
+                mkdir -p "/opt/data/skills/$(dirname "$rel")"
+                cp "$rel" "/opt/data/skills/$rel"
+              done < /tmp/skills-delivered.txt
+              if [ -f /opt/data/skills/.repo_delivered ]; then
+                comm -23 /opt/data/skills/.repo_delivered /tmp/skills-delivered.txt | while read -r rel; do
+                  rm -f "/opt/data/skills/$rel"
+                done
+              fi
+              cp /tmp/skills-delivered.txt /opt/data/skills/.repo_delivered
+              echo "skills: delivered $(wc -l < /tmp/skills-delivered.txt) file(s) from kg6zjl/skills"
+            else
+              echo "skills: unexpected archive layout; keeping the tree already on the PVC"
+            fi
+          else
+            echo "skills: fetch failed; keeping the tree already on the PVC"
+          fi
+          chown -R 10000:10000 /opt/data/skills
           # Seed the config file Hermes actually reads ($HERMES_HOME/config.yaml)
           # from the git-managed ConfigMap. Env vars (HERMES_MODEL_DEFAULT) are
           # NOT honored by the gateway; config.yaml wins. Keep it writable so
@@ -120,10 +113,10 @@ spec:
         volumeMounts:
         - name: data
           mountPath: /opt/data
-        - name: hermes-skills
-          mountPath: /skills
         - name: hermes-config
           mountPath: /hermes-config
+        - name: hermes-github-token
+          mountPath: /etc/hermes
       containers:
       - name: hermes
         image: nousresearch/hermes-agent:v2026.9.24
@@ -253,9 +246,6 @@ spec:
           - key: GITHUB_TOKEN
             path: github-token
           defaultMode: 0444
-      - name: hermes-skills
-        configMap:
-          name: hermes-skills
       - name: hermes-config
         configMap:
           name: hermes-config
