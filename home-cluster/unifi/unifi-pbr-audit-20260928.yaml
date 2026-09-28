@@ -4,7 +4,7 @@ metadata:
   # Bump the suffix to run again; Job names are immutable. Delete this file when the
   # run is finished and Flux prunes the Job. Deliberately no ttlSecondsAfterFinished:
   # a self-deleting Job looks like a missing resource to Flux and re-runs forever.
-  name: unifi-audit-20260929
+  name: unifi-pbr-audit-20260928
   namespace: unifi
 spec:
   backoffLimit: 1
@@ -27,8 +27,8 @@ spec:
         args:
         - -c
         - |
-          # Reads the gateway config with the read-only account and prints a whitelisted
-          # subset. Never prints credentials, cookies or the CSRF token.
+          # Reads the gateway's policy-based routes with the read-only account and prints
+          # a whitelisted subset. Never prints credentials, cookies or the CSRF token.
           import http.cookiejar, json, os, ssl, urllib.request
 
           BASE = "https://192.168.1.1"  # self-signed CN=unifi.local, so verification is off by design
@@ -49,28 +49,46 @@ spec:
               headers={"Content-Type": "application/json"},
           )
           csrf = opener.open(login).headers.get("X-CSRF-Token", "")
-          print("login: ok, csrf header present:", bool(csrf))
+          print("login: ok, csrf present:", bool(csrf))
 
-          KEEP = ("_id", "name", "enabled", "description", "domains", "regions",
-                  "network", "target_devices", "target_subnets", "match_ip",
-                  "match_ports", "vpn_client", "interface")
+          def get(path):
+              req = urllib.request.Request(BASE + path, headers={"X-CSRF-Token": csrf})
+              return json.load(opener.open(req))
+
+          # v1 networkconf works on 10.6.106 and maps network_id -> name. The VPN client
+          # is itself a network, which is why one is named "Express VPN".
+          networks = {}
+          try:
+              for n in get("/proxy/network/api/s/default/rest/networkconf").get("data", []):
+                  networks[n["_id"]] = n.get("name")
+              print("networks:", len(networks))
+          except Exception as exc:
+              print("networkconf ERROR", type(exc).__name__, getattr(exc, "code", ""))
+
+          # Policy-based routes are v2, not classic: /rest/trafficroute returns HTTP 400.
+          KEEP = ("route_id", "_id", "name", "description", "enabled", "matching_target",
+                  "network_id", "next_hop", "kill_switch_enabled", "domain_count",
+                  "ip_address_count", "ip_range_count", "region_count",
+                  "target_device_count", "target_devices", "target_subnets", "domains",
+                  "ip_addresses", "ip_ranges", "regions")
 
           for path in (
-              "/proxy/network/api/s/default/rest/trafficroute",
-              "/proxy/network/api/s/default/rest/trafficrule",
-              "/proxy/network/api/s/default/rest/networkconf",
+              "/proxy/network/v2/api/site/default/trafficroutes",
+              "/proxy/network/v2/api/site/default/trafficrules",
           ):
               try:
-                  req = urllib.request.Request(BASE + path, headers={"X-CSRF-Token": csrf})
-                  payload = json.load(opener.open(req))
+                  payload = get(path)
               except Exception as exc:
                   print(path, "ERROR", type(exc).__name__, getattr(exc, "code", ""))
                   continue
-              items = payload.get("data", [])
-              print(path, "items:", len(items),
-                    "keys:", sorted(items[0].keys())[:24] if items else [])
-              for item in items:
-                  print(" ", json.dumps({k: item[k] for k in KEEP if k in item}, default=str))
+              routes = payload.get("data", []) if isinstance(payload, dict) else payload
+              print(path, "items:", len(routes))
+              for r in routes:
+                  row = {k: r[k] for k in KEEP if k in r}
+                  if row.get("network_id") in networks:
+                      row["network_name"] = networks[row["network_id"]]
+                  print("  ", json.dumps(row, default=str))
+                  print("     all keys:", sorted(r.keys()))
         envFrom:
         - secretRef:
             name: unifi-ro-creds
