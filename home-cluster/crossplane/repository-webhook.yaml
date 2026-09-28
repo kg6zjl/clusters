@@ -8,9 +8,9 @@ spec:
     active: true
     events:
       - pull_request
-    # Plain "owner/repo" on purpose: a Repository MR would let Crossplane own the repo's
-    # settings (visibility, description, features). This pilot manages the webhook only.
-    repository: kg6zjl/skills
+    # Repository name only: the provider infers the owner from the credential, and a
+    # Repository MR would let Crossplane own the repo's settings. This manages the webhook only.
+    repository: skills
     configuration:
       - contentType: json
         insecureSsl: false
