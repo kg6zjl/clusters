@@ -9,7 +9,9 @@ metadata:
     configmap.reloader.stakater.com/reload: "meshmonitor-scripts"
     secret.reloader.stakater.com/reload: "meshtastic-admin"
 spec:
-  replicas: 1
+  # Stage 1 of the Longhorn migration: the copy job needs the SQLite volume quiet, and
+  # the backup CronJob reads it read-only so it can coexist. Stage 2 restores this to 1.
+  replicas: 0
   revisionHistoryLimit: 5
   selector:
     matchLabels:

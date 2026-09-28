@@ -1,0 +1,70 @@
+# Stage 1 of moving meshmonitor's SQLite state off the node-pinned hostpath claim.
+#
+# The Deployment is at replicas: 0 in this same commit. README.md line 119: state is
+# SQLite at /data/meshmonitor.db, and copying a live database yields a volume that looks
+# fine and is corrupt.
+#
+# The destination already holds ~2,142,208,000 bytes on a 2Gi claim - 99.75% full - from
+# an earlier attempt whose history is unexplained. Rather than assume it is complete, the
+# copy clears it first, so the result depends only on the source. The claim is grown to
+# 10Gi in this commit because a 2Gi destination cannot hold a source that filled it.
+#
+# Stage 2 repoints claimName in both deployment.yaml and backup-cronjob.yaml (the daily
+# backup reads the same claim), restores replicas to 1, and deletes this file. Nothing is
+# repointed here: repointing before the copy finishes would let the app boot against an
+# empty volume, and continuous reconciliation gives no ordering guarantee to save it.
+#
+# The job lands on the node holding the source PV on its own - that is where the hostpath
+# PV's nodeAffinity points, and the Longhorn volume attaches there too. No nodeSelector.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: meshmonitor-migrate
+  namespace: meshtastic
+spec:
+  backoffLimit: 2
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: copy
+          image: alpine:3.24
+          command:
+            - /bin/sh
+            - -c
+            - |
+              set -euo pipefail
+              # replicas: 0 landed with this commit; let the old pod release the
+              # ReadWriteOnce claim before reading it.
+              sleep 20
+              echo "--- source (hostpath, node-pinned by its PV) ---"
+              du -sh /old
+              NEEDED=$(du -sk /old | cut -f1)
+              find /old | wc -l
+              echo "--- destination (longhorn), cleared so the result depends only on the source ---"
+              find /new -mindepth 1 -delete
+              df -P -k /new
+              AVAIL=$(df -P -k /new | tail -1 | tr -s ' ' | cut -d' ' -f4)
+              echo "needed=${NEEDED}KiB available=${AVAIL}KiB"
+              # fail loudly here rather than half-copy and hit ENOSPC mid-file
+              test "${AVAIL}" -gt "${NEEDED}"
+              cp -a /old/. /new/
+              echo "--- result ---"
+              du -sh /new
+              find /new | wc -l
+              test -n "$(ls -A /new)"
+              test "$(find /new | wc -l)" -ge "$(find /old | wc -l)"
+              echo "copy ok"
+          volumeMounts:
+            - name: old
+              mountPath: /old
+              readOnly: true
+            - name: new
+              mountPath: /new
+      volumes:
+        - name: old
+          persistentVolumeClaim:
+            claimName: meshmonitor-data
+        - name: new
+          persistentVolumeClaim:
+            claimName: meshmonitor-data-longhorn
