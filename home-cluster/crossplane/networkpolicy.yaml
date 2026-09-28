@@ -1,0 +1,45 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: crossplane-system-allow
+  namespace: crossplane-system
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Crossplane core and providers talk to each other in-namespace; nothing external reaches in.
+    - from:
+        - podSelector: {}
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+    # The API server is a host process, not a pod: a namespaceSelector-only rule does not
+    # cover it. Service CIDR covers the ClusterIP, the node LAN covers the post-DNAT endpoint.
+    - to:
+        - ipBlock:
+            cidr: 10.152.183.0/16
+        - ipBlock:
+            cidr: 192.168.1.0/24
+      ports:
+        - port: 443
+          protocol: TCP
+        - port: 16443
+          protocol: TCP
+    - to:
+        - podSelector: {}
+    # xpkg.upbound.io for Provider packages, api.github.com for the provider's API calls.
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+      ports:
+        - port: 443
+          protocol: TCP

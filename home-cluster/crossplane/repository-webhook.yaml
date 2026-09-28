@@ -1,0 +1,22 @@
+apiVersion: repo.github.m.upbound.io/v1alpha1
+kind: RepositoryWebhook
+metadata:
+  name: skills-pr-notify
+  namespace: crossplane-system
+spec:
+  forProvider:
+    active: true
+    events:
+      - pull_request
+    # Plain "owner/repo" on purpose: a Repository MR would let Crossplane own the repo's
+    # settings (visibility, description, features). This pilot manages the webhook only.
+    repository: kg6zjl/skills
+    configuration:
+      - contentType: json
+        insecureSsl: false
+        urlSecretRef:
+          name: discord-pull-requests-webhook
+          key: url
+  providerConfigRef:
+    kind: ProviderConfig
+    name: default
