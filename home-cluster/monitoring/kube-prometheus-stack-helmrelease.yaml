@@ -227,6 +227,15 @@ spec:
             static_configs:
               - targets:
                   - openrouter-exporter.monitoring.svc.cluster.local:9101
+          # beast's comfy/llama priority state. The host serves JSON on :8126, which
+          # Prometheus cannot scrape directly, so beast-status-exporter converts it to text
+          # in-cluster. :8126 is ALLOW Anywhere in beast's UFW, so unlike the 9100/9835 jobs
+          # this needs no host change - and nothing scrapes the box directly.
+          - job_name: beast-status
+            scrape_interval: 15s
+            static_configs:
+              - targets:
+                  - beast-status-exporter.monitoring.svc.cluster.local:9102
         additionalAlertRelabelConfigs:
           - source_labels: [alertname]
             regex: NodeDiskIOSaturation

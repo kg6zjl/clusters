@@ -18,9 +18,12 @@ resources:
   - loki-helmrelease.yaml
   - alloy-helmrelease.yaml
   - loki-alerts.yaml
+  - longhorn-alerts.yaml
   - openrouter-exporter-external-secret.yaml
   - openrouter-exporter-configmap.yaml
   - openrouter-exporter.yaml
+  - beast-status-exporter-configmap.yaml
+  - beast-status-exporter.yaml
   - kube-prometheus-stack-helmrelease.yaml
   - blackbox-exporter-helmrelease.yaml
   - blackbox-probe-reconciler-script.yaml

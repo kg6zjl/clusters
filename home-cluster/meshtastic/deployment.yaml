@@ -9,6 +9,9 @@ metadata:
     configmap.reloader.stakater.com/reload: "meshmonitor-scripts"
     secret.reloader.stakater.com/reload: "meshtastic-admin"
 spec:
+  # Stage 2: the copy job completed (source 2.6G, 186 entries, both assertions passed)
+  # and both consumers now read the Longhorn claim. The hostpath claim stays as the
+  # rollback until the app has run a full cycle.
   replicas: 1
   revisionHistoryLimit: 5
   selector:
@@ -88,7 +91,7 @@ spec:
       volumes:
       - name: meshmonitor-data
         persistentVolumeClaim:
-          claimName: meshmonitor-data
+          claimName: meshmonitor-data-longhorn
       - name: meshmonitor-scripts
         configMap:
           name: meshmonitor-scripts

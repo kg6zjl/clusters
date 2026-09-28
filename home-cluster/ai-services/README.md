@@ -159,6 +159,16 @@ Grafana dashboard **"Beast AI Box Overview"** (`monitoring/dashboard-beast.yaml`
 `beast`): GPU util %, GPU memory used/total, GPU temp, power draw, plus node CPU/RAM.
 Scrape jobs live in `monitoring/kube-prometheus-stack-helmrelease.yaml`.
 
+The same dashboard has a **"GPU priority (ComfyUI vs llama)"** panel with two lines that flip.
+It comes from `beast-status-exporter`, an in-cluster Deployment following the
+`openrouter-exporter` pattern: the host's status server serves JSON, Prometheus cannot scrape
+that, so the exporter polls `:8126` and renders `beast_service_active{service="comfyui"}` and
+`{service="llama"}` as 1/0 as the two services hand the 16GB card back and forth (renders
+always win, so ComfyUI going to 1 is what forces llama to 0). `beast_status_up` falls to 0
+when `:8126` cannot be reached, which makes a break in the lines distinguishable from a real
+handover. Unlike 9100/9835, nothing scrapes the box directly - `:8126` is `ALLOW Anywhere` in
+beast's UFW, so this needed no host change at all.
+
 Serve check from the pod network:
 
     curl -s http://192.168.1.161:9100/metrics | head -3
