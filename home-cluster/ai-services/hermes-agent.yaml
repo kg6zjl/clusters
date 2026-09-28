@@ -307,23 +307,3 @@ spec:
     name: dashboard
   selector:
     app: hermes-agent
----
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: hermes-agent-allow-openwebui
-  namespace: ai-services
-spec:
-  podSelector:
-    matchLabels:
-      app: hermes-agent
-  policyTypes:
-  - Ingress
-  ingress:
-  - from:
-    - podSelector:
-        matchLabels:
-          app: open-webui
-    ports:
-    - protocol: TCP
-      port: 8642
