@@ -9,7 +9,6 @@ resources:
   - network-policy-github.yaml
   - network-policy-hermes-kubeapi.yaml
   - namespace.yaml
-  - llama-qwen35.yaml
   - open-webui.yaml
   - open-webui-data-longhorn-pvc.yaml
   - ingressroute-openwebui.yaml
