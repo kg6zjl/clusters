@@ -14,10 +14,7 @@ spec:
   timeout: 5m0s
   dependsOn:
     - name: crossplane
-  # Ready on Healthy, not merely applied: the next layer needs this provider's CRDs to exist,
-  # and applying the Provider does not install them.
-  healthChecks:
-    - apiVersion: pkg.crossplane.io/v1
-      kind: Provider
-      name: provider-upjet-github
-      namespace: crossplane-system
+  # No healthChecks here. Flux's health assessment wants a Ready condition; a Crossplane Provider
+  # reports Healthy/Installed only, so the check can never pass and this layer sits Unknown forever,
+  # blocking the config layer behind it. The provider's CRDs come from its package independently, so
+  # the next layer just retries if it races them.
