@@ -1,0 +1,81 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  # Bump the suffix to run again; Job names are immutable. Delete this file when the
+  # run is finished and Flux prunes the Job. Deliberately no ttlSecondsAfterFinished:
+  # a self-deleting Job looks like a missing resource to Flux and re-runs forever.
+  name: unifi-audit-20260928
+  namespace: unifi
+spec:
+  backoffLimit: 1
+  template:
+    spec:
+      restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        runAsGroup: 65534
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+      - name: audit
+        image: python:3.13-alpine
+        envFrom:
+        - secretRef:
+            name: unifi-ro-creds
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+        volumeMounts:
+        - name: tmp
+          mountPath: /tmp
+        args:
+        - -c
+        - |
+          # Reads the gateway config with the read-only account and prints a whitelisted
+          # subset. Never prints credentials, cookies or the CSRF token.
+          # UNVERIFIED: the login path and /rest/* names below are unexercised; dump the
+          # response keys on the first run before trusting them.
+          import http.cookiejar, json, os, ssl, urllib.request
+
+          BASE = "https://192.168.1.1"  # self-signed CN=unifi.local, so verification is off by design
+          ctx = ssl.create_default_context()
+          ctx.check_hostname = False
+          ctx.verify_mode = ssl.CERT_NONE
+          opener = urllib.request.build_opener(
+              urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()),
+              urllib.request.HTTPSHandler(context=ctx),
+          )
+
+          login = urllib.request.Request(
+              BASE + "/api/auth/login",
+              data=json.dumps({
+                  "username": os.environ["username"],
+                  "password": os.environ["password"],
+              }).encode(),
+              headers={"Content-Type": "application/json"},
+          )
+          csrf = opener.open(login).headers.get("X-CSRF-Token", "")
+
+          KEEP = ("_id", "name", "enabled", "description", "domains", "regions",
+                  "network", "target_devices", "target_subnets", "match_ip",
+                  "match_ports", "vpn_client", "interface")
+
+          for path in (
+              "/proxy/network/api/s/default/rest/trafficroute",
+              "/proxy/network/api/s/default/rest/trafficrule",
+          ):
+              try:
+                  req = urllib.request.Request(BASE + path, headers={"X-CSRF-Token": csrf})
+                  payload = json.load(opener.open(req))
+              except Exception as exc:
+                  print(path, "ERROR", type(exc).__name__)
+                  continue
+              for item in payload.get("data", []):
+                  print(path, json.dumps({k: item[k] for k in KEEP if k in item}, default=str))
+      volumes:
+      - name: tmp
+        emptyDir: {}
