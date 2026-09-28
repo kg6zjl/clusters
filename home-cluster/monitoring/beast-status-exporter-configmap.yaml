@@ -1,0 +1,179 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: beast-status-exporter-script
+  namespace: monitoring
+data:
+  exporter.py: |
+    #!/usr/bin/env python3
+    """Prometheus exporter for beast's comfy/llama VRAM priority state.
+
+    beast runs a stdlib status server (`status-server.service`, /opt/comfy-llama-sync/
+    status_server.py) that reports which of ComfyUI and llama-server currently holds the
+    16GB card. It answers every path with the same body:
+
+        {"comfyui": "on", "llama": "on"}
+
+    The two take turns, always in favour of renders: `comfy-llama-sync.service` stops
+    llama-server while a ComfyUI render is running or queued and restarts it when the queue
+    drains; `comfy-unload.service` POSTs /free to ComfyUI when llama comes up and the queue is
+    idle, so ComfyUI gives VRAM back. This turns that coordinator state into two series that
+    flip, which is the only way to see the handover from Grafana.
+
+    The host binds :8126 and serves JSON, which Prometheus cannot scrape, so this runs
+    in-cluster and converts it. Standard library only: no pip install on the stock image.
+
+    Exposed:
+      beast_service_active{service="comfyui"}   1 = holds the GPU, 0 = has yielded it
+      beast_service_active{service="llama"}     same
+      beast_status_up                           1 if the last poll of :8126 succeeded
+      beast_status_scrape_timestamp_seconds     Unix time of the last successful poll
+      beast_status_scrape_errors_total          failed polls since start
+    """
+
+    import json
+    import os
+    import sys
+    import threading
+    import time
+    import urllib.error
+    import urllib.request
+    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+    STATUS_URL = os.environ.get("BEAST_STATUS_URL", "http://192.168.1.161:8126/")
+    PORT = int(os.environ.get("PORT", "9102"))
+    INTERVAL = float(os.environ.get("SCRAPE_INTERVAL_SECONDS", "10"))
+    TIMEOUT = float(os.environ.get("HTTP_TIMEOUT_SECONDS", "5"))
+
+    # The keys the host reports, in a fixed order so the rendered output is stable.
+    SERVICES = ("comfyui", "llama")
+
+    HELP = {
+        "beast_service_active": "1 if the service currently holds the GPU, 0 if it has yielded it",
+        "beast_status_up": "1 if the last poll of beast's status endpoint succeeded, 0 otherwise",
+        "beast_status_scrape_timestamp_seconds": "Unix timestamp of the last successful status poll",
+        "beast_status_scrape_errors_total": "Number of failed status polls since start",
+    }
+
+    _lock = threading.Lock()
+    _services = {}
+    _up = 0.0
+    _errors = 0
+    _last_success = 0.0
+
+
+    def log(msg):
+        print(f"[beast-status-exporter] {msg}", flush=True)
+
+
+    def poll_once():
+        global _errors, _last_success, _up
+
+        try:
+            with urllib.request.urlopen(STATUS_URL, timeout=TIMEOUT) as resp:
+                payload = json.loads(resp.read().decode())
+        except (urllib.error.URLError, urllib.error.HTTPError, OSError, ValueError, json.JSONDecodeError) as exc:
+            code = getattr(exc, "code", None)
+            with _lock:
+                _errors += 1
+                _up = 0.0
+            log(f"poll failed: {type(exc).__name__}{f' HTTP {code}' if code else ''}")
+            return
+
+        # A missing key or an unexpected value means the response shape changed, not that a
+        # service is off. Fail the whole poll so both series go stale instead of being
+        # rewritten to a confident 0 that would look like a real handover.
+        values = {}
+        for service in SERVICES:
+            state = payload.get(service)
+            if state not in ("on", "off"):
+                with _lock:
+                    _errors += 1
+                    _up = 0.0
+                log(f"unexpected payload for {service!r}: {state!r}")
+                return
+            values[service] = 1.0 if state == "on" else 0.0
+
+        now = time.time()
+        with _lock:
+            _services.update(values)
+            _up = 1.0
+            _last_success = now
+
+
+    def render():
+        with _lock:
+            snapshot = dict(_services)
+            up = _up
+            errors = float(_errors)
+            last = _last_success
+
+        lines = []
+
+        lines.append(f"# HELP beast_service_active {HELP['beast_service_active']}")
+        lines.append("# TYPE beast_service_active gauge")
+        # Emitted only for services seen in the last successful poll. On a failed poll they are
+        # left out, so Prometheus' staleness handling marks them unknown (a gap in Grafana)
+        # rather than this exporter asserting a state it did not observe.
+        for service in SERVICES:
+            if service in snapshot:
+                lines.append(f'beast_service_active{{service="{service}"}} {snapshot[service]}')
+
+        lines.append(f"# HELP beast_status_up {HELP['beast_status_up']}")
+        lines.append("# TYPE beast_status_up gauge")
+        lines.append(f"beast_status_up {up}")
+
+        lines.append(f"# HELP beast_status_scrape_timestamp_seconds {HELP['beast_status_scrape_timestamp_seconds']}")
+        lines.append("# TYPE beast_status_scrape_timestamp_seconds gauge")
+        if last:
+            lines.append(f"beast_status_scrape_timestamp_seconds {last}")
+
+        lines.append(f"# HELP beast_status_scrape_errors_total {HELP['beast_status_scrape_errors_total']}")
+        lines.append("# TYPE beast_status_scrape_errors_total counter")
+        lines.append(f"beast_status_scrape_errors_total {errors}")
+
+        return "\n".join(lines) + "\n"
+
+
+    class Handler(BaseHTTPRequestHandler):
+        protocol_version = "HTTP/1.1"
+
+        def do_GET(self):
+            if self.path.startswith("/metrics"):
+                body = render().encode()
+                self.send_response(200)
+            elif self.path.startswith("/healthz"):
+                body = b"ok\n"
+                self.send_response(200)
+            else:
+                body = b"not found\n"
+                self.send_response(404)
+            self.send_header("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def log_message(self, fmt, *args):
+            pass
+
+
+    def poll_loop():
+        while True:
+            try:
+                poll_once()
+            except Exception as exc:
+                log(f"unexpected poll error: {type(exc).__name__}: {exc}")
+            time.sleep(INTERVAL)
+
+
+    def main():
+        log(f"polling {STATUS_URL} every {INTERVAL:.0f}s, serving /metrics on :{PORT}")
+        threading.Thread(target=poll_loop, daemon=True).start()
+        ThreadingHTTPServer(("", PORT), Handler).serve_forever()
+
+
+    if __name__ == "__main__":
+        try:
+            main()
+        except KeyboardInterrupt:
+            sys.exit(0)

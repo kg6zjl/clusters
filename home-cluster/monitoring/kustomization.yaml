@@ -1,6 +1,7 @@
 resources:
   - network-policy.yaml
   - namespace.yaml
+  - flux-podmonitor.yaml
   - ingressroute-grafana.yaml
   - ingressroute-prometheus.yaml
   - ingressroute-alertmanager.yaml
@@ -11,15 +12,22 @@ resources:
   - dashboard-beast.yaml
   - dashboard-trivy-operator.yaml
   - dashboard-openrouter.yaml
+  - dashboard-spegel.yaml
   - alertmanager-external-secret.yaml
   - external-secrets.yaml
   - loki-datasource.yaml
   - loki-helmrelease.yaml
   - alloy-helmrelease.yaml
   - loki-alerts.yaml
+  - longhorn-alerts.yaml
   - openrouter-exporter-external-secret.yaml
   - openrouter-exporter-configmap.yaml
   - openrouter-exporter.yaml
+  - cluster-egress-exporter-configmap.yaml
+  - cluster-egress-exporter.yaml
+  - cluster-egress-rules.yaml
+  - beast-status-exporter-configmap.yaml
+  - beast-status-exporter.yaml
   - kube-prometheus-stack-helmrelease.yaml
   - blackbox-exporter-helmrelease.yaml
   - blackbox-probe-reconciler-script.yaml

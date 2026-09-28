@@ -8,7 +8,8 @@ metadata:
     app: open-webui
     alert-on-down: "true"
   annotations:
-    secret.reloader.stakater.com/reload: "hermes-agent-secrets,ai-services-secrets"
+    # open-webui reads only ai-services-secrets now: it no longer consumes the agent's API key.
+    secret.reloader.stakater.com/reload: "ai-services-secrets"
 spec:
   replicas: 1
   revisionHistoryLimit: 5
@@ -31,13 +32,60 @@ spec:
         - containerPort: 8080
           name: http
         env:
+        # A single local endpoint: the GPU host's llama.cpp router on beast. The in-cluster
+        # llama-qwen35 endpoint is gone too, and the hermes-agent one before it - open-webui
+        # offers nothing that is not this host.
         - name: OPENAI_API_BASE_URLS
-          value: "http://hermes-agent:8642/v1;http://192.168.1.161:11434/v1;http://llama-qwen35:8080/v1"
+          value: "http://192.168.1.161:11434/v1"
+        # Positional: one key per URL, paired by index. This router needs no credential, so
+        # the literal placeholder is enough and open-webui holds no API key at all. It is NOT
+        # a sentinel open-webui recognises - it is sent verbatim as "Authorization: Bearer
+        # no-key" and the router ignores auth, so any non-empty string works here.
         - name: OPENAI_API_KEYS
-          valueFrom:
-            secretKeyRef:
-              name: hermes-agent-secrets
-              key: OPENAI_API_KEYS
+          value: "no-key"
+        # Per-connection settings, keyed by the index of the URL above ("0"). A non-empty
+        # model_ids makes this a hard whitelist: open-webui builds the picker from exactly
+        # these ids and never calls the router's /v1/models, which is what keeps the
+        # non-abliterated models (GLM-4.6V-Flash, Qwen3.5-9B, Qwen35-0.8B) out of the list
+        # and stops the router's dir-scan from growing the list whenever a .gguf is added.
+        # Ids are case-sensitive and come from the router's /v1/models - note the 14B is
+        # "abliterated" and the 27B is "ABLITERATED". Inference still goes to the URL
+        # above; the whitelist only decides what is offered. Trade-off: with a manual list
+        # open-webui can no longer infer per-model load state, so the picker stops showing
+        # which model is currently resident in VRAM.
+        #
+        # Two 27B quants are deliberately absent:
+        #   Q4_K_M - weights alone are 16032 MiB on a 16303 MiB card, so it cannot
+        #     load at any context size unless llama-server's --fit may spill layers to
+        #     system RAM, which needs -ngl 99 dropped from llama-server.service.
+        #   Q3_K_M - it does fit, but at 15196 MiB it leaves only ~650 MiB of headroom,
+        #     and ComfyUI idles at 456 MiB and spikes above that whenever it
+        #     generates, so a ComfyUI burst could OOM the LLM mid-request. Q3_K_S
+        #     serves the same 131072 total context at 14026 MiB instead.
+        # Neither is worth offering: both just risk a 500 on selection.
+        - name: OPENAI_API_CONFIGS
+          value: '{"0": {"enable": true, "model_ids": ["Qwen3-14B-abliterated-Q4_K_M", "Qwen3.8-27B-ABLITERATED-Q3_K_S"]}}'
+        # New chats open on the local 14B. This must be one of the ids above, spelled exactly
+        # as the router reports it. It used to be the Ollama-era "qwen3-14b-abliterated:latest",
+        # which this router has never served - port 11434 changed from Ollama to llama-server,
+        # so the Ollama-style ids in the old picker were ghosts of the previous backend.
+        - name: DEFAULT_MODELS
+          value: "Qwen3-14B-abliterated-Q4_K_M"
+        # There is no Ollama on this host. Port 11434 is llama-server, which open-webui
+        # reaches as an OpenAI-compatible endpoint above, so the Ollama integration has
+        # nothing to talk to and only produces errors.
+        #
+        # This is set in env rather than left to the admin panel because ollama.enable
+        # is a ConfigVar: like OPENAI_API_BASE_URLS it is persisted to webui.db on first
+        # boot, and the DB wins on subsequent boots. webui.db lives on a Longhorn PVC, so
+        # a stale "true" survives pod restarts and PVC restores. With
+        # ENABLE_PERSISTENT_CONFIG=false below, env wins over the DB, which is what makes
+        # this stick where toggling it in Settings > Connections did not.
+        #
+        # Symptom when this regresses: "Connection error: Cannot connect to host
+        # host.docker.internal:11434 ... [Name or service not known]" on every page load.
+        - name: ENABLE_OLLAMA_API
+          value: "false"
         - name: ENABLE_IMAGE_GENERATION
           value: "True"
         - name: IMAGE_GENERATION_ENGINE
@@ -50,10 +98,21 @@ spec:
           value: "True"
         - name: DEFAULT_USER_ROLE
           value: "admin"
+        - name: ENABLE_WEB_SEARCH
+          value: "True"
+        # The UI calls this engine "DDGS"; the backend dispatch in routers/retrieval.py
+        # matches on the value `duckduckgo` (DDGS_BACKEND, default `auto`, picks the
+        # underlying ddgs backend).
+        - name: WEB_SEARCH_ENGINE
+          value: "duckduckgo"
+        # Admin "Enforce Temporary Chat": every new chat is temporary. The per-user
+        # "Temporary Chat by Default" setting cannot be set from here (see the PR body).
+        - name: USER_PERMISSIONS_CHAT_TEMPORARY_ENFORCED
+          value: "true"
         # Make env vars authoritative over the persisted config DB.
         # OPENAI_API_BASE_URLS/OPENAI_API_KEYS are ConfigVars: on first boot
-        # they are written to webui.db and the DB wins afterwards, which
-        # silently drops the hermes-agent endpoint added later. With
+        # they are written to webui.db and the DB wins afterwards, which is how
+        # an endpoint declared here can silently fail to appear. With
         # ENABLE_PERSISTENT_CONFIG=false the env defaults (source of truth in
         # git) are always used and UI-only changes don't persist.
         - name: ENABLE_PERSISTENT_CONFIG

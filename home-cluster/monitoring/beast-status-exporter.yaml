@@ -1,0 +1,100 @@
+# Converts beast's comfy/llama status endpoint (JSON on the host's :8126) into Prometheus
+# text. Lives in monitoring because monitoring-allow-all egresses to 0.0.0.0/0, while
+# ai-services egress to that host is restricted to 8080 and 11434 - the scrape has to
+# originate here. Mirrors openrouter-exporter, the existing pattern for this.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: beast-status-exporter
+  namespace: monitoring
+  labels:
+    app: beast-status-exporter
+    alert-on-down: "true"
+  annotations:
+    configmap.reloader.stakater.com/reload: "beast-status-exporter-script"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: beast-status-exporter
+  template:
+    metadata:
+      labels:
+        app: beast-status-exporter
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        runAsGroup: 65534
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+      - name: exporter
+        image: python:3.13-slim
+        command:
+        - python
+        - /app/exporter.py
+        env:
+        - name: BEAST_STATUS_URL
+          value: "http://192.168.1.161:8126/"
+        # The host coordinator polls its own queue every 1s, so 10s tracks a handover closely
+        # without hammering the box; Prometheus scrapes this every 15s.
+        - name: SCRAPE_INTERVAL_SECONDS
+          value: "10"
+        - name: HTTP_TIMEOUT_SECONDS
+          value: "5"
+        - name: PORT
+          value: "9102"
+        - name: PYTHONDONTWRITEBYTECODE
+          value: "1"
+        resources:
+          requests:
+            cpu: 10m
+            memory: 32Mi
+          limits:
+            cpu: 100m
+            memory: 128Mi
+        ports:
+        - name: metrics
+          containerPort: 9102
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: metrics
+          initialDelaySeconds: 10
+          periodSeconds: 60
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: metrics
+          initialDelaySeconds: 5
+          periodSeconds: 30
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+        volumeMounts:
+        - name: script
+          mountPath: /app
+          readOnly: true
+      volumes:
+      - name: script
+        configMap:
+          name: beast-status-exporter-script
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: beast-status-exporter
+  namespace: monitoring
+  labels:
+    app: beast-status-exporter
+spec:
+  selector:
+    app: beast-status-exporter
+  ports:
+  - name: metrics
+    port: 9102
+    targetPort: metrics

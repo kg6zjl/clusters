@@ -18,6 +18,7 @@ resources:
   - home-assistant-kustomization.yaml
   - renovate-kustomization.yaml
   - ai-services-kustomization.yaml
+  - unifi-kustomization.yaml
   - media-kustomization.yaml
   - monitoring-kustomization.yaml
   - external-secrets-kustomization.yaml
@@ -31,6 +32,8 @@ resources:
   - adsb-kustomization.yaml
   - nodered-kustomization.yaml
   - security-scanning-kustomization.yaml
+  - spegel-helmrepository.yaml
+  - spegel-kustomization.yaml
   - longhorn-system-kustomization.yaml
   - flux-operator-kustomization.yaml
   - flux-instance-kustomization.yaml

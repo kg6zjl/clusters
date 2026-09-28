@@ -21,7 +21,7 @@ spec:
           volumes:
           - name: meshmonitor-data
             persistentVolumeClaim:
-              claimName: meshmonitor-data
+              claimName: meshmonitor-data-longhorn
               readOnly: true
           - name: nas-creds
             secret:

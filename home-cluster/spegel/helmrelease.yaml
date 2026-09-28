@@ -1,0 +1,44 @@
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: spegel
+  namespace: spegel
+spec:
+  interval: 1h
+  chart:
+    spec:
+      chart: spegel
+      version: 0.7.4
+      sourceRef:
+        kind: HelmRepository
+        name: spegel
+        namespace: flux-system
+  install:
+    remediation:
+      retries: 3
+  upgrade:
+    remediation:
+      retries: 3
+  values:
+    serviceMonitor:
+      enabled: true
+      labels:
+        release: kube-prometheus-stack
+    # Grafana's sidecar watches only the monitoring namespace, so the chart's copy in
+    # this namespace is never loaded. The same JSON ships as a ConfigMap in monitoring/.
+    grafanaDashboard:
+      enabled: false
+    spegel:
+      # MicroK8s runs containerd from a snap, so none of the chart's defaults exist.
+      containerdSock: /var/snap/microk8s/common/run/containerd.sock
+      containerdRegistryConfigPath: /var/snap/microk8s/current/args/certs.d
+      containerdContentPath: /var/snap/microk8s/common/var/lib/containerd/io.containerd.content.v1.content
+      containerdMirrorAdd: true
+      mirroredRegistries:
+        - https://docker.io
+        - https://ghcr.io
+        - https://quay.io
+        - https://registry.k8s.io
+        - https://mirror.gcr.io
+      additionalMirrorTargets:
+        - https://registry.kube.stevearnett.com
