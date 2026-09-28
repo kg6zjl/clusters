@@ -175,6 +175,33 @@ spec:
       annotations:
         summary: "PROD backup stale: {{ $labels.entity }}{{ $labels.cronjob }} in {{ $labels.namespace }}"
         description: "No successful backup in over 30 hours, or the metric reporting it has gone away. home-assistant uploads to the NAS over SFTP (schedule ~24h); meshmonitor writes a nightly tarball to the NAS at 03:30."
+  # The apiserver's dqlite (SQLite) datastore intermittently refuses writes -
+  # SQLITE_BUSY, surfaced to clients as HTTP 500 and to the controllers' logs as
+  # "database is locked". Those individual failures retry and heal, so they are
+  # excluded from the Flux Discord alert (flux-notifications/alert.yaml,
+  # exclusionList); what is worth being told about is the datastore staying sick, and
+  # that is what this rule watches. The 5xx rate has to hold for 20 minutes before
+  # anything is sent.
+  #
+  # Calibration, measured on this Prometheus over 10 days of 5m-resolution samples of
+  # sum(rate(apiserver_request_total{job="apiserver",code=~"5.."}[5m])): median
+  # ~0.007/s, p99 0.467/s, max 0.512/s, and only 5 of 2880 windows above 0.1/s. The
+  # bursts that only self-heal do not trip it (2026-09-27 06:14 and 06:29, the two
+  # events behind the Discord noise, peaked at 0.037/s and 0.022/s). The failure that
+  # started 06:39 that day held 0.5-1.07/s for over half an hour and does trip it.
+  #
+  # job="apiserver" is required: the same series are scraped a second time under
+  # job="kubelet" (per node, identically), so summing across jobs double counts.
+  - name: control-plane-writes
+    rules:
+    - alert: ApiserverWriteErrorsSustained
+      expr: sum(rate(apiserver_request_total{job="apiserver", code=~"5.."}[10m])) > 0.1
+      for: 20m
+      labels:
+        severity: warning
+      annotations:
+        summary: "kube-apiserver is returning sustained 5xx ({{ printf \"%.2f\" $value }}/s)"
+        description: "Over 0.1 failed API requests per second for 20 minutes - too long to be the self-healing datastore contention that retries within a minute. Check which resource is failing (sum by (verb,resource) (rate(apiserver_request_total{code=~\"5..\"}[10m]))), the control-plane nodes' k8s-dqlite logs, and the controllers' own logs for the matching write path (kubectl -n flux-system logs deploy/kustomize-controller --since=30m | grep 'database is locked')."
   # An empty pool leaves no kube_pod_info series at all, so count(...) == 0 returns no samples and
   # stays silent - absent_over_time is load-bearing, verified against the 2026-09-27 outage
   # (1 at 10:00Z while count(...) was empty). The 10m window is the debounce; no `for` on top.
