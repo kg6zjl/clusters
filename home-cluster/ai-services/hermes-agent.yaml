@@ -61,6 +61,12 @@ spec:
           # yq
           curl -fsSL https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -o /opt/data/.local/bin/yq && \
             chmod +x /opt/data/.local/bin/yq
+          # jq: the apt line above installs jq into THIS container's filesystem, which is
+          # discarded when the init exits, so it never reached the agent. Download it to the
+          # shared volume like yq. Version pinned rather than /latest because the tag is
+          # immutable and a surprise major bump should not land inside a pod start.
+          curl -fsSL https://github.com/jqlang/jq/releases/download/jq-1.7.1/jq-linux-amd64 -o /opt/data/.local/bin/jq && \
+            chmod +x /opt/data/.local/bin/jq
           # go-task (Taskfile)
           sh -c "$(curl --location https://taskfile.dev/install.sh)" -- -d -b /opt/data/.local/bin
           # yamllint into a glibc-compatible site-packages dir (PYTHONPATH in main container)
@@ -166,7 +172,13 @@ spec:
         # gateway at beast's llama.cpp (192.168.1.161:11434) and fed the now-removed
         # llamacpp provider. OpenRouter authenticates with OPENROUTER_API_KEY from
         # hermes-agent-secrets via envFrom below.
-        # Tools installed by install-tools initContainer into .local/bin (already on PATH)
+        # Tools installed by the install-tools initContainer live in /opt/data/.local/bin on the
+        # shared volume, but that dir is NOT on the image's PATH: gh, gitleaks, task, trufflehog,
+        # pre-commit and yq were all installed and unreachable (verified: `command -v yq` empty).
+        # Set PATH explicitly, prepending the two tool dirs and keeping the image defaults, so
+        # nothing system-level is displaced.
+        - name: PATH
+          value: /opt/data/.local/bin:/opt/data/home/.local/bin:/usr/local/bin:/usr/bin:/bin:/usr/local/sbin:/usr/sbin:/sbin
         - name: KUBECONFIG
           value: /opt/data/.kube/config
         - name: PYTHONPATH
