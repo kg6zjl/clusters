@@ -81,3 +81,14 @@ spec:
     longhornUI:
       nodeSelector:
         kubernetes.io/arch: amd64
+    metrics:
+      serviceMonitor:
+        # Off by default. The chart's template carries no selector labels, but this Prometheus
+        # selects on serviceMonitorSelector release=kube-prometheus-stack - which every scraped
+        # ServiceMonitor here has. Without additionalLabels the ServiceMonitor is created and
+        # Prometheus ignores it: metrics "enabled", still zero series.
+        enabled: true
+        additionalLabels:
+          release: kube-prometheus-stack
+        # Longhorn's series count is small; 30s matches the rest of the cluster.
+        interval: 30s
