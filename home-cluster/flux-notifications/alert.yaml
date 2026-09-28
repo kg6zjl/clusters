@@ -17,6 +17,25 @@ spec:
   #   source-controller      fetch/verify failure-> Warning (regex/artifact errors)
   # So Ready=False on a HelmRelease/Kustomization/GitRepository surfaces here.
   eventSeverity: error
+  # Events that describe a failure that heals itself are excluded on purpose.
+  #
+  # This cluster's apiserver intermittently returns HTTP 500 on writes because its
+  # dqlite (SQLite) datastore answers SQLITE_BUSY - "database is locked". In the
+  # controllers that shows up as one failed status update or one failed
+  # leader-election lease renewal, and every one of them is retried a minute later
+  # and succeeds. Measured 2026-09-27 over 24h: 9 such errors across
+  # source-controller (lease PUTs) and kustomize-controller (Kustomization status
+  # PATCHes for nodered, local-services, netalertx), while all 34 Kustomizations
+  # stayed Ready=True on the same revision the whole time. Notifying on the attempt
+  # instead of the outcome is what made this channel noisy.
+  #
+  # This suppresses the message, not the fault. If the datastore keeps failing, the
+  # effect is caught with hysteresis by ApiserverWriteErrorsSustained in
+  # home-cluster/monitoring/prometheus-rules.yaml. The pattern is deliberately narrow
+  # so that every other failure still notifies immediately - add a pattern here only
+  # after checking the same way that it heals on its own.
+  exclusionList:
+    - "database is locked"
   eventMetadata:
     summary: "Flux reconciliation failure"
     cluster: home-cluster
