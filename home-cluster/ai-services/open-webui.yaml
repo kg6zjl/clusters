@@ -8,7 +8,8 @@ metadata:
     app: open-webui
     alert-on-down: "true"
   annotations:
-    secret.reloader.stakater.com/reload: "hermes-agent-secrets,ai-services-secrets"
+    # open-webui reads only ai-services-secrets now: it no longer consumes the agent's API key.
+    secret.reloader.stakater.com/reload: "ai-services-secrets"
 spec:
   replicas: 1
   revisionHistoryLimit: 5
@@ -31,13 +32,20 @@ spec:
         - containerPort: 8080
           name: http
         env:
+        # A single local endpoint: the GPU host's llama.cpp router on beast. The in-cluster
+        # llama-qwen35 endpoint is gone too, and the hermes-agent one before it - open-webui
+        # offers nothing that is not this host.
         - name: OPENAI_API_BASE_URLS
-          value: "http://hermes-agent:8642/v1;http://192.168.1.161:11434/v1;http://llama-qwen35:8080/v1"
+          value: "http://192.168.1.161:11434/v1"
+        # Positional: one key per URL, paired by index. This router needs no credential, so
+        # the literal placeholder is enough and open-webui holds no API key at all.
         - name: OPENAI_API_KEYS
-          valueFrom:
-            secretKeyRef:
-              name: hermes-agent-secrets
-              key: OPENAI_API_KEYS
+          value: "no-key"
+        # New chats open on the local 14B. The name must match what the router's /v1/models
+        # reports; the README documents the same model as Qwen3-14B-abliterated-Q4_K_M, so if
+        # the picker comes up empty that spelling is the first thing to try.
+        - name: DEFAULT_MODELS
+          value: "qwen3-14b-abliterated:latest"
         - name: ENABLE_IMAGE_GENERATION
           value: "True"
         - name: IMAGE_GENERATION_ENGINE
@@ -52,8 +60,8 @@ spec:
           value: "admin"
         # Make env vars authoritative over the persisted config DB.
         # OPENAI_API_BASE_URLS/OPENAI_API_KEYS are ConfigVars: on first boot
-        # they are written to webui.db and the DB wins afterwards, which
-        # silently drops the hermes-agent endpoint added later. With
+        # they are written to webui.db and the DB wins afterwards, which is how
+        # an endpoint declared here can silently fail to appear. With
         # ENABLE_PERSISTENT_CONFIG=false the env defaults (source of truth in
         # git) are always used and UI-only changes don't persist.
         - name: ENABLE_PERSISTENT_CONFIG
