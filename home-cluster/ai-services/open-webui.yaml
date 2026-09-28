@@ -98,6 +98,17 @@ spec:
           value: "True"
         - name: DEFAULT_USER_ROLE
           value: "admin"
+        - name: ENABLE_WEB_SEARCH
+          value: "True"
+        # The UI calls this engine "DDGS"; the backend dispatch in routers/retrieval.py
+        # matches on the value `duckduckgo` (DDGS_BACKEND, default `auto`, picks the
+        # underlying ddgs backend).
+        - name: WEB_SEARCH_ENGINE
+          value: "duckduckgo"
+        # Admin "Enforce Temporary Chat": every new chat is temporary. The per-user
+        # "Temporary Chat by Default" setting cannot be set from here (see the PR body).
+        - name: USER_PERMISSIONS_CHAT_TEMPORARY_ENFORCED
+          value: "true"
         # Make env vars authoritative over the persisted config DB.
         # OPENAI_API_BASE_URLS/OPENAI_API_KEYS are ConfigVars: on first boot
         # they are written to webui.db and the DB wins afterwards, which is how
