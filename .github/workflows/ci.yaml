@@ -62,21 +62,43 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Run Trufflehog
-        uses: trufflesecurity/trufflehog@main
-        with:
-          path: ./
-          base: ${{ github.event.repository.default_branch }}
-          head: HEAD
-          extra_args: --only-verified
-        continue-on-error: true
-
-      - name: Check Trufflehog result
-        if: ${{ github.event_name == 'pull_request' }}
+      - name: Scan this change with the node-local trufflehog
+        # The old action passed base "main", which does not resolve in a local clone: trufflehog
+        # errored, scanned 0 chunks, and the action still reported success. Pass explicit SHAs,
+        # and refuse to pass unless the scan actually read commits.
         run: |
-          if [ -n "$(git log --oneline ${{ github.event.repository.default_branch }}..HEAD)" ]; then
-            echo "New commits found, TruffleHog scan is required"
-            exit 1
+          set -euo pipefail
+          REPO="$PWD"
+          TH=/opt/hostedtoolcache/tools/trufflehog
+          if [ ! -x "$TH" ]; then
+            # Runner pods from a pre-warmup template have an empty cache; prefer a pinned,
+            # checksum-verified local copy over the per-job image pull either way.
+            echo "No cached trufflehog on this runner - fetching pinned copy"
+            V=3.97.9
+            mkdir -p "$RUNNER_TEMP/th"
+            cd "$RUNNER_TEMP/th"
+            curl -sSfLO "https://github.com/trufflesecurity/trufflehog/releases/download/v${V}/trufflehog_${V}_linux_amd64.tar.gz"
+            curl -sSfLO "https://github.com/trufflesecurity/trufflehog/releases/download/v${V}/trufflehog_${V}_checksums.txt"
+            sha256sum -c --ignore-missing "trufflehog_${V}_checksums.txt"
+            tar -xzf "trufflehog_${V}_linux_amd64.tar.gz" trufflehog
+            TH="$RUNNER_TEMP/th/trufflehog"
+          fi
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            BASE="${{ github.event.pull_request.base.sha }}"
+            HEAD="${{ github.event.pull_request.head.sha }}"
           else
-            echo "No new commits in PR, skipping TruffleHog"
+            BASE="${{ github.event.before }}"
+            HEAD="${{ github.sha }}"
+          fi
+          ARGS=(git "file://$REPO" --branch "$HEAD" --only-verified --fail)
+          if printf '%s' "$BASE" | grep -qE '^[0-9a-f]{40}$'; then
+            ARGS+=(--since-commit "$BASE")
+          else
+            echo "No usable base commit ($BASE) - scanning the full history of $HEAD"
+          fi
+          echo "trufflehog ${ARGS[*]}"
+          "$TH" "${ARGS[@]}" 2>&1 | tee "$RUNNER_TEMP/trufflehog.log"
+          if ! grep -qE '"chunks": [1-9]' "$RUNNER_TEMP/trufflehog.log"; then
+            echo "::error::TruffleHog scanned 0 chunks - this gate would pass without scanning anything"
+            exit 1
           fi
