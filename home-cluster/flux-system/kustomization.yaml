@@ -9,5 +9,4 @@ resources:
   - grafana-helmrepository.yaml
   - actions-runner-controller-helmrepository.yaml
   - metallb-helmrepository.yaml
-  - spegel-helmrepository.yaml
   - syncs-kustomization.yaml
