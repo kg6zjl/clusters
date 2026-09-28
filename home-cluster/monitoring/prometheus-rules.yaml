@@ -215,3 +215,35 @@ spec:
         summary: "CI runner pool is empty - no PR on this repo can merge"
         description: "No github-runner pods have existed for over 10 minutes. Lint, Validate and Secret Scan are required status checks on main with enforce_admins enabled, so every PR is now frozen - including a PR that would fix it. The pool normally holds at least the HorizontalRunnerAutoscaler floor of 4 (github-runner-autoscaler, min 4 / max 12). Check the controller in arc-systems (arc-operator-actions-runner-controller) and its logs for registration errors. Do NOT add a second ARC install as the fix: the chart hardcodes the webhook name, so two installs veto each other - that is exactly what caused the 2026-09-27 outage."
         runbook_url: "https://github.com/kg6zjl/clusters/settings/variables/actions"
+  # A node can fail in ways the severity="critical" route never sees. The upstream node
+  # alerts (KubeNodeNotReady, KubeNodeUnreachable, KubeNodeReadinessFlapping) all ship as
+  # warning, and a deleted node drops its series rather than going false - so a count is the
+  # only signal that catches removal. Both rules here are routed to ntfy by alertname in the
+  # alertmanager config; this group only decides when they fire.
+  - name: node-health
+    rules:
+    # 3 is the current cluster size (thinkcentre01/02/03). Update it when the cluster grows:
+    # the point is to catch a node object disappearing, which no up{} or condition alert can
+    # see, so it has to be compared against a number that does not come from the cluster.
+    - alert: NodeMissingFromCluster
+      expr: count(kube_node_info) < 3
+      for: 20m
+      labels:
+        severity: critical
+      annotations:
+        summary: "A node has left the cluster ({{ $value }} present, 3 expected)"
+        description: "Fewer node objects than the known cluster size for 20 minutes. A deleted or rebuilt node vanishes from kube_node_info rather than reporting NotReady, so KubeNodeNotReady cannot see it. Check kubectl get nodes, and whether the node is mid-rebuild; if the cluster legitimately shrank, update the constant in this rule."
+        runbook_url: "https://headlamp.kube.stevearnett.com/c/in-cluster/nodes"
+    # node-exporter is a DaemonSet, one per node, plus the two external hosts scraped as
+    # job=beast and job=ugreen-dxp2800 (the NAS). A host whose exporter stops being
+    # scrapeable is the "not reporting" case: it can be perfectly healthy while blind, and
+    # while it is blind none of its disk, memory or filesystem alerts can fire.
+    - alert: NodeExporterDown
+      expr: up{job=~"node-exporter|beast|ugreen-dxp2800"} == 0
+      for: 10m
+      labels:
+        severity: critical
+      annotations:
+        summary: "Node exporter not reporting on {{ $labels.instance }}"
+        description: "The exporter on {{ $labels.instance }} (job={{ $labels.job }}) has been unscrapeable for 10 minutes. Disk and memory alerts for this host cannot fire while it is blind, so this alert reports that the monitoring is broken rather than the host."
+        runbook_url: "https://prometheus.kube.stevearnett.com/targets"
