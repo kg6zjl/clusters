@@ -13,13 +13,33 @@ spec:
         - self-hosted
         - kubernetes
       image: summerwind/actions-runner:v2.337.0-ubuntu-24.04
-      # install-tools was removed: it wrote kubectl into /usr/local/bin (which the runner does not
-      # mount) and fetched helmfile from a domain that does not resolve.
-      # The cache is node-local so setup-* actions stop re-downloading a toolchain per job.
+      # init: makes the node-local cache writable by the non-root runner, then warms
+      # trufflehog into it once per node (pinned, checksum-verified from the project's own
+      # checksums.txt). install-tools was removed: it wrote kubectl into /usr/local/bin,
+      # which the runner never mounts, and fetched helmfile from a domain that does not resolve.
       initContainers:
-        - name: toolcache-perms
+        - name: toolcache
           image: alpine:3.24
-          command: ["sh", "-c", "chmod 1777 /opt/hostedtoolcache"]
+          command:
+            - sh
+            - -c
+            - |
+              set -eu
+              mkdir -p /opt/hostedtoolcache/tools
+              chmod 1777 /opt/hostedtoolcache
+              # Warm once per node; later pods run only this test and exit.
+              if [ -x /opt/hostedtoolcache/tools/trufflehog ]; then
+                echo "tool cache already warm"
+                exit 0
+              fi
+              apk add --no-cache curl
+              cd /opt/hostedtoolcache/tools
+              V=3.97.9
+              curl -sSfLO "https://github.com/trufflesecurity/trufflehog/releases/download/v${V}/trufflehog_${V}_linux_amd64.tar.gz"
+              curl -sSfLO "https://github.com/trufflesecurity/trufflehog/releases/download/v${V}/trufflehog_${V}_checksums.txt"
+              sha256sum -c --ignore-missing "trufflehog_${V}_checksums.txt"
+              tar -xzf "trufflehog_${V}_linux_amd64.tar.gz" trufflehog
+              rm -f trufflehog_*.tar.gz trufflehog_*checksums.txt
           volumeMounts:
             - name: toolcache
               mountPath: /opt/hostedtoolcache
