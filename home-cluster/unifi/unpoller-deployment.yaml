@@ -60,9 +60,9 @@ spec:
           value: "false"
         - name: UP_PROMETHEUS_HTTP_LISTEN
           value: "0.0.0.0:9130"
-        # Metric prefix left at the documented default on purpose:
-        # UP_PROMETHEUS_NAMESPACE renames every series, and the bundled Grafana
-        # dashboards are built for the default.
+        # Series are unpoller_* - the baked up.conf sets namespace = "unpoller", so the
+        # docs' unifipoller_* default never applies. Set UP_PROMETHEUS_NAMESPACE=unifipoller
+        # if you want the upstream dashboards to work unmodified.
         - name: UP_POLLER_DEBUG
           value: "false"
         ports:
