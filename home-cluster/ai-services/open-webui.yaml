@@ -38,14 +38,29 @@ spec:
         - name: OPENAI_API_BASE_URLS
           value: "http://192.168.1.161:11434/v1"
         # Positional: one key per URL, paired by index. This router needs no credential, so
-        # the literal placeholder is enough and open-webui holds no API key at all.
+        # the literal placeholder is enough and open-webui holds no API key at all. It is NOT
+        # a sentinel open-webui recognises - it is sent verbatim as "Authorization: Bearer
+        # no-key" and the router ignores auth, so any non-empty string works here.
         - name: OPENAI_API_KEYS
           value: "no-key"
-        # New chats open on the local 14B. The name must match what the router's /v1/models
-        # reports; the README documents the same model as Qwen3-14B-abliterated-Q4_K_M, so if
-        # the picker comes up empty that spelling is the first thing to try.
+        # Per-connection settings, keyed by the index of the URL above ("0"). A non-empty
+        # model_ids makes this a hard whitelist: open-webui builds the picker from exactly
+        # these ids and never calls the router's /v1/models, which is what keeps the
+        # non-abliterated models (GLM-4.6V-Flash, Qwen3.5-9B, Qwen35-0.8B) out of the list
+        # and stops the router's dir-scan from growing the list whenever a .gguf is added.
+        # Ids are case-sensitive and come from the router's /v1/models - note the 14B is
+        # "abliterated" and the 27Bs are "ABLITERATED". Inference still goes to the URL
+        # above; the whitelist only decides what is offered. Trade-off: with a manual list
+        # open-webui can no longer infer per-model load state, so the picker stops showing
+        # which model is currently resident in VRAM.
+        - name: OPENAI_API_CONFIGS
+          value: '{"0": {"enable": true, "model_ids": ["Qwen3-14B-abliterated-Q4_K_M", "Qwen3.8-27B-ABLITERATED-Q3_K_M", "Qwen3.8-27B-ABLITERATED-Q4_K_M"]}}'
+        # New chats open on the local 14B. This must be one of the ids above, spelled exactly
+        # as the router reports it. It used to be the Ollama-era "qwen3-14b-abliterated:latest",
+        # which this router has never served - port 11434 changed from Ollama to llama-server,
+        # so the Ollama-style ids in the old picker were ghosts of the previous backend.
         - name: DEFAULT_MODELS
-          value: "qwen3-14b-abliterated:latest"
+          value: "Qwen3-14B-abliterated-Q4_K_M"
         - name: ENABLE_IMAGE_GENERATION
           value: "True"
         - name: IMAGE_GENERATION_ENGINE
