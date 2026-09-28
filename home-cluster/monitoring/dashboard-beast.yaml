@@ -558,34 +558,14 @@ data:
                 "mode": "palette-classic"
               },
               "custom": {
-                "axisCenteredZero": false,
-                "axisColorMode": "text",
-                "axisLabel": "",
-                "axisPlacement": "auto",
-                "barAlignment": 0,
-                "drawStyle": "line",
-                "fillOpacity": 0,
-                "gradientMode": "none",
+                "fillOpacity": 70,
                 "hideFrom": {
                   "legend": false,
                   "tooltip": false,
                   "viz": false
                 },
-                "lineInterpolation": "stepAfter",
-                "lineWidth": 2,
-                "pointSize": 5,
-                "scaleDistribution": {
-                  "type": "linear"
-                },
-                "showPoints": "never",
-                "spanNulls": false,
-                "stacking": {
-                  "group": "A",
-                  "mode": "none"
-                },
-                "thresholdsStyle": {
-                  "mode": "off"
-                }
+                "lineWidth": 0,
+                "spanNulls": false
               },
               "mappings": [
                 {
@@ -593,12 +573,12 @@ data:
                     "0": {
                       "color": "red",
                       "index": 1,
-                      "text": "yielded"
+                      "text": "OFF"
                     },
                     "1": {
                       "color": "green",
                       "index": 0,
-                      "text": "on"
+                      "text": "ON"
                     }
                   },
                   "type": "value"
@@ -617,26 +597,7 @@ data:
               },
               "unit": "short"
             },
-            "overrides": [
-              {
-                "matcher": {
-                  "id": "byName",
-                  "options": "llama"
-                },
-                "properties": [
-                  {
-                    "id": "custom.lineStyle",
-                    "value": {
-                      "dash": [
-                        10,
-                        10
-                      ],
-                      "fill": "dash"
-                    }
-                  }
-                ]
-              }
-            ]
+            "overrides": []
           },
           "gridPos": {
             "h": 8,
@@ -671,7 +632,7 @@ data:
             }
           ],
           "title": "GPU priority (ComfyUI vs llama)",
-          "type": "timeseries"
+          "type": "state-timeline"
         }
       ],
       "refresh": "30s",
