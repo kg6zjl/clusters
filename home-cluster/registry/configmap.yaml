@@ -91,6 +91,6 @@ data:
         }
       },
       "log": {
-        "level": "debug"
+        "level": "info"
       }
     }

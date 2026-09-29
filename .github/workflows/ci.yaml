@@ -48,6 +48,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.14'
+
       - name: Install kustomize
         run: |
           curl -sL https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2Fv5.4.2/kustomize_v5.4.2_linux_amd64.tar.gz | tar xz
@@ -58,6 +63,11 @@ jobs:
         run: |
           cd home-cluster
           /tmp/kustomize build . 2>&1 > /dev/null && echo "Kustomize: OK" || { echo "Kustomize: FAILED"; exit 1; }
+
+      - name: Check the registry config is strict JSON
+        # zot refuses to start on a comment or trailing comma inside config.json, and
+        # kustomize build cannot see it: a broken string is still valid YAML.
+        run: python3 home-cluster/registry/scripts/check_config_json.py
 
   secrets:
     name: Secret Scan
