@@ -30,6 +30,12 @@ data:
   # the runner image), and it is why there is no per-repository confidentiality to lose. Only the
   # runner ServiceAccount may write. Scope the write policy to the repositories CI actually publishes
   # before any image here becomes load-bearing.
+  #
+  # log.level is `debug`, not `info`, for one reason: zot's two rejection paths for a workload-identity
+  # token -- `the OIDC token verification failed` and `the OIDC token claim processing failed` -- are
+  # logged at Debug (pkg/api/bearer_oidc.go, both call sites). At info a rejected token produces a bare
+  # 401 with no explanation anywhere, which is indistinguishable from a bad credential. Drop back to
+  # info once a workload login has actually succeeded here.
   config.json: |
     {
       "distSpecVersion": "1.1.1",
@@ -84,6 +90,6 @@ data:
         }
       },
       "log": {
-        "level": "info"
+        "level": "debug"
       }
     }
