@@ -53,6 +53,12 @@ jobs:
         with:
           python-version: '3.14'
 
+      # check_config_json.py imports yaml. The Lint job gets PyYAML transitively via yamllint,
+      # but this job installs only kustomize, so the import failed with ModuleNotFoundError once CI
+      # ran on a clean ubuntu-latest toolcache. Declare it here rather than relying on that.
+      - name: Install pyyaml
+        run: pip install pyyaml
+
       - name: Install kustomize
         run: |
           curl -sL https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2Fv5.4.2/kustomize_v5.4.2_linux_amd64.tar.gz | tar xz
