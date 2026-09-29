@@ -312,4 +312,37 @@ spec:
       annotations:
         summary: "Pod {{ $labels.pod }} in {{ $labels.namespace }} has been Pending for 15m"
         description: "`kubectl -n {{ $labels.namespace }} describe pod {{ $labels.pod }}` names the cause in its Events in almost every case. Unschedulable means no node satisfies the pod's requests, selectors or affinity. Scheduled but still ContainerCreating means the node took the pod and could not start it - typically a volume that cannot attach (an RWO claim already attached to a different node) or a CNI failure. Both are silent by nature: the pod never fails, so nothing retries and nothing else alerts."
-
+  # Failed Jobs already have coverage from the chart's own KubeJobFailed
+  # (kubernetes-apps, warning, for 15m) and KubeJobNotCompleted (a job still active
+  # after 12h). What neither sees is a CronJob that stops producing runs without any
+  # Job failing: a wedged concurrencyPolicy: Forbid, a schedule that no longer
+  # matches, a scheduler that never creates the Job. Nothing fails, so nothing
+  # reports - the only visible symptom is the absence of successes.
+  #
+  # Per-service freshness rules exist for the two backups (ProdBackupStale) and the
+  # blackbox reconciler (IngressProbeReconcilerStale), but nothing generic. This is
+  # that backstop, so a new CronJob is covered the day it is added rather than the
+  # day someone remembers to hand-write a rule for it.
+  #
+  # 48h, deliberately loose: every CronJob in this cluster runs at least daily, so
+  # two days means at least one whole cycle was missed. It is a backstop, not the
+  # first line - ProdBackupStale already speaks at 30h for the backups that matter.
+  # A CronJob added with a weekly schedule would need this threshold raised.
+  #
+  # Two branches, because a CronJob that has never succeeded has no
+  # kube_cronjob_status_last_successful_time series at all: the first handles a
+  # series that is stale, the second a series that never existed. The `unless` keeps
+  # a freshly created CronJob (registry-pull-rotator spent its first hours that way)
+  # from alerting before its first run is even due.
+  - name: cronjob-health
+    rules:
+    - alert: CronJobStale
+      expr: |
+        (time() - kube_cronjob_status_last_successful_time > 172800)
+        or (time() - kube_cronjob_created > 172800 unless on (namespace, cronjob) kube_cronjob_status_last_successful_time)
+      for: 15m
+      labels:
+        severity: warning
+      annotations:
+        summary: "CronJob {{ $labels.cronjob }} in {{ $labels.namespace }} has not succeeded in 2 days"
+        description: "No successful run for over 48 hours, or a CronJob that has existed that long without ever succeeding. Check `kubectl -n {{ $labels.namespace }} get cronjob {{ $labels.cronjob }} -o yaml` for a suspend flag and `kubectl -n {{ $labels.namespace }} get jobs` for runs that were created but never completed - a pod stuck Pending blocks every later run when concurrencyPolicy is Forbid, and PodPendingTooLong reports that end of it. A CronJob whose runs never start at all leaves no Job behind to inspect."
