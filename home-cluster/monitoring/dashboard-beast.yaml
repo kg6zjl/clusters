@@ -682,8 +682,16 @@ data:
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "text",
+                    "color": "#8F8F8F",
                     "value": null
+                  },
+                  {
+                    "color": "#5794F2",
+                    "value": 1
+                  },
+                  {
+                    "color": "#FF9830",
+                    "value": 2
                   }
                 ]
               }
@@ -721,7 +729,7 @@ data:
                 "uid": "${datasource}"
               },
               "expr": "sum(clamp_max(beast_service_active{service=\"llama\"} > 0, 1) * 2) or sum(clamp_max(beast_service_active{service=\"comfyui\"} > 0, 1)) or sum((beast_service_active{service=~\"comfyui|llama\"} * 0))",
-              "legendFormat": "",
+              "legendFormat": "GPU holder",
               "refId": "A"
             }
           ],
