@@ -14,4 +14,8 @@ resources:
   - toolcache-warmer.yaml
   - external-secrets-store.yaml
   - external-secrets.yaml
+  # Consumer-side half of the registry pull credential: the rotator Job in the `registry` namespace
+  # writes the `registry-pull` Secret here, so the grant has to exist here. See the file for why it
+  # cannot live in home-cluster/registry/.
+  - registry-pull-secret-rbac.yaml
   - network-policy.yaml
