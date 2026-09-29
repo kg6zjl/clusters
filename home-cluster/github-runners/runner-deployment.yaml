@@ -23,7 +23,13 @@ spec:
       labels:
         - self-hosted
         - kubernetes
-      image: summerwind/actions-runner:v2.337.0-ubuntu-24.04
+      # The in-house image, pinned by digest -- never a tag: a moving tag is what this moves the
+      # runners off. Built by .github/workflows/build-runner-image.yaml from Dockerfile.optimized on
+      # the official actions-runner base, same agent version (v2.337.0) as the image it replaces.
+      # Kubelet pulls it with the `registry-pull` Secret above, which the rotator mints with a
+      # colon-free username; a Secret minted before that fix cannot authenticate (registry/README.md).
+      # Rollback: summerwind/actions-runner:v2.337.0-ubuntu-24.04
+      image: registry.kube.stevearnett.com/github-runners/runner@sha256:3cef1cdbf37586cc7c60f3921ee3569340895009ffa382da50d7c7e9136107cb
       # init: only makes the node-local cache writable by the non-root runner. It must stay free of
       # network I/O -- it runs on every pod, and a pod that cannot finish init cannot register.
       # The cache itself (trufflehog, used by the Secret Scan job) is warmed per node by the

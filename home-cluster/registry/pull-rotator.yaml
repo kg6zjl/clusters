@@ -156,7 +156,12 @@ data:
             sys.exit("FATAL: CONSUMER_NAMESPACES is empty -- refusing to mint a token nothing consumes")
         jwt, expires, remaining = mint()
         REDACT.add(jwt)
-        username = f"system:serviceaccount:{NS}:{PULL_SA}"
+        # Colon-free on purpose. Go's http.Request.BasicAuth() splits the Basic value at the first
+        # colon, so "system:serviceaccount:<ns>:<sa>" as the username leaves zot holding
+        # "serviceaccount:<ns>:<sa>:<JWT>" as the password and the JWT parse fails at that colon.
+        # zot reads the identity from the token's `sub` claim, so the username only has to be
+        # colon-free for a pull to work at all.
+        username = PULL_SA
         for namespace in NAMESPACES:
             action = write_secret(namespace, jwt, username)
             print(
