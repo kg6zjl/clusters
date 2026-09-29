@@ -55,5 +55,11 @@ spec:
       name: controller-manager
       key: github_token
     resources:
+      # Steady state is ~56Mi (manager) plus ~16Mi (kube-rbac-proxy). The 1Gi request
+      # that used to show on the pod was never in this manifest - it was injected at
+      # admission - so the controller reserved 2Gi across both containers while using
+      # ~72Mi. Declaring it here makes the reservation small and visible in Git.
+      requests:
+        memory: 128Mi
       limits:
         memory: 1Gi

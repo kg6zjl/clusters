@@ -23,13 +23,12 @@ spec:
       labels:
         - self-hosted
         - kubernetes
-      # The in-house image, pinned by digest -- never a tag: a moving tag is what this moves the
-      # runners off. Built by .github/workflows/build-runner-image.yaml from Dockerfile.optimized on
-      # the official actions-runner base, same agent version (v2.337.0) as the image it replaces.
-      # Kubelet pulls it with the `registry-pull` Secret above, which the rotator mints with a
-      # colon-free username; a Secret minted before that fix cannot authenticate (registry/README.md).
-      # Rollback: summerwind/actions-runner:v2.337.0-ubuntu-24.04
-      image: registry.kube.stevearnett.com/github-runners/runner@sha256:3cef1cdbf37586cc7c60f3921ee3569340895009ffa382da50d7c7e9136107cb
+      # ROLLED BACK from the in-house image. It pulls fine but its runners never registered with
+      # GitHub -- num_runners_registered stayed 0 while the pods churned, and no job ever ran on one
+      # of them. The old summerwind set masked that by serving every job, so the flip looked healthy
+      # until that set was reaped. Do not re-pin a digest here until a pod from it has actually
+      # appeared in GitHub's runner list: a green build and a 53ms image pull prove neither.
+      image: summerwind/actions-runner:v2.337.0-ubuntu-24.04
       # init: only makes the node-local cache writable by the non-root runner. It must stay free of
       # network I/O -- it runs on every pod, and a pod that cannot finish init cannot register.
       # The cache itself (trufflehog, used by the Secret Scan job) is warmed per node by the

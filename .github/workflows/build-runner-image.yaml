@@ -15,6 +15,7 @@ on:
     branches: [main]
     paths:
       - home-cluster/github-runners/Dockerfile.optimized
+      - home-cluster/github-runners/entrypoint.sh
       - .github/workflows/build-runner-image.yaml
   workflow_dispatch:
 

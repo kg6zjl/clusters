@@ -53,3 +53,32 @@ USER runner
 
 # Fail the build here rather than in a job that only finds out at 3am.
 RUN kubectl version --client && kustomize version && yamllint --version
+
+# The ARC entrypoint contract. This is the one thing the first-party actions/* base does not give us
+# and summerwind's image does. Without it the container inherits `Cmd: ["/bin/bash"]`, starts bash,
+# hits EOF on empty stdin and exits 0 in under a second: every runner pod "succeeded", none ever
+# registered, and ARC churned replacements forever. A green build and a fast image pull prove
+# nothing about this, which is why the flip-over is gated on a pod actually appearing in GitHub.
+# Already mode 0755 in git, so COPY carries the exec bit. Do not add a `RUN chmod +x` here: this
+# stage runs as USER runner, COPY leaves the file root-owned, and a non-root chmod of a root-owned
+# file in /usr/bin fails with EPERM. That failure cost a 15-minute build.
+COPY entrypoint.sh /usr/bin/entrypoint.sh
+
+# Where the agent looks for pre-installed tools. The RunnerDeployment mounts the node-local cache
+# warmed by the runner-toolcache-warmer DaemonSet at this path, and ci.yaml reads trufflehog from
+# /opt/hostedtoolcache/tools/trufflehog. summerwind's image bakes this ENV; the base image does not
+# set it, so without it the runner searches the default /opt/hostedtoolcache path for a different
+# layout and every job that calls trufflehog fails to find it.
+ENV RUNNER_TOOL_CACHE=/opt/hostedtoolcache
+
+# The agent is already unpacked in this image at /home/runner (owned by the runner user), so the
+# entrypoint runs config.sh/run.sh in place. Deliberately NOT /runner: ARC mounts an emptyDir over
+# /runner, and summerwind populates that mount by copying the agent in from /runnertmp. There is
+# nothing to copy here, so pointing RUNNER_HOME at it would just make config.sh a missing file.
+# Job checkouts still go to the emptyDir at RUNNER_WORKDIR, which ARC mounts for us.
+ENV RUNNER_HOME=/home/runner
+
+# Exec form, not `bash -c`: it starts the script directly with no extra shell layer, and the script
+# ends in `exec ./run.sh` so the agent ends up as PID 1. The base image's RUNNER_MANUALLY_TRAP_SIG=1
+# is what makes it install its own SIGTERM handler and deregister when a pod is deleted.
+ENTRYPOINT ["/usr/bin/entrypoint.sh"]
