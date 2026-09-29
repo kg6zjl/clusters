@@ -8,15 +8,19 @@ Read this before trusting the rest of the file.
 
 - **Verified:** the registry serves and challenges correctly. An unauthenticated `GET /v2/` returns
   `401` with `WWW-Authenticate: Bearer realm="https://registry.kube.stevearnett.com/zot/auth/token",service="registry.kube.stevearnett.com"`.
-- **Verified:** the rotator's RBAC is live in both namespaces, and the token mint itself works —
-  `POST /api/v1/namespaces/registry/serviceaccounts/registry-pull/token` succeeds.
-- **Not verified — no successful run has ever been observed.** Every rotator run so far failed, each on
-  a different cause (all fixed; the causes are listed under "Observed behaviour"). No `registry-pull`
-  Secret exists yet, no image has been pushed to this registry, and no image has been pulled from it by
-  kubelet. Until a Job completes, the pull path is **designed, not working**.
-- **Acceptance test:** run the rotator, confirm the Secret lands in the consumer namespace, then build
-  one image into this registry and pull it from a pod that names the Secret. Everything below that
-  describes the pull path holds only up to that first real pull.
+- **Verified:** the rotator completes. The run on 2026-09-29T18:21:58Z finished `Complete 1/1` and
+  wrote the Secret: `created github-runners/registry-pull as
+  system:serviceaccount:registry:registry-pull, expires 2026-10-06T18:21:58Z (167h)`. That line prints
+  only after the API accepts the write, which is the strongest confirmation obtainable from here — the
+  Secret is not readable by agent identities, so it was not read back, and its contents have never been
+  printed anywhere.
+- **Not verified — nothing has ever been pushed to or pulled from this registry.** No image exists in it,
+  and the kubelet path is unexercised: no pod has named `registry-pull`, and no runner pod does now
+  (that reference was removed until an image actually needs it). Treat the pull path as **designed, not
+  working** until an image goes in and comes back out.
+- **Acceptance test:** build one image into this registry (the runner-image pipeline), then pull it from
+  a pod that names the `registry-pull` Secret. Everything below that describes the pull path holds only
+  up to that first real pull.
 
 ## Auth
 
@@ -129,6 +133,15 @@ it has no OIDC identity of its own to present.
 
 ## Observed behaviour, from the running registry
 
+- **The rotator failed five times before it completed, each for a different reason.** In order: Python
+  3.13's TLS strict mode rejecting the cluster CA; the TokenRequest on the wrong API path
+  (`authentication.k8s.io` serves only `tokenreviews`, the subresource is core); the RBAC rule under the
+  wrong API group; the RBAC written into the wrong namespace (a component kustomization with `namespace:`
+  rewrites every object it renders); and a `resourceNames`-scoped `create`, which can never match a POST
+  because the authorization request carries no object name. Every one of those was invisible to review
+  and only appeared on a real run — and in pod logs that were already deleted, so they had to be
+  recovered from Loki. That is why the Job now retains failed pods for an hour and why the run itself is
+  the only acceptance test that counts here.
 - **Anonymous repository access is impossible while bearer auth is enabled, in zot v2.1.21.** With an
   OIDC bearer authorizer configured, `AuthHandler()` installs `bearerAuth.Middleware()` instead of the
   anonymous-aware middleware, and that middleware ends *every* unauthenticated request at
