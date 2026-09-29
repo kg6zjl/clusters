@@ -59,8 +59,10 @@ RUN kubectl version --client && kustomize version && yamllint --version
 # hits EOF on empty stdin and exits 0 in under a second: every runner pod "succeeded", none ever
 # registered, and ARC churned replacements forever. A green build and a fast image pull prove
 # nothing about this, which is why the flip-over is gated on a pod actually appearing in GitHub.
+# Already mode 0755 in git, so COPY carries the exec bit. Do not add a `RUN chmod +x` here: this
+# stage runs as USER runner, COPY leaves the file root-owned, and a non-root chmod of a root-owned
+# file in /usr/bin fails with EPERM. That failure cost a 15-minute build.
 COPY entrypoint.sh /usr/bin/entrypoint.sh
-RUN chmod +x /usr/bin/entrypoint.sh
 
 # Where the agent looks for pre-installed tools. The RunnerDeployment mounts the node-local cache
 # warmed by the runner-toolcache-warmer DaemonSet at this path, and ci.yaml reads trufflehog from
