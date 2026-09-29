@@ -580,14 +580,16 @@ kubectl get namespace | grep <name>
 
 - **Use `docker/build-push-action` for building and pushing images** - NOT kaniko (kaniko is deprecated/archived)
 - Image registry: `registry.kube.stevearnett.com`
-- Registry credentials:
-  - Secret: `registry-auth` in `registry` namespace
-  - Keys: `htpasswd` (contains `username:password`), `REGISTRY_PASSWORD`
-  - Extract username from htpasswd: `echo "$HTPASSWD" | cut -d: -f1`
-- Authentication: Use `docker login` with `--password-stdin`:
+- Registry credentials: **none.** Pushes authenticate with the runner pod's projected ServiceAccount
+  token (audience `zot`); zot verifies it against the cluster's own OIDC issuer, so there is no
+  shared password to store in 1Password or sync through ESO.
+- Authentication: `docker login` with the projected token as the password:
   ```bash
-  echo "$REGISTRY_PASS" | docker login $REGISTRY -u "$REGISTRY_USER" --password-stdin
+  docker login registry.kube.stevearnett.com \
+    -u system:serviceaccount:github-runners:github-runner \
+    --password-stdin < /var/run/secrets/registry.zot/token
   ```
+- Reads are anonymous (kubelet pulls need no credential).
 
 ### Runner Tools
 
