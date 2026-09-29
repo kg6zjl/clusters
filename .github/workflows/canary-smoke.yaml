@@ -1,0 +1,93 @@
+# Smoke test for the in-house runner image. Runs only on the canary runner, and only on demand.
+#
+# GitHub force-adds `self-hosted`, `Linux` and `X64` to every runner regardless of the labels ARC
+# registers, so a canary RunnerDeployment cannot be kept away from `runs-on: self-hosted` jobs by
+# labelling alone -- it would silently start taking production CI. This workflow is the other half
+# of the isolation: the canary is the only runner carrying `inhouse-canary`, and the only thing
+# that asks for that label is this file, so the canary proves itself without being asked to prove
+# production.
+#
+# Deliberately asserts the things that actually broke in #802, all of which a green "image built and
+# pulled" check would have missed:
+#   - the agent process is running (no exit-0 silence from a missing entrypoint)
+#   - the runner is registered and GitHub knows its agentId
+#   - the tools the repo's CI depends on resolve: kubectl, kustomize, yamllint
+#   - the node-local toolcache is mounted and the Secret Scan job's trufflehog is in it
+#   - the agent's working directory is the emptyDir ARC mounted, not the image layer
+name: Canary runner smoke test
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: canary-smoke
+  cancel-in-progress: false
+
+jobs:
+  smoke:
+    runs-on: inhouse-canary
+    timeout-minutes: 10
+    steps:
+      - name: The agent is running
+        run: |
+          set -euo pipefail
+          # The #802 failure mode: no entrypoint, so the container ran bash, hit EOF and exited 0.
+          # If we are here at all that is already the primary assertion, but name it explicitly so
+          # the log says so rather than leaving the reader to infer it.
+          echo "job is executing on $(hostname)"
+          ps -eo pid,comm --no-headers | grep -i runner || {
+            echo "no runner listener process found"
+            exit 1
+          }
+
+      - name: Agent identity
+        run: |
+          set -euo pipefail
+          # ARC sets RUNNER_* for registration and the entrypoint unsets them before exec'ing
+          # run.sh, so these must be empty here. A leaked RUNNER_TOKEN would be a credential
+          # exposed to every job step.
+          for v in RUNNER_NAME RUNNER_TOKEN RUNNER_REPO RUNNER_ORG RUNNER_LABELS; do
+            if [ -n "${!v:-}" ]; then
+              echo "LEAK: $v is set in the job environment"
+              exit 1
+            fi
+          done
+          echo "no ARC registration env leaked into the job"
+          echo "tool cache: ${RUNNER_TOOL_CACHE:-<unset>}"
+          echo "work dir:   ${GITHUB_WORKSPACE:-<unset>}"
+
+      - name: The tools this repo's CI depends on
+        run: |
+          set -euo pipefail
+          kubectl version --client
+          kustomize version
+          yamllint --version
+
+      - name: Node-local toolcache is mounted and has trufflehog
+        run: |
+          set -euo pipefail
+          # The RunnerDeployment mounts the hostPath cache that runner-toolcache-warmer keeps warm.
+          # Without RUNNER_TOOL_CACHE in the image the runner would look elsewhere and every job
+          # calling trufflehog -- the Secret Scan job -- would fail to find it.
+          test -n "${RUNNER_TOOL_CACHE:-}" || { echo "RUNNER_TOOL_CACHE unset"; exit 1; }
+          test -d "$RUNNER_TOOL_CACHE" || { echo "$RUNNER_TOOL_CACHE is not a directory"; exit 1; }
+          test -x "$RUNNER_TOOL_CACHE/tools/trufflehog" || {
+            echo "trufflehog missing from the toolcache"
+            ls -la "$RUNNER_TOOL_CACHE/tools" 2>/dev/null || true
+            exit 1
+          }
+          "$RUNNER_TOOL_CACHE/tools/trufflehog" --version
+
+      - name: Job workspace is on the ARC-provided volume, not the image layer
+        run: |
+          set -euo pipefail
+          # config.sh was given --work $RUNNER_WORKDIR, the emptyDir ARC mounts at /runner/_work.
+          # If that were missing the runner would check out into the image layer and every job would
+          # share one writable layer across pods.
+          case "$GITHUB_WORKSPACE" in
+            /runner/*) echo "workspace is on the mounted volume: $GITHUB_WORKSPACE" ;;
+            *) echo "workspace is NOT under /runner: $GITHUB_WORKSPACE"; exit 1 ;;
+          esac

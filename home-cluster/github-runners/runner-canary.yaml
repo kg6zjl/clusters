@@ -1,0 +1,76 @@
+# Canary RunnerDeployment for the in-house image. One replica, its own label, no autoscaler.
+#
+# Why this exists: the note in runner-deployment.yaml says not to pin a digest until a pod from it
+# has actually appeared in GitHub and run a job, because a green build and a 53ms image pull prove
+# neither. The previous attempt at this failed exactly that way -- the image built fine, the pods
+# came up 2/2, and not one runner ever registered, because the base image set no ENTRYPOINT.
+#
+# This is how the flip gets evidence without risking the live pool:
+#   - Separate RunnerDeployment, so the existing one is untouched and can be reverted independently.
+#   - Label `inhouse-canary`, which no production workflow requests. GitHub force-adds
+#     `self-hosted`/`Linux`/`X64` to every runner, so this runner *is* eligible for `runs-on:
+#     self-hosted` -- but with 1 replica against the live set's 4-12, and with canary-smoke.yaml as
+#     the only workflow that asks for its label, the blast radius of a bad canary is one job, not
+#     the pool.
+#   - No HorizontalRunnerAutoscaler targets it, so nothing scales it up under load.
+#   - The digest is the verified build. The image config was read back out of the registry before
+#     this manifest was written: Entrypoint ['/usr/bin/entrypoint.sh'] (previously None),
+#     RUNNER_HOME=/home/runner, RUNNER_TOOL_CACHE=/opt/hostedtoolcache, User runner.
+#
+# Delete this file and its kustomization line once the digest is promoted into runner-deployment.yaml.
+apiVersion: actions.summerwind.dev/v1alpha1
+kind: RunnerDeployment
+metadata:
+  name: github-runner-canary
+  namespace: github-runners
+spec:
+  replicas: 1
+  template:
+    spec:
+      priorityClassName: system-cluster-critical
+      serviceAccountName: github-runner
+      # Same posture as the live runners: no apiserver token, only the registry-scoped one.
+      automountServiceAccountToken: false
+      # Required: this image is only in the private registry and zot bearer auth gates every read.
+      imagePullSecrets:
+        - name: registry-pull
+      repository: kg6zjl/clusters
+      labels:
+        - inhouse-canary
+      image: registry.kube.stevearnett.com/github-runners/runner@sha256:0e2e2f2818f5a58b62117ca59df0eef57e7909810b4c20817675dbf06d86db78
+      # init: only makes the node-local cache writable by the non-root runner, and no network I/O.
+      initContainers:
+        - name: toolcache-perms
+          image: alpine:3.24
+          command: ["sh", "-c", "chmod 1777 /opt/hostedtoolcache"]
+          volumeMounts:
+            - name: toolcache
+              mountPath: /opt/hostedtoolcache
+      containers:
+        - name: runner
+          env:
+            # A failed workflow should be able to post its own notification. The URL comes from
+            # 1Password via ESO, never from a GitHub secret.
+            - name: CI_DISCORD_WEBHOOK
+              valueFrom:
+                secretKeyRef:
+                  name: ci-notify-discord
+                  key: CI_DISCORD_WEBHOOK
+          volumeMounts:
+            - name: toolcache
+              mountPath: /opt/hostedtoolcache
+            - name: registry-token
+              mountPath: /var/run/secrets/registry.zot
+              readOnly: true
+      volumes:
+        - name: toolcache
+          hostPath:
+            path: /var/lib/arc-toolcache
+            type: DirectoryOrCreate
+        - name: registry-token
+          projected:
+            sources:
+              - serviceAccountToken:
+                  audience: zot
+                  expirationSeconds: 3600
+                  path: token
