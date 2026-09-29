@@ -29,13 +29,23 @@ projected token volume (`audience: zot`).
 
 ## Deliberate constraints
 
-- `anonymousPolicy` and a Docker-client quirk: when anonymous policies coexist with policies that
-  require *basic* auth (htpasswd/LDAP/API keys), zot answers `401` on `GET /v2/` for the Docker
-  client, which then fails even on anonymously readable repos (project-zot/zot#2928, #4173, won't be
-  fixed). This config enables no basic-auth backend at all — bearer/OIDC only — so that path is not
-  taken. Verify `curl -s -o /dev/null -w '%{http_code}' https://registry.kube.stevearnett.com/v2/`
-  returns 200 after any change here; containerd and skopeo handle per-resource challenges natively
-  and are unaffected either way.
+## Observed behaviour, from the running registry
+
+- **`GET /v2/` returns `401` when unauthenticated, and that is correct.** With a bearer/OIDC
+  authorizer configured, zot replies with the auth challenge; it is not an outage and it is not
+  proof that anonymous access is broken. Consequences:
+  - Do **not** use `/v2/` as a Kubernetes probe. It shipped that way once: readiness never passed,
+    the pod stayed out of the Service endpoints (Traefik answered 503 for every request), and
+    liveness killed the container on a loop. Both probes are `tcpSocket` for that reason.
+  - Do not read a `401` on `/v2/` as a design failure either — containerd and skopeo treat it as a
+    normal registry challenge and continue; the Docker CLI is the fussy client (see the quirk below).
+- **`/metrics` also answers `401`.** A ServiceMonitor scraping it fails permanently, so there is no
+  ServiceMonitor here until it is decided how Prometheus authenticates (a token with `audience: zot`,
+  or metrics left unauthenticated). Do not add one back without checking the endpoint first.
+- `anonymousPolicy: ["read"]` coexisting with authenticated policies is the config that trips the
+  Docker-client quirk (project-zot/zot#2928, #4173, won't be fixed): the client then fails even on
+  anonymously readable repos. This config enables no basic-auth backend at all — bearer/OIDC only —
+  so that forcing code path (`CanAuthenticateWithBasicCredentials()`) is not taken.
 - Egress is pinned to the two addresses the OIDC flow needs: the apiserver ClusterIP for the
   discovery document, and the node subnet on the nodeport that the discovery document names as
   `jwks_uri`. That host is **not stable** — two reads of the discovery document minutes apart
