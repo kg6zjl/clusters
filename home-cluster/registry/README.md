@@ -47,8 +47,11 @@ the next reconcile, so a runtime credential must not be a manifest — same reas
 Secret.
 
 Adding a consumer namespace is three edits: point its pods at the Secret, add the namespace to
-`CONSUMER_NAMESPACES`, and grant the rotator a `registry-pull-secret` Role there
-(`pull-rotator-rbac.yaml`).
+`CONSUMER_NAMESPACES`, and grant the rotator a `registry-pull-secret` Role **in that namespace's own
+component directory** — not in this one. This directory's kustomization sets `namespace: registry`, and
+kustomize's namespace transformer rewrites every object it renders, so a Role written here for another
+namespace silently lands in `registry` instead and the rotator gets a 403. Worked example:
+`github-runners/registry-pull-secret-rbac.yaml`.
 
 Rotating on demand, without waiting for the schedule:
 
