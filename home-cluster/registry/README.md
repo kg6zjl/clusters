@@ -15,13 +15,15 @@ Read this before trusting the rest of the file.
   only after the API accepts the write, which is the strongest confirmation obtainable from here — the
   Secret is not readable by agent identities, so it was not read back, and its contents have never been
   printed anywhere.
-- **Not verified — nothing has ever been pushed to or pulled from this registry.** No image exists in it,
-  and the kubelet path is unexercised: no pod has named `registry-pull`, and no runner pod does now
-  (that reference was removed until an image actually needs it). Treat the pull path as **designed, not
-  working** until an image goes in and comes back out.
-- **Acceptance test:** build one image into this registry (the runner-image pipeline), then pull it from
-  a pod that names the `registry-pull` Secret. Everything below that describes the pull path holds only
-  up to that first real pull.
+- **Verified: an image has been pushed and pulled back out.** `build-runner-image.yaml` pushed
+  `github-runners/runner@sha256:3cef1cdbf37586cc7c60f3921ee3569340895009ffa382da50d7c7e9136107cb`, and the
+  runners were flipped onto it, pulling it with the `registry-pull` Secret. zot's log for that window
+  shows 771 requests authenticated as `system:serviceaccount:registry:registry-pull` and 342 manifest
+  requests for that digest, so the kubelet path is exercised end to end rather than designed-only.
+- **Acceptance test (met 2026-09-29).** Build one image into this registry, then pull it from a pod that
+  names the `registry-pull` Secret. Both halves have now happened. It re-opens on any change to the
+  issuer, the audience, the Secret's shape, or the Basic username — the last of those is what broke it
+  the first time, and at the default log level it fails as a bare `401` with no reason recorded.
 
 ## Auth
 
