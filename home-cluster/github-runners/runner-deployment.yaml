@@ -8,6 +8,10 @@ spec:
   template:
     spec:
       priorityClassName: system-cluster-critical
+      serviceAccountName: github-runner
+      # No apiserver token is mounted: a runner pod has no business calling the API, and the only
+      # credential it carries is the registry-scoped projected token below (audience "zot").
+      automountServiceAccountToken: false
       repository: kg6zjl/clusters
       labels:
         - self-hosted
@@ -37,8 +41,20 @@ spec:
           volumeMounts:
             - name: toolcache
               mountPath: /opt/hostedtoolcache
+            # Read by the workflow's `docker login` against the registry. kubelet re-requests this
+            # token well before it expires, so the 1h lifetime is a ceiling, not a hard deadline.
+            - name: registry-token
+              mountPath: /var/run/secrets/registry.zot
+              readOnly: true
       volumes:
         - name: toolcache
           hostPath:
             path: /var/lib/arc-toolcache
             type: DirectoryOrCreate
+        - name: registry-token
+          projected:
+            sources:
+              - serviceAccountToken:
+                  audience: zot
+                  expirationSeconds: 3600
+                  path: token
