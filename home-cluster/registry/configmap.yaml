@@ -5,7 +5,20 @@ metadata:
   namespace: registry
 data:
   # Shape follows the project's own examples/config-bearer-oidc-workload.json: accessControl
-  # nests inside http, policies live under accessControl.repositories.<path>.
+  # nests inside http, policies live under accessControl.repositories.<path>. That example carries
+  # "realm" only inside auth.bearer, so the stray top-level one is gone.
+  #
+  # realm tells a client where to take its credential. On a 401 zot answers
+  # `WWW-Authenticate: Bearer realm=<realm>,service=...,scope=...` and docker/containerd fetch a token
+  # from <realm> -- so it has to be an absolute URL. The bare string "zot" (both the vendor example's
+  # value and what this file used to say) parses as a relative path and no client can follow it, which
+  # is why nothing could ever authenticate. zot serves the endpoint at <namespace>/auth/token and
+  # accepts the credential as HTTP Basic, password-only, per pkg/api/token_exchange.go.
+  #
+  # anonymousPolicy is dead config under bearer auth: bearerAuth replaces the middleware that reads it
+  # and ends every unauthenticated request at 401. defaultPolicy is what applies, and it covers any
+  # authenticated cluster identity. Images are not secrets here, so any pod may read them; only the
+  # runner ServiceAccount may write.
   config.json: |
     {
       "distSpecVersion": "1.1.1",
@@ -20,11 +33,10 @@ data:
       "http": {
         "address": "0.0.0.0",
         "port": "5000",
-        "realm": "zot",
         "compat": ["docker2s2"],
         "auth": {
           "bearer": {
-            "realm": "zot",
+            "realm": "https://registry.kube.stevearnett.com/zot/auth/token",
             "service": "zot-service",
             "oidc": [
               {
