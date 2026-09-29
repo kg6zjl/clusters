@@ -9,3 +9,6 @@ resources:
   - service.yaml
   - ingressroute.yaml
   - network-policy.yaml
+  - pull-identity.yaml
+  - pull-rotator-rbac.yaml
+  - pull-rotator.yaml

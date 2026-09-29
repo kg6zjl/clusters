@@ -1,0 +1,173 @@
+# Keeps the registry's imagePullSecret fresh, so kubelet can pull private images with no credential
+# a human ever holds or copies between systems.
+#
+# kubelet is a node process and has no Pod ServiceAccount to project, so intra-cluster OIDC cannot be
+# handed to it directly. A credential has to exist somewhere on disk -- the question is only who puts
+# it there. Here it is this Job: it mints a token for the registry-pull ServiceAccount from the
+# in-cluster TokenRequest API, and writes it as a dockerconfigjson Secret. The token is verified by
+# zot against the cluster's own OIDC issuer, so the registry never shares a secret with anyone either.
+#
+# Rotation runs daily and rewrites the Secret every time, rather than once at the end of the token's
+# life: if the apiserver ever caps the requested lifetime lower (--service-account-max-token-expiration),
+# a daily run still keeps it valid, and the Job fails loudly instead of quietly serving a stale token.
+#
+# The Secret is deliberately absent from git. Flux owns any field it applies and would reset the token
+# on every reconcile; a runtime-minted credential is not a manifest. Consumers just reference it:
+#
+#   spec.template.spec.imagePullSecrets:
+#     - name: registry-pull
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: registry-pull-rotator
+  namespace: registry
+data:
+  rotate.py: |
+    #!/usr/bin/env python3
+    """Mints and installs the registry imagePullSecret. Prints no credential material."""
+    import base64
+    import json
+    import os
+    import ssl
+    import sys
+    import urllib.error
+    import urllib.request
+    from datetime import datetime, timedelta, timezone
+
+    SA_DIR = "/var/run/secrets/kubernetes.io/serviceaccount"
+    API = "https://kubernetes.default.svc"
+    PULL_SA = os.environ.get("PULL_SA", "registry-pull")
+    NAMESPACES = [ns.strip() for ns in os.environ.get("CONSUMER_NAMESPACES", "").split(",") if ns.strip()]
+    REGISTRY_HOST = os.environ["REGISTRY_HOST"]
+    SECRET_NAME = os.environ.get("SECRET_NAME", "registry-pull")
+    TOKEN_SECONDS = int(os.environ.get("TOKEN_SECONDS", "31536000"))
+    MIN_VALID_DAYS = int(os.environ.get("MIN_VALID_DAYS", "30"))
+
+
+    def read(path):
+        with open(path) as handle:
+            return handle.read().strip()
+
+
+    SA_TOKEN = read(f"{SA_DIR}/token")
+    NS = read(f"{SA_DIR}/namespace")
+    CTX = ssl.create_default_context(cafile=f"{SA_DIR}/ca.crt")
+
+
+    def api(method, path, body=None):
+        payload = json.dumps(body).encode() if body is not None else None
+        request = urllib.request.Request(
+            API + path,
+            data=payload,
+            method=method,
+            headers={
+                "Authorization": f"Bearer {SA_TOKEN}",
+                "Content-Type": "application/json",
+                "Accept": "application/json",
+            },
+        )
+        with urllib.request.urlopen(request, context=CTX, timeout=30) as response:
+            return json.loads(response.read() or b"{}")
+
+
+    def mint():
+        result = api(
+            "POST",
+            f"/apis/authentication.k8s.io/v1/namespaces/{NS}/serviceaccounts/{PULL_SA}/token",
+            {
+                "apiVersion": "authentication.k8s.io/v1",
+                "kind": "TokenRequest",
+                "spec": {"audiences": ["zot"], "expirationSeconds": TOKEN_SECONDS},
+            },
+        )
+        status = result["status"]
+        expires = status["expirationTimestamp"]
+        remaining = datetime.fromisoformat(expires.replace("Z", "+00:00")) - datetime.now(timezone.utc)
+        if remaining < timedelta(days=MIN_VALID_DAYS):
+            sys.exit(
+                f"FATAL: apiserver issued a token expiring {expires}, {remaining.days}d from now, "
+                f"below the {MIN_VALID_DAYS}d floor -- image pulls would break before the next run"
+            )
+        return status["token"], expires, remaining.days
+
+
+    def write_secret(namespace, jwt, username):
+        entry = {"username": username, "password": jwt, "auth": base64.b64encode(f"{username}:{jwt}".encode()).decode()}
+        body = {
+            "apiVersion": "v1",
+            "kind": "Secret",
+            "metadata": {"name": SECRET_NAME, "namespace": namespace},
+            "type": "kubernetes.io/dockerconfigjson",
+            "stringData": {".dockerconfigjson": json.dumps({"auths": {REGISTRY_HOST: entry}})},
+        }
+        try:
+            api("POST", f"/api/v1/namespaces/{namespace}/secrets", body)
+            return "created"
+        except urllib.error.HTTPError as error:
+            if error.code != 409:
+                raise
+        api("PUT", f"/api/v1/namespaces/{namespace}/secrets/{SECRET_NAME}", body)
+        return "updated"
+
+
+    def main():
+        if not NAMESPACES:
+            sys.exit("FATAL: CONSUMER_NAMESPACES is empty -- refusing to mint a token nothing consumes")
+        jwt, expires, days = mint()
+        username = f"system:serviceaccount:{NS}:{PULL_SA}"
+        for namespace in NAMESPACES:
+            action = write_secret(namespace, jwt, username)
+            print(f"{action} {namespace}/{SECRET_NAME} as {username}, expires {expires} ({days}d)", flush=True)
+
+
+    if __name__ == "__main__":
+        main()
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: registry-pull-rotator
+  namespace: registry
+spec:
+  schedule: "17 4 * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 2
+  failedJobsHistoryLimit: 2
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      template:
+        spec:
+          restartPolicy: OnFailure
+          serviceAccountName: registry-pull-rotator
+          containers:
+            - name: rotate
+              image: python:3.13-alpine
+              command: ["python3", "/scripts/rotate.py"]
+              env:
+                - name: REGISTRY_HOST
+                  value: registry.kube.stevearnett.com
+                - name: CONSUMER_NAMESPACES
+                  value: github-runners
+              resources:
+                requests:
+                  cpu: 10m
+                  memory: 32Mi
+                limits:
+                  memory: 128Mi
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                runAsNonRoot: true
+                runAsUser: 65534
+                capabilities:
+                  drop: ["ALL"]
+              volumeMounts:
+                - name: scripts
+                  mountPath: /scripts
+                  readOnly: true
+          volumes:
+            - name: scripts
+              configMap:
+                name: registry-pull-rotator
+                defaultMode: 0444

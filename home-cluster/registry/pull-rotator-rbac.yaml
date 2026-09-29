@@ -1,0 +1,66 @@
+# Permissions for the token rotator, and nothing else.
+#
+# Two grants, both narrower than they look:
+#   - minting is limited to the registry-pull ServiceAccount by name, so this can never become a
+#     general "hand me any token in the namespace" role;
+#   - the Secret grant is limited to the one Secret name, and lives in the consumer's namespace.
+#
+# Caveat worth knowing: RBAC ignores resourceNames for `create`, so that one verb is effectively
+# any-secret-in-github-runners. The rotator is the only holder of this Role, and the alternative --
+# shipping the Secret from git and only updating it -- is worse: Flux owns the fields it applies and
+# would reset the token on every reconcile.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: registry-pull-rotator
+  namespace: registry
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: registry-pull-token
+  namespace: registry
+rules:
+  - apiGroups: ["authentication.k8s.io"]
+    resources: ["serviceaccounts/token"]
+    verbs: ["create"]
+    resourceNames: ["registry-pull"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: registry-pull-token
+  namespace: registry
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: registry-pull-token
+subjects:
+  - kind: ServiceAccount
+    name: registry-pull-rotator
+    namespace: registry
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: registry-pull-secret
+  namespace: github-runners
+rules:
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get", "create", "update"]
+    resourceNames: ["registry-pull"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: registry-pull-secret
+  namespace: github-runners
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: registry-pull-secret
+subjects:
+  - kind: ServiceAccount
+    name: registry-pull-rotator
+    namespace: registry
