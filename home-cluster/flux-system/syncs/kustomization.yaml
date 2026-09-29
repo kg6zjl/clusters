@@ -10,7 +10,6 @@ resources:
   - headlamp-kustomization.yaml
   - mqtt-kustomization.yaml
   - meshtastic-kustomization.yaml
-  - meshtastic-bot-kustomization.yaml
   - cloudflared-kustomization.yaml
   - local-services-kustomization.yaml
   - oauth2-proxy-kustomization.yaml

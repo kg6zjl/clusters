@@ -482,7 +482,7 @@ The self-hosted runner has these tools installed via init container:
 
 ### Build Workflow Pattern
 
-For meshtastic-bot-style builds:
+For image builds in this repo:
 1. Secrets are already mounted - no auth setup needed
 2. `docker/login-action@v3` or `docker login` for registry auth
 3. `docker/setup-buildx-action@v3` for buildx
