@@ -91,6 +91,21 @@ data:
     # Reachable at http://hermes-webhook.ai-services.svc.cluster.local:8644/webhooks/<route>
     # from inside the cluster. A LAN device would additionally need a NodePort or an
     # Ingress, which the network policy already allows for.
+    #
+    # Webhook runs are locked down by default: toolsets.py ships hermes-webhook with
+    # _HERMES_WEBHOOK_SAFE_TOOLS (web_search, web_extract, vision_analyze, clarify) because
+    # webhook payloads are untrusted third-party content. Ours are not. The Service is
+    # ClusterIP with no Ingress, hermes-agent-allow-webhook is the whole allowlist, every POST
+    # is HMAC-SHA256-verified against WEBHOOK_SECRET, and the only sender is the alert-detector
+    # CronJob in this namespace. Left at the default a wake can read the alert and do nothing
+    # else - no kubectl, no files, no PR - which is a notification, not a wake. Worse, its own
+    # route prompt instructs it to run kubectl and open a PR it has no tool for.
+    #
+    # `coding` is the composite bundle (file + terminal + search + web + skills + todo + memory
+    # + session_search + clarify + code_execution + delegation + vision). kanban is called for
+    # by the credential-leak route, whose prompt records the leak as a ticket.
+    platform_toolsets:
+      webhook: [coding, kanban]
     platforms:
       webhook:
         enabled: true
@@ -150,8 +165,11 @@ data:
                    anything, and never restart a workload to see whether that fixes it.
                 2. If a fix is warranted, open a pull request on kg6zjl/clusters and stop
                    there. Never merge it, not even a one-line manifest change - the human
-                   who is asleep decides that. Work in a fresh worktree, branch off
-                   origin/main, and never push to main.
+                   who is asleep decides that. The repo is already cloned: work in a fresh
+                   worktree under /opt/data/worktrees branched off origin/main, and fetch
+                   first - the shared clone at /opt/data/workspace/clusters can be stale.
+                   Never push to main. Read home-cluster/AGENTS.md before acting; it is
+                   the operating contract for this cluster.
                 3. Never print, echo or commit a secret value, and never use a leaked
                    credential to test whether it is still live.
                 4. Say what you verified and what you are guessing. If the evidence does
