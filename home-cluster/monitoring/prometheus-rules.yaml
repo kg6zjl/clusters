@@ -25,21 +25,19 @@ spec:
       annotations:
         summary: "PROD service {{ $labels.deployment }} in {{ $labels.namespace }} is down"
         description: "Deployment {{ $labels.deployment }} ({{ $labels.namespace }}) has had no available replicas for 3 minutes. Both are prod: home-assistant runs the house, meshmonitor runs the HotPotato Base meshtastic bots."
-    # Generic label-driven availability. This cannot fire yet: kube-state-metrics only
-    # exposes resource labels that are allowlisted, and `alert-on-down` is not. The
-    # allowlist goes under `kube-state-metrics:` in kube-prometheus-stack-helmrelease.yaml
-    # (the subchart's values - `kubeStateMetrics:` is only the component toggle and is
-    # ignored there), and the label then arrives prefixed as label_alert_on_down. Not
-    # enabled yet because changing those values starts an upgrade loop on that release;
-    # see the note in that file. Prod is covered by ProdServiceDown above meanwhile.
-    - alert: ServiceDown
-      expr: kube_deployment_status_replicas_available{label_alert_on_down="true"} == 0
-      for: 10m
-      labels:
-        severity: warning
-      annotations:
-        summary: "Service {{ $labels.deployment }} in {{ $labels.namespace }} is down"
-        description: "Deployment {{ $labels.deployment }} has no available replicas"
+    # There is deliberately no generic label-driven rule here. One was written - select
+    # `label_alert_on_down="true"` and alert at 0 replicas - and it could never fire:
+    # kube-state-metrics exposes only allowlisted resource labels, so the label never
+    # arrives and the selector matches nothing. Verified against the live Prometheus:
+    # kube_deployment_status_replicas_available has 62 series, and the
+    # label_alert_on_down selector returns none. A rule that cannot fire reads as
+    # coverage and is not, so it is deleted rather than left dormant.
+    #
+    # To bring it back, expose the label first: the allowlist goes under
+    # `kube-state-metrics:` in kube-prometheus-stack-helmrelease.yaml (`kubeStateMetrics:`
+    # at that level is only the component toggle and is ignored), the label then arrives
+    # prefixed as label_alert_on_down, and the upgrade loop that used to block that change
+    # is fixed. Prod is covered by ProdServiceDown above meanwhile.
   - name: disk-space
     rules:
     - alert: DiskSpaceWarning
