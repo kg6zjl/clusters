@@ -48,3 +48,15 @@ spec:
             follow_redirects: true
             tls_config:
               insecure_skip_verify: true
+        # For a backend that gates every request behind auth: zot answers 401 on
+        # /v2/ and 404 on /, and http_2xx reads both as the host being down. This
+        # asserts what is actually worth knowing about such a host - DNS resolved,
+        # Traefik routed, TLS terminated, the backend answered - so a 5xx, a
+        # refused connection or a failed cert still fails it, and a definitive
+        # 401/403/404 passes. Selected per ingress with:
+        #   blackbox.stevearnett.com/module: http_auth_gated
+        http_auth_gated:
+          prober: http
+          http:
+            follow_redirects: true
+            valid_status_codes: [200, 401, 403, 404]
