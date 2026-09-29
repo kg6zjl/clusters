@@ -89,12 +89,17 @@ kubectl -n registry create job --from=cronjob/registry-pull-rotator rotate
 
 Stated here rather than in a file comment, so they are reviewable.
 
-- **The rotator's ServiceAccount can create any Secret in `github-runners`,** not just `registry-pull`.
-  RBAC does not apply `resourceNames` to `create` (`github-runners/registry-pull-secret-rbac.yaml`), so
-  the grant is effectively `create` in that namespace. The alternative — declaring an empty Secret in
-  git and granting only `get`/`update` — fights Flux's field ownership for a runtime credential, which
-  is why this Job writes it. Mitigation available if it ever matters: pre-create the Secret outside
-  Flux and drop the `create` verb.
+- **The rotator's ServiceAccount can create any Secret in `github-runners`,** not only `registry-pull`.
+  `create` cannot be name-scoped: it is a POST to the collection, so the authorization request carries
+  no object name, and a rule carrying `resourceNames` matches nothing without one. Measured — with
+  `resourceNames` on the verb, the rotator's POST returned
+  `403 cannot create resource "secrets" in API group "" in the namespace "github-runners"`, a flat
+  denial rather than a broad grant. `create` is therefore granted unscoped in that one namespace, while
+  `get`/`update` stay scoped to the single name. Shipping the Secret from git instead does not work: a
+  `kubernetes.io/dockerconfigjson` Secret cannot be created with empty data, and if Flux declared the
+  real `data` field it would own it and reset the token on every reconcile. Removing the unscoped verb
+  means switching the Job to server-side apply — the name travels in the URL, so `resourceNames` can
+  match it — which is untested here.
 - **The minted token's audience cannot be constrained by RBAC.** The Role names the ServiceAccount the
   rotator may mint for, but not the audience, so a compromised rotator pod could mint a token for
   `registry-pull` with any audience. The identity itself holds no Kubernetes RBAC, so the value of that
