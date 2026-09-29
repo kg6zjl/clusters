@@ -1,0 +1,37 @@
+# zot authenticates workloads against the cluster's own OIDC issuer, and it fetches that issuer's
+# discovery document *unauthenticated* -- it has no credential for the apiserver and no config field
+# to give it one. Neither built-in public role covers these two paths: `system:discovery` lists only
+# /api, /apis, /healthz, /livez, /openapi, /readyz and /version; `system:public-info-viewer` lists only
+# the health and version paths. Without this, zot's refresh is refused with
+#
+#   User "system:anonymous" cannot get path "/.well-known/openid-configuration"
+#
+# so no token verifier is ever built and every login answers 401 "authentication required" -- which
+# looks like a bad credential from the client side and is not one.
+#
+# Both paths are public information by design: the discovery document advertises the issuer and the
+# jwks_uri, and the JWKS is public key material. This grants `get` on those two URLs to anonymous
+# callers and nothing else -- no resource access, no other non-resource path.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: registry-oidc-discovery-reader
+rules:
+  - nonResourceURLs:
+      - /.well-known/openid-configuration
+      - /openid/v1/jwks
+    verbs:
+      - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: registry-oidc-discovery-reader
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: registry-oidc-discovery-reader
+subjects:
+  - apiGroup: rbac.authorization.k8s.io
+    kind: Group
+    name: system:unauthenticated
