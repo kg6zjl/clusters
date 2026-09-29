@@ -12,6 +12,11 @@ spec:
   failedJobsHistoryLimit: 2
   jobTemplate:
     spec:
+      # A stuck pod must not wedge the schedule. ConcurrencyPolicy: Forbid (below)
+      # counts a Pending pod as an active job, so one that never starts blocks every
+      # later run silently - no failure, no alert on the job itself. A real run takes
+      # under a minute; 30 minutes is a ceiling, not a limit.
+      activeDeadlineSeconds: 1800
       template:
         metadata:
           labels:
