@@ -11,6 +11,7 @@ resources:
   - rbac.yaml
   - runner-deployment.yaml
   - runner-autoscaler.yaml
+  - toolcache-warmer.yaml
   - external-secrets-store.yaml
   - external-secrets.yaml
   - network-policy.yaml

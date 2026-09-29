@@ -5,7 +5,25 @@
   ],
   "dependencyDashboard": true,
   "prConcurrentLimit": 1,
-  "enabledManagers": ["helmfile", "helm-values", "flux", "kubernetes"],
+  "enabledManagers": ["helmfile", "helm-values", "flux", "kubernetes", "custom.regex"],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "trufflehog CLI pin in the CI workflow, where the Secret Scan fallback reads it",
+      "managerFilePatterns": ["/^\\.github/workflows/ci\\.ya?ml$/"],
+      "matchStrings": [
+        "# renovate: datasource=(?<datasource>.*?) depName=(?<depName>.*?)\\s*(?:\\r?\\n)+\\s*TRUFFLEHOG_VERSION: \"(?<currentValue>.*?)\""
+      ]
+    },
+    {
+      "customType": "regex",
+      "description": "trufflehog CLI pin in the node-local cache warmer DaemonSet",
+      "managerFilePatterns": ["/^home-cluster/github-runners/toolcache-warmer\\.ya?ml$/"],
+      "matchStrings": [
+        "# renovate: datasource=(?<datasource>.*?) depName=(?<depName>.*?)\\s*(?:\\r?\\n)+\\s*- name: TRUFFLEHOG_VERSION\\s*(?:\\r?\\n)+\\s*value: \"(?<currentValue>.*?)\""
+      ]
+    }
+  ],
   "flux": {
     "fileMatch": ["home-cluster/[^/]+/helmrelease\\.yaml$"]
   },
