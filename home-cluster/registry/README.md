@@ -19,7 +19,7 @@ Pushing from a runner pod:
 
 ```bash
 docker login registry.kube.stevearnett.com \
-  -u system:serviceaccount:github-runners:registry-pusher \
+  -u system:serviceaccount:github-runners:github-runner \
   --password-stdin < /var/run/secrets/registry.zot/token
 ```
 
