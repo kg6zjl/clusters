@@ -26,6 +26,14 @@ spec:
               mountPath: /opt/hostedtoolcache
       containers:
         - name: runner
+          # Available to every job step, so a failed workflow can post its own notification.
+          # The URL comes from 1Password via ESO, never from a GitHub secret.
+          env:
+            - name: CI_DISCORD_WEBHOOK
+              valueFrom:
+                secretKeyRef:
+                  name: ci-notify-discord
+                  key: CI_DISCORD_WEBHOOK
           volumeMounts:
             - name: toolcache
               mountPath: /opt/hostedtoolcache

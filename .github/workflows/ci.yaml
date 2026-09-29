@@ -109,3 +109,35 @@ jobs:
             echo "::error::TruffleHog scanned 0 chunks - this gate would pass without scanning anything"
             exit 1
           fi
+
+  notify:
+    name: Notify failure
+    # Only fires when something failed, and only on PRs - the case that currently arrives as
+    # GitHub email. Posts to the same Discord channel Alertmanager and Flux already use.
+    needs: [lint, validate, secrets]
+    if: ${{ always() && failure() }}
+    runs-on: ${{ vars.CI_RUNNER || 'self-hosted' }}  # CI_RUNNER repo variable overrides this (ubuntu-latest = break-glass)
+    timeout-minutes: 5
+    steps:
+      - name: Post failure to Discord
+        run: |
+          set -euo pipefail
+          if [ -z "${CI_DISCORD_WEBHOOK:-}" ]; then
+            echo "::warning::CI_DISCORD_WEBHOOK is unset on this runner; no notification sent"
+            exit 0
+          fi
+          # Branch names are attacker-adjacent text going into a JSON string: keep only
+          # characters that cannot terminate it.
+          BRANCH=$(printf '%s' '${{ github.head_ref }}' | tr -cd 'A-Za-z0-9._/-')
+          FAILED=""
+          [ "${{ needs.lint.result }}" = "failure" ] && FAILED="$FAILED lint"
+          [ "${{ needs.validate.result }}" = "failure" ] && FAILED="$FAILED validate"
+          [ "${{ needs.secrets.result }}" = "failure" ] && FAILED="$FAILED secret-scan"
+          [ -n "$FAILED" ] || FAILED=" unknown"
+          printf '{"content": "**CI failed** `%s`: failed%s\\n%s"}' \
+            "$BRANCH" "$FAILED" \
+            '${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}' \
+            > "$RUNNER_TEMP/discord.json"
+          curl -sS --fail --max-time 20 -X POST -H 'Content-Type: application/json' \
+            --data-binary @"$RUNNER_TEMP/discord.json" "$CI_DISCORD_WEBHOOK" > /dev/null
+          echo "failure notification sent"
