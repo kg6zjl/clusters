@@ -20,25 +20,15 @@ spec:
     - Ingress
     - Egress
   ingress:
-    # Traefik serves registry.kube.stevearnett.com, so both the LAN clients and the kubelets that
-    # pull images reach this pod through it.
+    # The only thing that reaches this pod is Traefik, for both client types: pods resolve
+    # registry.kube.stevearnett.com to the Traefik Service (CoreDNS rewrite in kube-system/), and
+    # kubelet/containerd on a node resolves it over the LAN to the MetalLB VIP that Traefik also
+    # serves. Traefik opens its own connection from the traefik namespace, so the node is never the
+    # source address at this pod.
     - from:
         - namespaceSelector:
             matchLabels:
               kubernetes.io/metadata.name: traefik
-      ports:
-        - port: 5000
-          protocol: TCP
-    # kubelet pulls are not pod traffic: after the MetalLB hop the source is the node itself.
-    - from:
-        - ipBlock:
-            cidr: 192.168.1.0/24
-      ports:
-        - port: 5000
-          protocol: TCP
-    - from:
-        - ipBlock:
-            cidr: 10.1.0.0/16
       ports:
         - port: 5000
           protocol: TCP
@@ -53,11 +43,11 @@ spec:
         - port: 53
           protocol: TCP
     # The OIDC issuer is https://kubernetes.default.svc, so zot fetches the discovery document from
-    # the apiserver through its ClusterIP. A namespaceSelector cannot express this: the apiserver is
-    # a host process, not a pod.
+    # the apiserver through the service CIDR. A namespaceSelector cannot express this: the apiserver
+    # is a host process, not a pod.
     - to:
         - ipBlock:
-            cidr: 10.152.183.0/16
+            cidr: 10.152.183.0/24
       ports:
         - port: 443
           protocol: TCP

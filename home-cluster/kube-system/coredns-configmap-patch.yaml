@@ -14,6 +14,12 @@ data:
         log . {
           class error
         }
+        # In-cluster clients must not hairpin out to Traefik's MetalLB VIP (192.168.1.241) and back.
+        # Resolve the registry name straight to the Traefik Service, so pods and CI reach it the
+        # k8s-native way. The target is a Service DNS name, not an address, so it follows the
+        # Service if it ever moves. Nodes do not use CoreDNS -- containerd resolves via the LAN --
+        # so kubelet pulls still arrive over the VIP, and both paths meet at Traefik.
+        rewrite name registry.kube.stevearnett.com traefik.traefik.svc.cluster.local
         kubernetes cluster.local in-addr.arpa ip6.arpa {
           pods insecure
           fallthrough in-addr.arpa ip6.arpa
