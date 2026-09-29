@@ -287,4 +287,29 @@ spec:
         summary: "gotk_resource_info is absent - FluxResourceNotReady cannot fire"
         description: "kube-state-metrics is up but is not exporting gotk_resource_info, so no Flux resource going not-Ready will alert from here. Either the customResourceState config in kube-prometheus-stack-helmrelease.yaml is no longer being read (check the kube-state-metrics pod's log for custom resource state errors) or rbac.extraRules no longer grants list/watch on the flux CRs."
         runbook_url: "https://prometheus.kube.stevearnett.com/targets"
+  # Nothing above sees a pod that never starts. A pod stuck Pending is not crash
+  # looping, its Deployment still reports available replicas (the Deployment was
+  # never the broken object), and a Job's last-successful time only speaks up a day
+  # later - which is how meshmonitor-backup sat Pending for 10 hours on 2026-09-29,
+  # scheduled onto a node that could never attach its RWO volume, with every rule
+  # here quiet.
+  #
+  # "Pending" is the phase for both halves of the failure: the scheduler refusing to
+  # place the pod, and the kubelet never getting it started. The second is the one
+  # that hides - the pod reports PodScheduled=True and is still Pending, because the
+  # volume attach, the CNI setup or the image pull never completes.
+  #
+  # 15m is above every legitimate wait observed here; a cold image pull or a Longhorn
+  # attach takes a couple of minutes, and a pod waiting on a scheduler decision that
+  # will never come is a problem long before the quarter hour is up.
+  - name: pod-scheduling
+    rules:
+    - alert: PodPendingTooLong
+      expr: kube_pod_status_phase{phase="Pending"} == 1
+      for: 15m
+      labels:
+        severity: warning
+      annotations:
+        summary: "Pod {{ $labels.pod }} in {{ $labels.namespace }} has been Pending for 15m"
+        description: "`kubectl -n {{ $labels.namespace }} describe pod {{ $labels.pod }}` names the cause in its Events in almost every case. Unschedulable means no node satisfies the pod's requests, selectors or affinity. Scheduled but still ContainerCreating means the node took the pod and could not start it - typically a volume that cannot attach (an RWO claim already attached to a different node) or a CNI failure. Both are silent by nature: the pod never fails, so nothing retries and nothing else alerts."
 
