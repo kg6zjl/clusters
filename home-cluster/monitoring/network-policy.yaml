@@ -16,3 +16,26 @@ spec:
     - namespaceSelector: {}
     - ipBlock:
         cidr: 0.0.0.0/0
+---
+# Headlamp's shipped prometheus plugin queries via the apiserver
+# (/api/v1/namespaces/<ns>/{services|pods}/<x>:9090/proxy), so the client on the wire is the
+# apiserver -- a host process, not a pod. monitoring-allow-all's namespaceSelector does not
+# cover its node-LAN source.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: prometheus-allow-apiserver-proxy
+  namespace: monitoring
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: prometheus
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - ipBlock:
+        cidr: 192.168.1.0/24
+    ports:
+    - protocol: TCP
+      port: 9090
