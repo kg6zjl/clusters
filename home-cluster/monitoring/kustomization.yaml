@@ -14,6 +14,9 @@ resources:
   - dashboard-openrouter.yaml
   - dashboard-spegel.yaml
   - alertmanager-external-secret.yaml
+  - alertmanager-deadman-external-secret.yaml
+  - alertmanager-deadman-script.yaml
+  - alertmanager-deadman.yaml
   - external-secrets.yaml
   - loki-datasource.yaml
   - loki-helmrelease.yaml

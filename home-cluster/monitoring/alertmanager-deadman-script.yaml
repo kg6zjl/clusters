@@ -1,0 +1,112 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: alertmanager-deadman-script
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: alertmanager-deadman
+data:
+  deadman.py: |
+    #!/usr/bin/env python3
+    """Page when the alerting pipeline itself has stopped working.
+
+    Alertmanager cannot report its own death: every notification it would send travels
+    through it, so a rule that fires on an unhealthy Alertmanager is delivered by the
+    unhealthy Alertmanager. The blackbox probe on alerts.kube.stevearnett.com has the
+    same hole - it can see the host go down, and the only thing that could tell anyone
+    is the host that went down.
+
+    So this runs outside the pipeline and posts straight to ntfy, which is a different
+    service on a different host and survives the failure it is reporting.
+
+    Two checks, both required:
+
+      1. Alertmanager answers GET /-/ready with 200.
+      2. Prometheus still has Watchdog firing. Watchdog is the always-on rule, so a
+         deadline that stops firing means rule evaluation stopped - and from the
+         inside, a Prometheus that has stopped evaluating is indistinguishable from
+         one with nothing to report.
+
+    Exit status is 0 once a page is sent: a non-zero exit would also trip
+    KubeJobFailed, which pages a second time for the same fault. It is 1 only when
+    the page itself could not be delivered, which is the one case where this Job
+    failing is the whole signal.
+
+    Companion: CronJobStale in prometheus-rules.yaml notices within 48h if this Job
+    stops running altogether.
+    """
+    import json
+    import os
+    import sys
+    import urllib.error
+    import urllib.parse
+    import urllib.request
+
+    ALERTMANAGER = os.environ["ALERTMANAGER_URL"].rstrip("/")
+    PROMETHEUS = os.environ["PROMETHEUS_URL"].rstrip("/")
+    NTFY = os.environ["NTFY_URL"]
+    TIMEOUT = float(os.environ.get("HTTP_TIMEOUT_SECONDS", "10"))
+    WATCHDOG = 'ALERTS{alertname="Watchdog",alertstate="firing"}'
+
+
+    def get(url):
+        with urllib.request.urlopen(url, timeout=TIMEOUT) as response:
+            return response.status, response.read()
+
+
+    def check_alertmanager():
+        try:
+            status, _ = get(ALERTMANAGER + "/-/ready")
+        except Exception as exc:
+            return "Alertmanager is not answering /-/ready: %s: %s" % (type(exc).__name__, exc)
+        if status != 200:
+            return "Alertmanager /-/ready returned HTTP %s" % status
+        return None
+
+
+    def check_watchdog():
+        url = PROMETHEUS + "/api/v1/query?" + urllib.parse.urlencode({"query": WATCHDOG})
+        try:
+            _, body = get(url)
+        except Exception as exc:
+            return "Prometheus is not answering its query API: %s: %s" % (type(exc).__name__, exc)
+        try:
+            payload = json.loads(body)
+        except ValueError:
+            return "Prometheus returned a body that is not JSON"
+        if payload.get("status") != "success":
+            return "Prometheus rejected the Watchdog query: %s" % payload.get("error")
+        if not payload.get("data", {}).get("result"):
+            return ("Watchdog is not firing in Prometheus, so rule evaluation has stopped "
+                    "and nothing else in this cluster can alert either")
+        return None
+
+
+    def page(problems):
+        url = NTFY + "?" + urllib.parse.urlencode({
+            "title": "[deadman] alerting pipeline is down",
+            "priority": "urgent",
+            "tags": "skull",
+        })
+        body = "\n".join("- " + problem for problem in problems).encode()
+        request = urllib.request.Request(url, data=body, method="POST")
+        with urllib.request.urlopen(request, timeout=TIMEOUT) as response:
+            return response.status
+
+
+    problems = [p for p in (check_alertmanager(), check_watchdog()) if p]
+    if not problems:
+        print("ok: Alertmanager ready, Watchdog firing")
+        sys.exit(0)
+
+    print("DEGRADED: " + " | ".join(problems))
+    try:
+        status = page(problems)
+    except Exception as exc:
+        print("FATAL: could not deliver the page to ntfy: %s: %s" % (type(exc).__name__, exc))
+        sys.exit(1)
+    if status >= 300:
+        print("FATAL: ntfy returned HTTP %s" % status)
+        sys.exit(1)
+    print("paged via ntfy (HTTP %s)" % status)
+    sys.exit(0)
