@@ -18,6 +18,18 @@ spec:
             app: meshmonitor-backup
         spec:
           restartPolicy: OnFailure
+          # meshmonitor-data-longhorn is RWO, so Longhorn can only attach it to the node
+          # already running meshmonitor. Without this the pod lands on any node and sits
+          # ContainerCreating on the attach forever.
+          affinity:
+            podAffinity:
+              requiredDuringSchedulingIgnoredDuringExecution:
+              - labelSelector:
+                  matchLabels:
+                    app: meshmonitor
+                topologyKey: kubernetes.io/hostname
+                namespaces:
+                - meshtastic
           volumes:
           - name: meshmonitor-data
             persistentVolumeClaim:
