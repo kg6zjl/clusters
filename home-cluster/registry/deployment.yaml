@@ -5,6 +5,11 @@ metadata:
   namespace: registry
   labels:
     app.kubernetes.io/name: zot
+  annotations:
+    # Without this, a merged change to zot-config never reaches the running pod: zot reads its config
+    # once at start, and nothing else rolls it. The bearer realm fix sat merged-but-inert until the
+    # pod was restarted, which is the same class of bug as a manifest with no Flux applier.
+    configmap.reloader.stakater.com/reload: "zot-config"
 spec:
   replicas: 1
   # Single ReadWriteOnce volume; a rolling update would need two pods on it at once.

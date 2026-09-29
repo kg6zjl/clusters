@@ -12,6 +12,12 @@ spec:
       # No apiserver token is mounted: a runner pod has no business calling the API, and the only
       # credential it carries is the registry-scoped projected token below (audience "zot").
       automountServiceAccountToken: false
+      # kubelet cannot project a Pod token, so pulling our own images is authenticated by this Secret
+      # rather than by OIDC. It is minted and rotated in-cluster -- see registry/pull-rotator.yaml --
+      # and scoped to registry.kube.stevearnett.com, so it is inert while the runner image still comes
+      # from Docker Hub.
+      imagePullSecrets:
+        - name: registry-pull
       repository: kg6zjl/clusters
       labels:
         - self-hosted

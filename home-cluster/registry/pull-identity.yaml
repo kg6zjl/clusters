@@ -1,0 +1,14 @@
+# The identity kubelet presents when it pulls an image from this registry.
+#
+# kubelet is a node process, not a pod: it cannot project a Pod's ServiceAccount token, so it reads
+# one out of an imagePullSecret instead. That token is minted in-cluster from this ServiceAccount by
+# pull-rotator.yaml and verified by zot against the cluster's own OIDC issuer -- the same trust chain
+# a workload's push token uses. Nothing here is hand-held and nothing is synced from outside.
+#
+# One identity, three edits to add a consumer: point its pods at the `registry-pull` imagePullSecret,
+# add its namespace to CONSUMER_NAMESPACES in pull-rotator.yaml, and grant the rotator a Role there.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: registry-pull
+  namespace: registry
