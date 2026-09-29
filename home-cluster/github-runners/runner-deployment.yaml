@@ -12,12 +12,13 @@ spec:
       # No apiserver token is mounted: a runner pod has no business calling the API, and the only
       # credential it carries is the registry-scoped projected token below (audience "zot").
       automountServiceAccountToken: false
-      # No imagePullSecrets yet, deliberately. In-cluster pulls are not anonymous (zot v2.1.21 bearer
-      # auth), so a pull of an image from our own registry will need the `registry-pull` Secret that
-      # registry/pull-rotator.yaml mints. Nothing here is pulled from that registry yet -- the runner
-      # image is still summerwind's from Docker Hub -- so naming the Secret now would only make kubelet
-      # log FailedToRetrieveImagePullSecret every time a pod starts. Add it in the change that first
-      # builds an image into the registry.
+      # The registry is not anonymous (zot bearer auth), so a kubelet pull needs a credential. The
+      # `registry-pull` Secret is minted in-cluster by registry/pull-rotator.yaml and rotated daily;
+      # nothing in git holds it. This reference arrives with the workflow that first publishes an
+      # image here -- until then naming the Secret would only make kubelet log a lookup it does not
+      # need at every pod start.
+      imagePullSecrets:
+        - name: registry-pull
       repository: kg6zjl/clusters
       labels:
         - self-hosted

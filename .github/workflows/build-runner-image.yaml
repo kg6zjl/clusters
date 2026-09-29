@@ -1,0 +1,51 @@
+# Builds the in-house runner image into the cluster registry.
+#
+# Kept out of ci.yaml on purpose: this produces the image the runners themselves run, so it has to be
+# able to fail without blocking a pull request that has nothing to do with runners. main only, plus
+# manual dispatch to get the first build out before any commit depends on it.
+#
+# Auth is the runner pod's own projected ServiceAccount token (audience "zot"), not a stored password:
+# zot verifies it against the cluster's own OIDC issuer. runner-deployment.yaml mounts it at
+# /var/run/secrets/registry.zot/token, and zot's policy allows that identity to create and update any
+# repository.
+name: Build runner image
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - home-cluster/github-runners/Dockerfile.optimized
+      - .github/workflows/build-runner-image.yaml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ${{ vars.CI_RUNNER || 'self-hosted' }}  # CI_RUNNER repo variable overrides this
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Log in to the cluster registry
+        run: |
+          docker login registry.kube.stevearnett.com \
+            -u system:serviceaccount:github-runners:github-runner \
+            --password-stdin < /var/run/secrets/registry.zot/token
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # Tagged by commit, never ":latest". A moving tag is the thing this change moves the runners
+      # away from; the RunnerDeployment pins one of these by digest when it is flipped over.
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: home-cluster/github-runners
+          file: home-cluster/github-runners/Dockerfile.optimized
+          push: true
+          tags: registry.kube.stevearnett.com/github-runners/runner:${{ github.sha }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/kg6zjl/clusters
+            org.opencontainers.image.revision=${{ github.sha }}
