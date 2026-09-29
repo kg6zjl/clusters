@@ -21,7 +21,12 @@ metadata:
   name: registry-pull-token
   namespace: registry
 rules:
-  - apiGroups: ["authentication.k8s.io"]
+  # Core API group, not authentication.k8s.io: the subresource is serviceaccounts/token on the core
+  # serviceaccounts resource. authentication.k8s.io/v1 is the TokenRequest *body* version, which is a
+  # different thing entirely, and putting the rule there is silently useless -- the authorizer reports
+  # `cannot create resource "serviceaccounts/token" in API group ""`. Upstream agrees: Flux's own
+  # source-controller ClusterRole grants this the same way (apiGroups: [""]).
+  - apiGroups: [""]
     resources: ["serviceaccounts/token"]
     verbs: ["create"]
     resourceNames: ["registry-pull"]
