@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Runners: CI as a cluster citizen</title>
+<meta name="description" content="Self-hosted GitHub Actions runners inside a Kubernetes cluster: ephemeral pods, credentials from the vault instead of GitHub secrets, image builds to an internal registry, and the least-privilege work still outstanding.">
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<nav class="topnav">
+  <ul>
+    <li><a href="index.html">The model</a></li>
+    <li><a href="limits.html">Permissions</a></li>
+    <li><a href="network.html">Network</a></li>
+    <li><a href="state.html">State &amp; storage</a></li>
+    <li><a href="skills.html">Skills</a></li>
+    <li><a href="workflow.html">The loop</a></li>
+    <li><a href="secrets.html">Secrets</a></li>
+    <li><a href="paging.html">Paging</a></li>
+    <li><a href="runners.html" aria-current="page">Runners</a></li>
+    <li><a href="interesting.html">Interesting bits</a></li>
+    <li><a href="proud.html">Proud of</a></li>
+    <li><a href="checklist.html">Build your own</a></li>
+  </ul>
+</nav>
+
+<header class="page-head">
+  <p class="eyebrow">Practice</p>
+  <h1>Runners: CI as a cluster citizen</h1>
+  <p class="lede">
+    Every pipeline in this setup runs on a runner pod scheduled by the cluster it is testing. No
+    hosted runners, no cloud CI minutes, no second environment to keep in sync. The runners are
+    ordinary cluster citizens — which also means they inherit the cluster's own rules, and its own
+    mistakes.
+  </p>
+</header>
+
+<main>
+
+<section aria-labelledby="why">
+  <h2 id="why">Why self-host</h2>
+  <ul>
+    <li><strong>Credentials stop travelling.</strong> The runners read secrets from the cluster's own
+      secret path — the same vault-backed operator every workload uses. No secret value is ever
+      copied into a CI system's secret store, and a workflow just reads an environment variable it
+      already has. In the manifests that line is explicit: the notification webhook comes from the
+      vault, never from a repository secret.</li>
+    <li><strong>The build can reach what the cluster can.</strong> Pushing an image to an internal
+      registry, reconciling with the cluster API, reading a cluster-scoped resource: all trivial when
+      the pipeline runs inside the cluster and impossible or painful when it does not.</li>
+    <li><strong>One place to reason about trust.</strong> A pipeline is code with credentials. Having
+      it run somewhere you already apply network policy, RBAC and resource limits is the whole point.</li>
+    <li><strong>Cost and privacy</strong> follow from the above: the machines are already on.</li>
+  </ul>
+</section>
+
+<section aria-labelledby="mechanics">
+  <h2 id="mechanics">How it actually works</h2>
+  <p>
+    A controller watches for queued jobs and creates a runner pod per job (that is the standard
+    pattern: an autoscaling runner group, plus a deployment describing the pod shape). The parts worth
+    copying:
+  </p>
+  <ul>
+    <li><strong>Ephemeral runners.</strong> One pod, one job, then gone. Nothing about the previous
+      job's filesystem or credentials survives into the next, and a wedged run cannot poison the pool.</li>
+    <li><strong>Init containers that fix the environment.</strong> The Docker images mount a shared
+      tool cache mounted read-write, then an init container enforces ownership and permissions on it
+      before the runner starts — because the next job, running as a different user, would otherwise
+      fail on a directory it cannot write.</li>
+    <li><strong>A warm tool cache.</strong> Toolchains are pre-downloaded into the cache by a periodic
+      job, so a build does not spend its first ninety seconds fetching a compiler. Cheap to run, and
+      the difference between a fast pipeline and one people stop watching.</li>
+    <li><strong>Registry auth from the vault.</strong> The image build logs in to the internal
+      registry with credentials already mounted, then builds and pushes with the standard build
+      action. No credential appears in the workflow file.</li>
+    <li><strong>Notifications from the pipeline.</strong> CI posts its own failures to the same chat
+      channel the agent uses, so a red pipeline is visible without anyone polling anything.</li>
+  </ul>
+</section>
+
+<section aria-labelledby="gap">
+  <h2 id="gap">The least-privilege work still outstanding</h2>
+  <div class="note">
+    <span class="label">Named plainly, because this is the biggest hole in the design</span>
+    <p>
+      In the reference setup the runner service account is bound to a role with <code>*</code> on
+      <code>*</code>, and the runner namespace allows unrestricted egress. Both were pragmatic choices
+      to unblock real builds, and both are exactly what the rest of this site argues against. A
+      pipeline that holds cluster-admin and can reach anything is the highest-value target on the
+      network, and it is the one component in this setup that has not been given the treatment
+      everything else got.
+    </p>
+  </div>
+  <p>
+    The migration is not mysterious, but it is genuinely fiddly, which is why it is still here:
+  </p>
+  <ol>
+    <li>Enumerate what each workflow actually needs. Most need almost nothing; a few need to write
+      specific resources in specific namespaces.</li>
+    <li>Replace one broad binding with per-purpose roles — a role per workflow family, scoped to the
+      namespaces and resource types that family touches.</li>
+    <li>Write the egress allow-list from observed traffic: registry, package mirrors, source control,
+      the API server. Prove it by letting a build fail loudly if a destination is missing, in a PR
+      whose required check is that build.</li>
+    <li>Keep the wide role only for the pipelines that genuinely reconcile the cluster, and treat that
+      as a documented exception with a name attached.</li>
+  </ol>
+</section>
+
+<section aria-labelledby="lessons">
+  <h2 id="lessons">Lessons from running CI this way</h2>
+  <ul>
+    <li><strong>A required check that fails for reasons unrelated to the diff blocks everything.</strong>
+      A tool that helpfully self-updates inside a container where the cached binary belongs to root
+      will fail the job and fail the merge — for every PR, forever. Pin the tool, disable its updater
+      in CI, and treat "the pipeline is broken for everyone" as an incident with priority over any
+      feature.</li>
+    <li><strong>A change to the pipeline is tested by the pipeline.</strong> A PR that edits the
+      workflow definition runs the workflow, so a mistake in the YAML shows up as a failed check on
+      the PR that introduced it — a small mercy worth relying on rather than fighting.</li>
+    <li><strong>The runner needs the same network scrutiny as any pod.</strong> Every connectivity
+      failure inside a build gets the same first question as everywhere else: what does the policy
+      allow, and what is the A/B test that proves it?</li>
+    <li><strong>Give the runners resource limits and a namespace policy like anything else.</strong>
+      A build that can starve the node it runs on is a self-inflicted outage.</li>
+  </ul>
+</section>
+
+</main>
+
+<footer>
+  <div class="wrap">
+    <p><a href="paging.html">← Paging</a> · <a href="interesting.html">Interesting bits →</a></p>
+  </div>
+</footer>
+</body>
+</html>
