@@ -90,9 +90,12 @@ data:
 
 
     def mint():
+        # The core path, not the authentication.k8s.io one: serviceaccounts/token is served by API group
+        # v1 (confirmed against live discovery -- authentication.k8s.io/v1 lists only tokenreviews), so
+        # /apis/authentication.k8s.io/v1/.../token is a 404 on an otherwise authorized request.
         result = api(
             "POST",
-            f"/apis/authentication.k8s.io/v1/namespaces/{NS}/serviceaccounts/{PULL_SA}/token",
+            f"/api/v1/namespaces/{NS}/serviceaccounts/{PULL_SA}/token",
             {
                 "apiVersion": "authentication.k8s.io/v1",
                 "kind": "TokenRequest",
