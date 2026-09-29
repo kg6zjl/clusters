@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Build your own: the short version</title>
+<meta name="description" content="An ordered checklist for running an AI agent inside a Kubernetes cluster: read-only RBAC, no secret access, default-deny networking, disposable state, versioned skills, and a pull request as the only write path.">
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<nav class="topnav">
+  <ul>
+    <li><a href="index.html">The model</a></li>
+    <li><a href="limits.html">Permissions</a></li>
+    <li><a href="network.html">Network</a></li>
+    <li><a href="state.html">State &amp; storage</a></li>
+    <li><a href="skills.html">Skills</a></li>
+    <li><a href="workflow.html">The loop</a></li>
+    <li><a href="secrets.html">Secrets</a></li>
+    <li><a href="paging.html">Paging</a></li>
+    <li><a href="runners.html">Runners</a></li>
+    <li><a href="interesting.html">Interesting bits</a></li>
+    <li><a href="proud.html">Proud of</a></li>
+    <li><a href="checklist.html" aria-current="page">Build your own</a></li>
+  </ul>
+</nav>
+
+<header class="page-head">
+  <p class="eyebrow">Extras</p>
+  <h1>Build your own: the short version</h1>
+  <p class="lede">
+    In order, because the order matters — each step makes the next one possible, and the cheapest
+    steps are the ones that make the expensive ones safe.
+  </p>
+</header>
+
+<main>
+
+<section aria-labelledby="steps">
+  <h2 id="steps">The checklist</h2>
+  <ol>
+    <li>
+      <strong>Put everything in git first, and reconcile from it.</strong> Before any agent appears,
+      the cluster should already be described by a repository and a controller, so that a change made
+      any other way is temporary by construction. Without this, read-only access is a cage rather
+      than a design.
+    </li>
+    <li>
+      <strong>Give the agent a service account with read verbs only.</strong> <code>get</code>,
+      <code>list</code>, <code>watch</code> across the resource families it needs to diagnose, and not
+      one write verb anywhere. Be generous with the reads — a missing read is what makes the agent
+      ask a human for something it could have checked itself.
+    </li>
+    <li>
+      <strong>Do not grant <code>secrets</code>, <code>exec</code> or token minting.</strong> These
+      are the three that turn diagnosis into exfiltration or escape. If the agent needs something
+      from a secret, the answer is a workload that uses it, not a wider role.
+    </li>
+    <li>
+      <strong>Move secrets into a manager and sync them in.</strong> One path in: a vault item, an
+      operator, a workload. Add a reloader so rotation actually reaches the process, and never let a
+      value be printed — by the agent or by anyone.
+    </li>
+    <li>
+      <strong>Make the namespace default-deny, then write the allow-list.</strong> DNS, the cluster
+      API, its upstreams. Use address blocks for anything that is not a pod — especially the API
+      server, which is a host process and invisible to a namespace selector. Prove a connection
+      failure with the A/B test before blaming the application.
+    </li>
+    <li>
+      <strong>Make the pod disposable and its knowledge external.</strong> Rebuild config and
+      instructions from git at start, delete what the repository deleted, and treat anything written
+      inside the running pod as a draft.
+    </li>
+    <li>
+      <strong>Version the agent's skills, and read them back.</strong> A lesson goes into a repository
+      in the same change that produced it, with the reason attached. Remove the ones that stopped
+      being true.
+    </li>
+    <li>
+      <strong>Make the pull request the only write path, and gate the merge.</strong> Required checks
+      plus a human merge for the cluster repository. Then verify the reconcile — merging is not
+      applying, and the agent's summary of its own success is not evidence.
+    </li>
+    <li>
+      <strong>Give it a way to read what it has no credential for.</strong> The pattern: a reviewed Job
+      in the repository, a read-only credential from the vault, sanitized output, and the file deleted
+      afterwards so the object is pruned. That is better than widening a role and better than an
+      interactive session.
+    </li>
+    <li>
+      <strong>Decide who runs the writes that git cannot own.</strong> Copying a volume, migrating
+      storage, scaling during a data move: tag those commands as operator-only in the runbook, and let
+      the agent run the read-only half.
+    </li>
+    <li>
+      <strong>Make the agent's own success loud and its silence loud too.</strong> An always-firing
+      watchdog alert proves the pipeline works by its absence; sibling notification routes mean one
+      dead leg is not a dead pager.
+    </li>
+    <li>
+      <strong>Write the gaps down, in the same place as the design.</strong> The broad CI role, the
+      approval fatigue, the pod-only skill copies, the single human who can revive the agent. A design
+      that lists its weaknesses gets fixed; one that lists its features gets trusted.
+    </li>
+  </ol>
+</section>
+
+<section aria-labelledby="decisions">
+  <h2 id="decisions">The five decisions to make deliberately</h2>
+  <table>
+    <thead><tr><th>Decision</th><th>What to weigh</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>Which repositories may the agent merge to?</td>
+        <td>A skills or docs repository is low-risk and keeps the agent useful without a human in the
+          loop. The cluster repository is not. Decide per repository, and remember that a repository
+          it can merge to is a repository it can change.</td>
+      </tr>
+      <tr>
+        <td>Which single one-off actions get an approval gate, if any?</td>
+        <td>Fewer is better. Every gated action competes for the same attention, and approval fatigue
+          is how a gate becomes a formality.</td>
+      </tr>
+      <tr>
+        <td>Does the agent's knowledge live on a volume at all?</td>
+        <td>A volume makes it faster and adds a second copy that can drift from the repository. If you
+          keep one, make the repository win at every start and delete what it stopped shipping.</td>
+      </tr>
+      <tr>
+        <td>How does the agent narrate?</td>
+        <td>One-way notifications into a channel with history give you an audit trail nobody had to
+          ask for. Just make sure the credential for it comes from the vault, not from the CI system's
+          secret store.</td>
+      </tr>
+      <tr>
+        <td>What happens when the agent is the thing that is broken?</td>
+        <td>Assume it cannot fix itself, and plan a human step. Put a name on it, because "someone
+          will notice" is not a recovery plan.</td>
+      </tr>
+    </tbody>
+  </table>
+</section>
+
+<section aria-labelledby="done">
+  <h2 id="done">How you know it is working</h2>
+  <ul>
+    <li>The agent diagnoses things it was never told about, because it can read the cluster.</li>
+    <li>It has never asked you for a write credential — every change arrived as a pull request.</li>
+    <li>You can read its last twenty changes in the repository, and every one says why it happened.</li>
+    <li>When you did nothing for a week, the cluster was still described by the repository and the
+      agent was still working the same way.</li>
+  </ul>
+  <p class="small">
+    That is the whole trick: reach without authority, and a log of every decision in a place you can
+    review at your own pace.
+  </p>
+</section>
+
+</main>
+
+<footer>
+  <div class="wrap">
+    <p><a href="proud.html">← Proud of</a> · <a href="index.html">Back to the model</a></p>
+  </div>
+</footer>
+</body>
+</html>

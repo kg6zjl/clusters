@@ -6,15 +6,42 @@ metadata:
 spec:
   podSelector: {}
   policyTypes:
-  - Egress
+    - Egress
   egress:
-  - {} # Allow all egress temporarily to unblock the runner builds
-  ingress:
-  - from:
-    - namespaceSelector:
-        matchLabels:
-          kubernetes.io/metadata.name: kube-system
-  - from:
-    - namespaceSelector:
-        matchLabels:
-          kubernetes.io/metadata.name: arc-systems
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+    # What CI legitimately talks to off-cluster: the GitHub API, action and tool downloads, ghcr.io,
+    # Docker Hub. Web ports only, with the private ranges excluded so this cannot become a path back
+    # into the cluster or the LAN.
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 10.0.0.0/8
+              - 172.16.0.0/12
+              - 192.168.0.0/16
+              - 169.254.0.0/16
+              - 100.64.0.0/10
+      ports:
+        - port: 80
+          protocol: TCP
+        - port: 443
+          protocol: TCP
+    # The registry. registry.kube.stevearnett.com resolves to the Traefik Service ClusterIP in-cluster
+    # (CoreDNS rewrite in kube-system/), so pushes and dind pulls leave through Traefik on 443.
+    - to:
+        - ipBlock:
+            cidr: 10.152.183.0/24
+      ports:
+        - port: 443
+          protocol: TCP
+# No Ingress policy: nothing dials into these pods, and an ingress default-deny here would only put
+# kubelet's own probes at risk. The previous version of this file declared `ingress:` rules without
+# listing Ingress in policyTypes, so they were silently inert -- not isolation.

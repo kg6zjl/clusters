@@ -33,7 +33,7 @@ data:
                 "claimMapping": {
                   "username": "claims.sub"
                 },
-                "certificateAuthorityFile": "/etc/zot/k8s-ca.crt"
+                "certificateAuthorityFile": "/etc/zot-ca/ca.crt"
               }
             ]
           }
@@ -45,7 +45,7 @@ data:
               "defaultPolicy": ["read"],
               "policies": [
                 {
-                  "users": ["system:serviceaccount:github-runners:registry-pusher"],
+                  "users": ["system:serviceaccount:github-runners:github-runner"],
                   "actions": ["read", "create", "update"]
                 }
               ]

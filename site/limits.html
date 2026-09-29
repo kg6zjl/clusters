@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Permissions: read-only, and no secrets in reach</title>
+<meta name="description" content="A read-only cluster role for an in-cluster AI agent: get/list/watch only, no secrets, no exec, no token minting — plus the deliberate omissions and the credential-scope rules that go with them.">
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<nav class="topnav">
+  <ul>
+    <li><a href="index.html">The model</a></li>
+    <li><a href="limits.html" aria-current="page">Permissions</a></li>
+    <li><a href="network.html">Network</a></li>
+    <li><a href="state.html">State &amp; storage</a></li>
+    <li><a href="skills.html">Skills</a></li>
+    <li><a href="workflow.html">The loop</a></li>
+    <li><a href="secrets.html">Secrets</a></li>
+    <li><a href="paging.html">Paging</a></li>
+    <li><a href="runners.html">Runners</a></li>
+    <li><a href="interesting.html">Interesting bits</a></li>
+    <li><a href="proud.html">Proud of</a></li>
+    <li><a href="checklist.html">Build your own</a></li>
+  </ul>
+</nav>
+
+<header class="page-head">
+  <p class="eyebrow">Boundary 1</p>
+  <h1>Permissions: read-only, and no secrets in reach</h1>
+  <p class="lede">
+    One cluster role, one service account, one binding. The role grants
+    <code>get</code>, <code>list</code> and <code>watch</code> on a long list of resources, and
+    nothing else. The list of what it does <em>not</em> grant is the security model.
+  </p>
+</header>
+
+<main>
+
+<section aria-labelledby="shape">
+  <h2 id="shape">The shape of the role</h2>
+  <p>
+    Every rule in the role has the same verb set. There is no rule anywhere with a write verb, which
+    makes the property auditable in one pass rather than by reading subject-by-subject:
+  </p>
+<pre><code>verbs: ["get", "list", "watch"]        # every rule, no exceptions</code></pre>
+  <p>
+    Breadth is fine here <em>because</em> the verb is narrow. Reading a NetworkPolicy cannot take
+    the cluster down; the same cannot be said for patching a deployment. So the role covers:
+  </p>
+  <ul>
+    <li>core: pods, logs, services, endpoints and endpointslices, configmaps, namespaces, nodes,
+      PVs and PVCs, events, quotas</li>
+    <li>workloads: deployments, statefulsets, daemonsets, replicasets, controllerrevisions</li>
+    <li>networking: networkpolicies, ingresses, ingressclasses · storage: storageclasses, CSI objects,
+      volumes</li>
+    <li>the GitOps stack: kustomizations, helmreleases, sources, notification objects</li>
+    <li>RBAC itself, so the agent can answer "who can do this" without asking a human</li>
+    <li>the CRD families whose status is the only honest source of truth: cert-manager, external-secrets,
+      the monitoring stack, Longhorn, Trivy, Flux's own operator objects, the backup CRDs, and
+      Crossplane's provider state — the one place that tells you whether a managed object is failing
+      or its provider was never installed</li>
+  </ul>
+  <div class="note">
+    <span class="label">Grants that look gratuitous but are not</span>
+    <p>
+      Each of these was added after a real diagnosis failed because the read was missing. They are
+      the cheapest possible fix for that class of failure — a read, not a write:
+    </p>
+    <ul>
+      <li><code>pods/log</code>: without it the agent can see that a pod is broken and nothing about why.</li>
+      <li><code>endpointslices</code> as well as the legacy <code>endpoints</code>: the old object can
+        be stale or skipped entirely, which is exactly how a decommissioned address survived in a
+        service's endpoint list unnoticed.</li>
+      <li><code>customresourcedefinitions</code>: "the CRD is missing" and "the CRD exists but is not
+        established" look identical from a failed list; the status is what tells them apart.</li>
+      <li>the <code>Prometheus</code> custom resource: its selectors are the only place that says
+        whether a scrape job was never rendered, or was rendered and never selected. A ServiceMonitor
+        looks perfectly correct in both cases — that gap produced a confidently wrong root cause.</li>
+      <li>backup and scan CRDs: the cluster API is the only description of what is actually backed up
+        or actually scanned. Without the read, "no backup" and "no permission to look" are the same
+        answer, and that mistake was made too.</li>
+    </ul>
+  </div>
+</section>
+
+<section aria-labelledby="omitted">
+  <h2 id="omitted">What is deliberately absent</h2>
+  <table>
+    <thead><tr><th>Not granted</th><th>Consequence</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><code>secrets</code> — no verb at all</td>
+        <td>The agent cannot read a secret value, in any namespace, ever. It sees references and
+          existence, never contents. Secrets arrive in workloads from a manager, not through the agent.</td>
+      </tr>
+      <tr>
+        <td><code>pods/exec</code>, <code>pods/attach</code>, <code>pods/portforward</code></td>
+        <td>No shell inside a running container, and no tunnel to a service. Reproducing a network
+          fault happens from a pod the agent owns the definition of, not inside yours.</td>
+      </tr>
+      <tr>
+        <td><code>serviceaccounts/token</code></td>
+        <td>It cannot mint a fresh identity for itself or anything else. It can use the token the
+          pod was started with, and that token carries this read-only role.</td>
+      </tr>
+      <tr>
+        <td>anything with <code>create</code>, <code>update</code>, <code>patch</code>, <code>delete</code></td>
+        <td>No deletes, no scaling, no drain, no rollout restart, no Job creation. The only Job it can
+          cause to exist is one it writes into the repository.</td>
+      </tr>
+      <tr>
+        <td><code>deletecollection</code>, <code>impersonate</code>, <code>escalate</code></td>
+        <td>No bulk destruction and no wearing someone else's hat — including the "can I do this as
+          that service account" trick, which is a privilege-escalation surface.</td>
+      </tr>
+    </tbody>
+  </table>
+  <p>
+    The kubeconfig the agent uses is itself a committed manifest with no credentials in it: it names
+    the in-cluster server, the cluster CA, and a <code>tokenFile</code> pointing at the service
+    account token the kubelet already mounted. Nothing to expire, nothing to leak, and rotating the
+    identity means restarting the pod.
+  </p>
+</section>
+
+<section aria-labelledby="secrets">
+  <h2 id="secrets">Secrets: one path in, none out</h2>
+  <p>
+    Secrets live in a password manager and are synced into the cluster by an operator, one item per
+    declared need. That gives two properties that matter more than convenience:
+  </p>
+  <ul>
+    <li><strong>Nothing secret is ever in git</strong>, so a public repository is survivable.</li>
+    <li><strong>The agent has no shortcut around it.</strong> Because it cannot read Secrets, the
+      only way for a workload to get a credential is the operator's own sync — which means the agent
+      cannot leak what it cannot read, by accident or otherwise.</li>
+  </ul>
+  <p>
+    Declaring a secret is a manifest change like any other: an object naming an item in the vault and
+    the field inside it, with a refresh interval. Write the trade-offs next to the declaration. A value reused for two purposes, for instance, means rotating it rotates both. Say so in a comment, where the next person will read it.
+  </p>
+  <div class="note">
+    <span class="label">Credential scope is not a suggestion</span>
+    <p>
+      The rule that keeps a many-purpose agent honest: a credential is used for its stated purpose and
+      nothing else. The sharpest real example is a billing key — an account-management credential that
+      can read spend. It is a metrics credential. It cannot be used to make model requests, to create
+      or revoke keys, or to be echoed anywhere. A key that is powerful enough to do something is not
+      permission to do it, and "the call succeeded" is not evidence it was allowed.
+    </p>
+  </div>
+</section>
+
+<section aria-labelledby="humans">
+  <h2 id="humans">The second key: a human for privileged actions</h2>
+  <p>
+    Read-only by default does not have to mean "helpless when something is genuinely
+    one-time-privileged". The pattern that works is an approval gate: the agent asks, the human's
+    client shows the exact command or change, and on approval it runs. It is worth scoping this
+    tightly, because the failure mode is not that the human approves something wrong — it is that
+    approval fatigue turns the gate into a formality. Keep the set of gated actions small, keep them
+    visible, and prefer a change in the repository over an approved one-off wherever both exist.
+  </p>
+  <p>
+    The corollary is a hard rule about self-modification: the agent must not edit its own deployment,
+    credentials or tooling without approval. Break that and the thing that does the work is the thing
+    that is broken, and it cannot repair itself.
+  </p>
+  <p class="small">
+    The honest caveat: needs like "run a Job that reads the gateway" are best served by writing the
+    Job into the repository and letting the controller create it — reviewed, reproducible, and
+    already sanitized in the PR. Reach for the approval gate when there is no repository-shaped
+    version of the action.
+  </p>
+</section>
+
+</main>
+
+<footer>
+  <div class="wrap">
+    <p><a href="index.html">← The model</a> · <a href="network.html">Network →</a></p>
+  </div>
+</footer>
+</body>
+</html>

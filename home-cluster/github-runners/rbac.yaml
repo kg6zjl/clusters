@@ -1,32 +1,20 @@
+# The runner pods' identity, with NO RBAC on purpose.
+#
+# A self-hosted runner executes code from a pull request. Every cluster permission this identity
+# holds is a permission whoever authored that PR holds, and a compromised third-party action holds
+# it too. This ServiceAccount exists for one reason: zot maps a projected token issued for it
+# (audience "zot") to push rights on registry.kube.stevearnett.com. See home-cluster/registry/README.md.
+#
+# What this replaced: a ClusterRole of `*` on `*` -- cluster-admin in every namespace -- bound to this
+# ServiceAccount AND to this namespace's `default`, added in aeddbd1 ("grant rbac to default service
+# account", empty commit body) because the pods run as `default` and something wanted API access.
+# Every runner pod and every toolcache warmer therefore carried full cluster control. Nothing uses
+# it: the only workflow in this repo (.github/workflows/ci.yaml) makes no Kubernetes API calls.
+#
+# When a job genuinely needs cluster access, add a Role + RoleBinding scoped to the namespace and the
+# resources it touches. Never re-add cluster-admin here.
 apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: github-runner
   namespace: github-runners
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRole
-metadata:
-  name: github-runner
-rules:
-  - apiGroups: ["*"]
-    resources: ["*"]
-    verbs: ["*"]
-  - nonResourceURLs: ["*"]
-    verbs: ["*"]
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRoleBinding
-metadata:
-  name: github-runner
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: ClusterRole
-  name: github-runner
-subjects:
-  - kind: ServiceAccount
-    name: github-runner
-    namespace: github-runners
-  - kind: ServiceAccount
-    name: default
-    namespace: github-runners

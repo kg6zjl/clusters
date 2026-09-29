@@ -14,6 +14,8 @@ spec:
       labels:
         app.kubernetes.io/name: runner-toolcache-warmer
     spec:
+      # Fills a cache and downloads a tarball; it needs no apiserver token.
+      automountServiceAccountToken: false
       # The node-local cache the runner mounts at /opt/hostedtoolcache has to be filled by a pod
       # whose lifetime is not tied to a job. A runner init container cannot do it: the GitHub
       # release CDN delivers ~300KB/s from here, so the 35MB trufflehog tarball takes ~2 minutes,
