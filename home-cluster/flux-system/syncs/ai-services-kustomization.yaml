@@ -5,6 +5,16 @@ metadata:
   namespace: flux-system
 spec:
   interval: 5m
+  # When `timeout` is unset, kustomize-controller's GetTimeout() defaults the
+  # deadline to `interval - 30s`, so `wait: true` was giving hermes-agent only
+  # 4m30s to go Ready. Its install-tools initContainer re-downloaded the whole
+  # toolchain on every pod start and needed ~6m, so every reconcile that rolled
+  # the Deployment ended in HealthCheckFailed ("timeout waiting for:
+  # [Deployment/ai-services/hermes-agent status: 'InProgress']"). Pin an explicit
+  # deadline so the health check measures rollout time instead of the reconcile
+  # cadence. The initContainer is now stamped and parallel, so a warm start is
+  # ~15s and this is headroom for a genuinely cold PVC, not a workaround.
+  timeout: 10m
   path: ./home-cluster/ai-services
   prune: true
   sourceRef:
