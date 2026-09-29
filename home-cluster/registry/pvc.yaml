@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: zot-data
+  namespace: registry
+spec:
+  accessModes:
+    - ReadWriteOnce
+  # Both `longhorn` and `microk8s-hostpath` carry the default-class annotation, so the class has to
+  # be named explicitly or the BindingMode decides it for us.
+  storageClassName: longhorn
+  resources:
+    requests:
+      storage: 10Gi

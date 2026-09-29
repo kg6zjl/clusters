@@ -1,0 +1,15 @@
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: registry
+  namespace: registry
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - match: Host(`registry.kube.stevearnett.com`)
+      kind: Rule
+      services:
+        - name: zot
+          port: 5000
+  # No tls block: the wildcard cert is the cluster's default TLSStore, in the traefik namespace.

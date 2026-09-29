@@ -26,6 +26,7 @@ resources:
   - metallb-system-kustomization.yaml
   - metallb-system-pools-kustomization.yaml
   - github-runners-kustomization.yaml
+  - registry-kustomization.yaml
   - kube-system-kustomization.yaml
   - arc-kustomization.yaml
   - auth-kustomization.yaml
