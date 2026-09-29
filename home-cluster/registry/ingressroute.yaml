@@ -3,6 +3,13 @@ kind: IngressRoute
 metadata:
   name: registry
   namespace: registry
+  annotations:
+    # zot requires bearer auth for every request, so the root answers 404 and /v2/
+    # answers 401 - which the default http_2xx module read as the registry being
+    # down, firing IngressDown critical. This module asserts the host answered at
+    # all rather than asserting a 200, so a real Traefik/TLS/backend failure still
+    # trips it.
+    blackbox.stevearnett.com/module: http_auth_gated
 spec:
   entryPoints:
     - websecure
