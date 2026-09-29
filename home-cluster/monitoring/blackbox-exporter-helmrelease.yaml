@@ -60,3 +60,10 @@ spec:
           http:
             follow_redirects: true
             valid_status_codes: [200, 401, 403, 404]
+
+    # 30Mi peak with no requests declared.
+    resources:
+      requests:
+        memory: 32Mi
+      limits:
+        memory: 64Mi
