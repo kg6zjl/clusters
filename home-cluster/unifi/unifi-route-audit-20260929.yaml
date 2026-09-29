@@ -4,7 +4,7 @@ metadata:
   # Bump the suffix to run again; Job names are immutable. Delete this file when the
   # run is finished and Flux prunes the Job. Deliberately no ttlSecondsAfterFinished:
   # a self-deleting Job looks like a missing resource to Flux and re-runs forever.
-  name: unifi-client-audit-20260928
+  name: unifi-route-audit-20260929
   namespace: unifi
 spec:
   backoffLimit: 1
@@ -28,8 +28,9 @@ spec:
         - -c
         - |
           # Reads the gateway's policy-based routes and the client list with the read-only
-          # account, and prints a whitelisted subset. Never prints credentials, cookies or
-          # the CSRF token.
+          # account. Route objects are printed whole - a whitelist hid every field nobody
+          # had thought to ask for, which is how a route's own priority/order field would
+          # stay invisible. Never prints credentials, cookies or the CSRF token.
           import http.cookiejar, json, os, ssl, urllib.request
 
           BASE = "https://192.168.1.1"  # self-signed CN=unifi.local, so verification is off by design
@@ -56,6 +57,18 @@ spec:
               req = urllib.request.Request(BASE + path, headers={"X-CSRF-Token": csrf})
               return json.load(opener.open(req))
 
+          # Redaction is by key name, not by an allow-list: a routing field is never
+          # named like a credential, and a credential is never worth one log line.
+          SECRETISH = ("secret", "password", "passwd", "token", "pwd", "key", "credential", "x_passphrase")
+
+          def scrub(obj):
+              if isinstance(obj, dict):
+                  return {k: ("<redacted>" if any(s in k.lower() for s in SECRETISH) else scrub(v))
+                          for k, v in obj.items()}
+              if isinstance(obj, list):
+                  return [scrub(v) for v in obj]
+              return obj
+
           # v1 networkconf works on 10.6.106 and maps network_id -> name. The VPN client
           # is itself a network, which is why one is named "Express VPN".
           networks = {}
@@ -67,10 +80,6 @@ spec:
               print("networkconf ERROR", type(exc).__name__, getattr(exc, "code", ""))
 
           # Policy-based routes are v2, not classic: /rest/trafficroute returns HTTP 400.
-          ROUTE_KEEP = ("_id", "description", "enabled", "matching_target", "network_id",
-                        "next_hop", "kill_switch_enabled", "target_devices", "domains",
-                        "ip_addresses", "ip_ranges", "regions")
-
           routes = []
           for path in (
               "/proxy/network/v2/api/site/default/trafficroutes",
@@ -83,12 +92,17 @@ spec:
                   continue
               items = payload.get("data", []) if isinstance(payload, dict) else payload
               print(path, "items:", len(items))
-              routes.extend(items)
-              for r in items:
-                  row = {k: r[k] for k in ROUTE_KEEP if k in r}
+              for i, r in enumerate(items):
+                  routes.append(r)
+                  row = scrub(r)
+                  row["_list_index"] = i
                   if row.get("network_id") in networks:
                       row["network_name"] = networks[row["network_id"]]
-                  print("  ", json.dumps(row, default=str))
+                  print("  route[%d] %s" % (i, json.dumps(row, default=str, sort_keys=True)))
+
+          # The union of keys is printed separately: if the console gains a field that
+          # orders routes (priority, order, seq), it shows up here in one line.
+          print("route field names:", sorted({k for r in routes for k in r}))
 
           routed_macs = {
               d.get("client_mac")
@@ -97,6 +111,10 @@ spec:
               if d.get("client_mac")
           }
           print("routed client MACs:", sorted(routed_macs))
+
+          def route_names_for(mac):
+              return [r.get("description") or r.get("_id") for r in routes
+                      if mac in {d.get("client_mac") for d in (r.get("target_devices") or [])}]
 
           # The node/beast addresses as the cluster reports them, so a renamed client is
           # still found by address.
@@ -123,7 +141,7 @@ spec:
                   row = {k: c[k] for k in CLIENT_KEEP if k in c}
                   if row.get("network_id") in networks:
                       row["network_name"] = networks[row["network_id"]]
-                  row["in_policy_route"] = c.get("mac") in routed_macs
+                  row["policy_routes"] = route_names_for(c.get("mac"))
                   print("  ", json.dumps(row, default=str))
               if label == "known" and not hits:
                   # Nothing matched by name or address: dump the active list so the names in

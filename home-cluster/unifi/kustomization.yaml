@@ -7,4 +7,4 @@ resources:
   - unpoller-deployment.yaml
   - unpoller-service.yaml
   - unpoller-servicemonitor.yaml
-  - unifi-client-audit-20260928.yaml
+  - unifi-route-audit-20260929.yaml
