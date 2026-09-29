@@ -43,6 +43,11 @@ spec:
       metricsVulnIdEnabled: true
       infraAssessmentScannerEnabled: false
     trivy:
+      # Only report what gets triaged. The full CVE list on a fat base image produces a
+      # report larger than both the apiserver's 3 MiB request cap and the trivy
+      # client-server 2 MiB gRPC message cap, so those scans fail outright instead of
+      # reporting anything at all.
+      severity: "HIGH,CRITICAL"
       ignoreUnfixed: true
       timeout: "5m0s"
       resources:
