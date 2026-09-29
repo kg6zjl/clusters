@@ -5,6 +5,8 @@ metadata:
   namespace: adsb
   labels:
     alert-on-down: "true"
+  annotations:
+    secret.reloader.stakater.com/reload: "adsb-secrets"
 spec:
   strategy:
     type: Recreate

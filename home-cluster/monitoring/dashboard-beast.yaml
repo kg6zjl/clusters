@@ -82,7 +82,7 @@ data:
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 0
+            "y": 16
           },
           "id": 1,
           "options": {
@@ -177,7 +177,7 @@ data:
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 0
+            "y": 16
           },
           "id": 2,
           "options": {
@@ -393,7 +393,7 @@ data:
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 16
+            "y": 24
           },
           "id": 4,
           "options": {
@@ -461,7 +461,7 @@ data:
             "h": 8,
             "w": 6,
             "x": 12,
-            "y": 16
+            "y": 24
           },
           "id": 5,
           "options": {
@@ -518,7 +518,7 @@ data:
             "h": 8,
             "w": 6,
             "x": 18,
-            "y": 16
+            "y": 24
           },
           "id": 6,
           "options": {
@@ -546,6 +546,93 @@ data:
           ],
           "title": "GPU Power Draw",
           "type": "gauge"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "fillOpacity": 70,
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "lineWidth": 0,
+                "spanNulls": false
+              },
+              "mappings": [
+                {
+                  "options": {
+                    "0": {
+                      "color": "red",
+                      "index": 1,
+                      "text": "OFF"
+                    },
+                    "1": {
+                      "color": "green",
+                      "index": 0,
+                      "text": "ON"
+                    }
+                  },
+                  "type": "value"
+                }
+              ],
+              "max": 1,
+              "min": 0,
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "unit": "short"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 24,
+            "x": 0,
+            "y": 0
+          },
+          "id": 7,
+          "options": {
+            "legend": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "displayMode": "table",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "none"
+            }
+          },
+          "pluginVersion": "9.5.3",
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+              },
+              "expr": "beast_service_active",
+              "legendFormat": "{{service}}",
+              "refId": "A"
+            }
+          ],
+          "title": "GPU priority (ComfyUI vs llama)",
+          "type": "state-timeline"
         }
       ],
       "refresh": "30s",

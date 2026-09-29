@@ -4,3 +4,4 @@ resources:
   - namespace.yaml
   - longhorn-helmrepository.yaml
   - longhorn-helmrelease.yaml
+  - network-policy-metrics.yaml

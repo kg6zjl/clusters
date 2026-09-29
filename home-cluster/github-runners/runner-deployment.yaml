@@ -13,36 +13,32 @@ spec:
         - self-hosted
         - kubernetes
       image: summerwind/actions-runner:v2.337.0-ubuntu-24.04
+      # init: only makes the node-local cache writable by the non-root runner. It must stay free of
+      # network I/O -- it runs on every pod, and a pod that cannot finish init cannot register.
+      # The cache itself (trufflehog, used by the Secret Scan job) is warmed per node by the
+      # runner-toolcache-warmer DaemonSet, whose lifetime does not end with the job.
       initContainers:
-        - name: install-tools
+        - name: toolcache-perms
           image: alpine:3.24
-          command:
-            - sh
-            - -c
-            - |
-              apk add --no-cache curl bash python3 py3-pip
-              mkdir -p /opt/tools/bin /usr/local/bin
-              curl -sL https://dl.k8s.io/release/$(curl -sL https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl -o /usr/local/bin/kubectl
-              chmod +x /usr/local/bin/kubectl
-              curl -sL https://get.helmfile.dev | sh
-              mv helmfile /opt/tools/bin/
-              pip3 install yamllint || true
+          command: ["sh", "-c", "chmod 1777 /opt/hostedtoolcache"]
           volumeMounts:
-            - name: tools
-              mountPath: /opt/tools/bin
-            - name: usr-local
-              mountPath: /usr/local/bin
-          securityContext:
-            allowPrivilegeEscalation: false
-            capabilities:
-              drop: ["ALL"]
+            - name: toolcache
+              mountPath: /opt/hostedtoolcache
       containers:
         - name: runner
+          # Available to every job step, so a failed workflow can post its own notification.
+          # The URL comes from 1Password via ESO, never from a GitHub secret.
+          env:
+            - name: CI_DISCORD_WEBHOOK
+              valueFrom:
+                secretKeyRef:
+                  name: ci-notify-discord
+                  key: CI_DISCORD_WEBHOOK
           volumeMounts:
-            - name: tools
-              mountPath: /opt/tools/bin
+            - name: toolcache
+              mountPath: /opt/hostedtoolcache
       volumes:
-        - name: tools
-          emptyDir: {}
-        - name: usr-local
-          emptyDir: {}
+        - name: toolcache
+          hostPath:
+            path: /var/lib/arc-toolcache
+            type: DirectoryOrCreate

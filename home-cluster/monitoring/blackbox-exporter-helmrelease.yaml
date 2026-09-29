@@ -13,6 +13,19 @@ spec:
         kind: HelmRepository
         name: prometheus-community
         namespace: flux-system
+  postRenderers:
+    - kustomize:
+        patches:
+          - target:
+              kind: Deployment
+              name: blackbox-exporter-prometheus-blackbox-exporter
+            patch: |
+              apiVersion: apps/v1
+              kind: Deployment
+              metadata:
+                name: blackbox-exporter-prometheus-blackbox-exporter
+                annotations:
+                  configmap.reloader.stakater.com/reload: "blackbox-exporter-prometheus-blackbox-exporter"
   values:
     config:
       modules:

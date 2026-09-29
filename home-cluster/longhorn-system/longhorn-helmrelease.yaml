@@ -57,11 +57,16 @@ spec:
       # No need to phone home to the Longhorn upgrade responder from a home lab.
       upgradeChecker: false
     persistence:
-      # Keep microk8s-hostpath as the cluster default StorageClass. New PVCs
-      # without an explicit storageClassName must NOT silently switch backend.
-      defaultClass: false
-      # Replica count for the `longhorn` StorageClass that is created (it stays
-      # non-default). Must match defaultSettings.defaultReplicaCount.
+      # The cluster default now. The rule during migration was "flip this last", but five
+      # PVC manifests omit storageClassName entirely (adsb x3, meshmonitor-data,
+      # netalertx-data, nodered-data), so re-creating any of them lands on node-local
+      # hostpath storage today. Replica counts are already 2, so a new volume costs 2x its
+      # size, not the chart's default 3x.
+      # microk8s-hostpath keeps its own default annotation - it is a MicroK8s addon object,
+      # not ours to clear. With two defaults the newest StorageClass wins, which is this one.
+      defaultClass: true
+      # Replica count for the `longhorn` StorageClass. Must match
+      # defaultSettings.defaultReplicaCount.
       defaultClassReplicaCount: 2
     # Exclude pi4-microk8s (aarch64, being decommissioned) from Longhorn.
     # nodeSelector is equality-only, so it cannot express "hostname NotIn".
@@ -76,3 +81,14 @@ spec:
     longhornUI:
       nodeSelector:
         kubernetes.io/arch: amd64
+    metrics:
+      serviceMonitor:
+        # Off by default. The chart's template carries no selector labels, but this Prometheus
+        # selects on serviceMonitorSelector release=kube-prometheus-stack - which every scraped
+        # ServiceMonitor here has. Without additionalLabels the ServiceMonitor is created and
+        # Prometheus ignores it: metrics "enabled", still zero series.
+        enabled: true
+        additionalLabels:
+          release: kube-prometheus-stack
+        # Longhorn's series count is small; 30s matches the rest of the cluster.
+        interval: 30s

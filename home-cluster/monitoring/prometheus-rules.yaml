@@ -175,3 +175,116 @@ spec:
       annotations:
         summary: "PROD backup stale: {{ $labels.entity }}{{ $labels.cronjob }} in {{ $labels.namespace }}"
         description: "No successful backup in over 30 hours, or the metric reporting it has gone away. home-assistant uploads to the NAS over SFTP (schedule ~24h); meshmonitor writes a nightly tarball to the NAS at 03:30."
+  # The apiserver's dqlite (SQLite) datastore intermittently refuses writes -
+  # SQLITE_BUSY, surfaced to clients as HTTP 500 and to the controllers' logs as
+  # "database is locked". Those individual failures retry and heal, so they are
+  # excluded from the Flux Discord alert (flux-notifications/alert.yaml,
+  # exclusionList); what is worth being told about is the datastore staying sick, and
+  # that is what this rule watches. The 5xx rate has to hold for 20 minutes before
+  # anything is sent.
+  #
+  # Calibration, measured on this Prometheus over 10 days of 5m-resolution samples of
+  # sum(rate(apiserver_request_total{job="apiserver",code=~"5.."}[5m])): median
+  # ~0.007/s, p99 0.467/s, max 0.512/s, and only 5 of 2880 windows above 0.1/s. The
+  # bursts that only self-heal do not trip it (2026-09-27 06:14 and 06:29, the two
+  # events behind the Discord noise, peaked at 0.037/s and 0.022/s). The failure that
+  # started 06:39 that day held 0.5-1.07/s for over half an hour and does trip it.
+  #
+  # job="apiserver" is required: the same series are scraped a second time under
+  # job="kubelet" (per node, identically), so summing across jobs double counts.
+  - name: control-plane-writes
+    rules:
+    - alert: ApiserverWriteErrorsSustained
+      expr: sum(rate(apiserver_request_total{job="apiserver", code=~"5.."}[10m])) > 0.1
+      for: 20m
+      labels:
+        severity: warning
+      annotations:
+        summary: "kube-apiserver is returning sustained 5xx ({{ printf \"%.2f\" $value }}/s)"
+        description: "Over 0.1 failed API requests per second for 20 minutes - too long to be the self-healing datastore contention that retries within a minute. Check which resource is failing (sum by (verb,resource) (rate(apiserver_request_total{code=~\"5..\"}[10m]))), the control-plane nodes' k8s-dqlite logs, and the controllers' own logs for the matching write path (kubectl -n flux-system logs deploy/kustomize-controller --since=30m | grep 'database is locked')."
+  # An empty pool leaves no kube_pod_info series at all, so count(...) == 0 returns no samples and
+  # stays silent - absent_over_time is load-bearing, verified against the 2026-09-27 outage
+  # (1 at 10:00Z while count(...) was empty). The 10m window is the debounce; no `for` on top.
+  - name: ci-runners
+    rules:
+    - alert: CIRunnerPoolEmpty
+      expr: absent_over_time(kube_pod_info{namespace="github-runners",created_by_kind="Runner"}[10m])
+      labels:
+        severity: critical
+      annotations:
+        summary: "CI runner pool is empty - no PR on this repo can merge"
+        description: "No github-runner pods have existed for over 10 minutes. Lint, Validate and Secret Scan are required status checks on main with enforce_admins enabled, so every PR is now frozen - including a PR that would fix it. The pool normally holds at least the HorizontalRunnerAutoscaler floor of 4 (github-runner-autoscaler, min 4 / max 12). Check the controller in arc-systems (arc-operator-actions-runner-controller) and its logs for registration errors. Do NOT add a second ARC install as the fix: the chart hardcodes the webhook name, so two installs veto each other - that is exactly what caused the 2026-09-27 outage."
+        runbook_url: "https://github.com/kg6zjl/clusters/settings/variables/actions"
+  # A node can fail in ways the severity="critical" route never sees. The upstream node
+  # alerts (KubeNodeNotReady, KubeNodeUnreachable, KubeNodeReadinessFlapping) all ship as
+  # warning, and a deleted node drops its series rather than going false - so a count is the
+  # only signal that catches removal. Both rules here are routed to ntfy by alertname in the
+  # alertmanager config; this group only decides when they fire.
+  - name: node-health
+    rules:
+    # 3 is the current cluster size (thinkcentre01/02/03). Update it when the cluster grows:
+    # the point is to catch a node object disappearing, which no up{} or condition alert can
+    # see, so it has to be compared against a number that does not come from the cluster.
+    - alert: NodeMissingFromCluster
+      expr: count(kube_node_info) < 3
+      for: 20m
+      labels:
+        severity: critical
+      annotations:
+        summary: "A node has left the cluster ({{ $value }} present, 3 expected)"
+        description: "Fewer node objects than the known cluster size for 20 minutes. A deleted or rebuilt node vanishes from kube_node_info rather than reporting NotReady, so KubeNodeNotReady cannot see it. Check kubectl get nodes, and whether the node is mid-rebuild; if the cluster legitimately shrank, update the constant in this rule."
+        runbook_url: "https://headlamp.kube.stevearnett.com/c/in-cluster/nodes"
+    # node-exporter is a DaemonSet, one per node, plus the two external hosts scraped as
+    # job=beast and job=ugreen-dxp2800 (the NAS). A host whose exporter stops being
+    # scrapeable is the "not reporting" case: it can be perfectly healthy while blind, and
+    # while it is blind none of its disk, memory or filesystem alerts can fire.
+    - alert: NodeExporterDown
+      expr: up{job=~"node-exporter|beast|ugreen-dxp2800"} == 0
+      for: 10m
+      labels:
+        severity: critical
+      annotations:
+        summary: "Node exporter not reporting on {{ $labels.instance }}"
+        description: "The exporter on {{ $labels.instance }} (job={{ $labels.job }}) has been unscrapeable for 10 minutes. Disk and memory alerts for this host cannot fire while it is blind, so this alert reports that the monitoring is broken rather than the host."
+        runbook_url: "https://prometheus.kube.stevearnett.com/targets"
+  # "A Flux resource is not Ready" is a different question from "a Flux reconcile just
+  # failed". Flux emits an event per *attempt*, so an event-driven alert can never express
+  # duration; kube-state-metrics exports gotk_resource_info{ready="True|False"} read from the
+  # resource's own status, which can. The two are complementary and both stay: the Alert in
+  # flux-notifications/ fires on the first failed attempt (minus the datastore-write class,
+  # which self-heals), this fires only if the resource is still not Ready a quarter of an
+  # hour later - i.e. when a reconcile is genuinely stuck rather than retrying.
+  #
+  # Depends on the customResourceState block in kube-prometheus-stack-helmrelease.yaml. That
+  # dependency is stated twice on purpose: the second rule exists because a rule whose metric
+  # has never existed is silent, and "silent" is indistinguishable from "nothing is broken".
+  - name: flux-resources
+    rules:
+    - alert: FluxResourceNotReady
+      # Suspended resources are deliberately included: Flux does not flip the Ready
+      # condition when a resource is suspended, so a suspended resource stuck at
+      # Ready=False is still a real problem, and filtering on `suspended` would hide it.
+      expr: gotk_resource_info{ready="False"} == 1
+      for: 15m
+      labels:
+        severity: warning
+      annotations:
+        summary: "{{ $labels.customresource_kind }} {{ $labels.exported_namespace }}/{{ $labels.name }} not Ready for 15m"
+        description: "kube-state-metrics has reported {{ $labels.customresource_kind }} {{ $labels.exported_namespace }}/{{ $labels.name }} ({{ $labels.customresource_group }}) with Ready=False continuously for 15 minutes, so this is not a transient reconcile error that healed on retry. Check its status and message with `flux get {{ $labels.customresource_kind | toLower }} -n {{ $labels.exported_namespace }} {{ $labels.name }}`."
+    - alert: FluxResourceMetricsMissing
+      # absent() rather than a staleness check because gotk_resource_info never existed here
+      # before it was enabled, and a series that has never existed is not "missing recently"
+      # - there is nothing to measure a gap against. Gated on the producer so that a
+      # kube-state-metrics outage, which has its own alert, does not also accuse this config.
+      # Expected to be silent within ~30m of the kube-prometheus-stack change landing; if it
+      # fires, the customResourceState config is not being read and FluxResourceNotReady is
+      # blind, not healthy.
+      expr: absent(gotk_resource_info) and on() (up{job="kube-state-metrics"} == 1)
+      for: 30m
+      labels:
+        severity: warning
+      annotations:
+        summary: "gotk_resource_info is absent - FluxResourceNotReady cannot fire"
+        description: "kube-state-metrics is up but is not exporting gotk_resource_info, so no Flux resource going not-Ready will alert from here. Either the customResourceState config in kube-prometheus-stack-helmrelease.yaml is no longer being read (check the kube-state-metrics pod's log for custom resource state errors) or rbac.extraRules no longer grants list/watch on the flux CRs."
+        runbook_url: "https://prometheus.kube.stevearnett.com/targets"
+

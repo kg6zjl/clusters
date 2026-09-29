@@ -6,16 +6,25 @@ on:
       - main
     paths:
       - 'home-cluster/**'
+      - 'node-config/**'
       - 'renovate.json'
       - '.github/workflows/**'
       - '.gitleaks.toml'
       - '.pre-commit-config.yaml'
       - '.githooks/**'
 
+env:
+  # Single pin for the trufflehog CLI, shared by this workflow's fallback and the
+  # runner-toolcache-warmer DaemonSet. Renovate keeps both in step (see customManagers in
+  # renovate.json); a rename here breaks that, so keep the token intact.
+  # renovate: datasource=github-releases depName=trufflesecurity/trufflehog
+  TRUFFLEHOG_VERSION: "3.97.9"
+
 jobs:
   lint:
     name: Lint
-    runs-on: self-hosted
+    runs-on: ${{ vars.CI_RUNNER || 'self-hosted' }}  # CI_RUNNER repo variable overrides this (ubuntu-latest = break-glass)
+    timeout-minutes: 20
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -33,7 +42,8 @@ jobs:
 
   validate:
     name: Validate
-    runs-on: self-hosted
+    runs-on: ${{ vars.CI_RUNNER || 'self-hosted' }}  # CI_RUNNER repo variable overrides this (ubuntu-latest = break-glass)
+    timeout-minutes: 10
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -51,28 +61,87 @@ jobs:
 
   secrets:
     name: Secret Scan
-    runs-on: self-hosted
+    runs-on: ${{ vars.CI_RUNNER || 'self-hosted' }}  # CI_RUNNER repo variable overrides this (ubuntu-latest = break-glass)
+    timeout-minutes: 15
     steps:
       - name: Checkout
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
-      - name: Run Trufflehog
-        uses: trufflesecurity/trufflehog@main
-        with:
-          path: ./
-          base: ${{ github.event.repository.default_branch }}
-          head: HEAD
-          extra_args: --only-verified
-        continue-on-error: true
-
-      - name: Check Trufflehog result
-        if: ${{ github.event_name == 'pull_request' }}
+      - name: Scan this change with the node-local trufflehog
+        # The old action passed base "main", which does not resolve in a local clone: trufflehog
+        # errored, scanned 0 chunks, and the action still reported success. Pass explicit SHAs,
+        # and refuse to pass unless the scan actually read commits.
         run: |
-          if [ -n "$(git log --oneline ${{ github.event.repository.default_branch }}..HEAD)" ]; then
-            echo "New commits found, TruffleHog scan is required"
-            exit 1
-          else
-            echo "No new commits in PR, skipping TruffleHog"
+          set -euo pipefail
+          REPO="$PWD"
+          TH=/opt/hostedtoolcache/tools/trufflehog
+          if [ ! -x "$TH" ]; then
+            # Runner pods from a pre-warmup template have an empty cache; prefer a pinned,
+            # checksum-verified local copy over the per-job image pull either way.
+            echo "No cached trufflehog on this runner - fetching pinned copy"
+            V="${TRUFFLEHOG_VERSION:?TRUFFLEHOG_VERSION is not set}"
+            mkdir -p "$RUNNER_TEMP/th"
+            cd "$RUNNER_TEMP/th"
+            curl -sSfLO "https://github.com/trufflesecurity/trufflehog/releases/download/v${V}/trufflehog_${V}_linux_amd64.tar.gz"
+            curl -sSfLO "https://github.com/trufflesecurity/trufflehog/releases/download/v${V}/trufflehog_${V}_checksums.txt"
+            sha256sum -c --ignore-missing "trufflehog_${V}_checksums.txt"
+            tar -xzf "trufflehog_${V}_linux_amd64.tar.gz" trufflehog
+            TH="$RUNNER_TEMP/th/trufflehog"
           fi
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            BASE="${{ github.event.pull_request.base.sha }}"
+            HEAD="${{ github.event.pull_request.head.sha }}"
+          else
+            BASE="${{ github.event.before }}"
+            HEAD="${{ github.sha }}"
+          fi
+          ARGS=(git "file://$REPO" --branch "$HEAD" --only-verified --fail)
+          if printf '%s' "$BASE" | grep -qE '^[0-9a-f]{40}$'; then
+            ARGS+=(--since-commit "$BASE")
+          else
+            echo "No usable base commit ($BASE) - scanning the full history of $HEAD"
+          fi
+          # --no-update: the node-local cache binary is root-owned in a root-owned directory, so
+          # trufflehog's self-updater cannot replace it, fails the move and logFatals the whole
+          # run - a required check dying for something unrelated to the diff. A secret gate has
+          # no business fetching a newer release mid-scan anyway.
+          echo "trufflehog --no-update ${ARGS[*]}"
+          "$TH" --no-update "${ARGS[@]}" 2>&1 | tee "$RUNNER_TEMP/trufflehog.log"
+          if ! grep -qE '"chunks": [1-9]' "$RUNNER_TEMP/trufflehog.log"; then
+            echo "::error::TruffleHog scanned 0 chunks - this gate would pass without scanning anything"
+            exit 1
+          fi
+
+  notify:
+    name: Notify failure
+    # Only fires when something failed, and only on PRs - the case that currently arrives as
+    # GitHub email. Posts to the same Discord channel Alertmanager and Flux already use.
+    needs: [lint, validate, secrets]
+    if: ${{ always() && failure() }}
+    runs-on: ${{ vars.CI_RUNNER || 'self-hosted' }}  # CI_RUNNER repo variable overrides this (ubuntu-latest = break-glass)
+    timeout-minutes: 5
+    steps:
+      - name: Post failure to Discord
+        run: |
+          set -euo pipefail
+          if [ -z "${CI_DISCORD_WEBHOOK:-}" ]; then
+            echo "::warning::CI_DISCORD_WEBHOOK is unset on this runner; no notification sent"
+            exit 0
+          fi
+          # Branch names are attacker-adjacent text going into a JSON string: keep only
+          # characters that cannot terminate it.
+          BRANCH=$(printf '%s' '${{ github.head_ref }}' | tr -cd 'A-Za-z0-9._/-')
+          FAILED=""
+          [ "${{ needs.lint.result }}" = "failure" ] && FAILED="$FAILED lint"
+          [ "${{ needs.validate.result }}" = "failure" ] && FAILED="$FAILED validate"
+          [ "${{ needs.secrets.result }}" = "failure" ] && FAILED="$FAILED secret-scan"
+          [ -n "$FAILED" ] || FAILED=" unknown"
+          printf '{"content": "**CI failed** `%s`: failed%s\\n%s"}' \
+            "$BRANCH" "$FAILED" \
+            '${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}' \
+            > "$RUNNER_TEMP/discord.json"
+          curl -sS --fail --max-time 20 -X POST -H 'Content-Type: application/json' \
+            --data-binary @"$RUNNER_TEMP/discord.json" "$CI_DISCORD_WEBHOOK" > /dev/null
+          echo "failure notification sent"

@@ -9,10 +9,10 @@ metadata:
     alert-on-down: "true"
   annotations:
     # Roll the pod when any of the git-managed config that only takes effect at
-    # container start changes: the initContainer re-seeds config.yaml and the
-    # skill tree from these ConfigMaps, so a merge alone is otherwise a no-op
-    # until the next unrelated restart. Reloader watches for changes.
-    configmap.reloader.stakater.com/reload: "hermes-config,hermes-skills,hermes-soul"
+    # container start changes: the initContainer re-seeds config.yaml from this
+    # ConfigMap and pulls the skill tree from kg6zjl/skills, so a merge alone is
+    # otherwise a no-op until the next unrelated restart. Reloader watches for changes.
+    configmap.reloader.stakater.com/reload: "hermes-config,hermes-soul"
     secret.reloader.stakater.com/reload: "hermes-agent-secrets"
 spec:
   replicas: 1
@@ -34,81 +34,145 @@ spec:
       initContainers:
       - name: install-tools
         image: python:3.13-slim
+        env:
+        # Keeps apt off the dialog frontend it cannot drive without a tty, which
+        # otherwise fills the init log with debconf "unable to initialize" noise.
+        - name: DEBIAN_FRONTEND
+          value: noninteractive
         command:
         - sh
         - -c
         - |
-          set -e
-          apt-get update -qq && apt-get install -y -qq --no-install-recommends curl jq >/dev/null
-          mkdir -p /opt/data/.local/bin /opt/data/.local/pylib
-          # Helm
-          curl -fsSL https://get.helm.sh/helm-v3.16.4-linux-amd64.tar.gz | tar xz -C /tmp && \
-            mv /tmp/linux-amd64/helm /opt/data/.local/bin/ && rm -rf /tmp/linux-amd64
-          # kubectl (pin to server minor)
-          curl -fsSL https://dl.k8s.io/release/v1.35.6/bin/linux/amd64/kubectl -o /opt/data/.local/bin/kubectl && \
-            chmod +x /opt/data/.local/bin/kubectl
-          # kustomize (matches CI: v5.4.2)
-          curl -fsSL "https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2Fv5.4.2/kustomize_v5.4.2_linux_amd64.tar.gz" | \
-            tar xz -C /tmp && mv /tmp/kustomize /opt/data/.local/bin/
-          # GitHub CLI (matches runner Dockerfile: v2.47.0)
-          curl -fsSL https://github.com/cli/cli/releases/download/v2.47.0/gh_2.47.0_linux_amd64.tar.gz | \
-            tar xz -C /tmp && mv /tmp/gh_2.47.0_linux_amd64/bin/gh /opt/data/.local/bin/ && rm -rf /tmp/gh_2.47.0_linux_amd64
-          # gitleaks (matches pre-commit: v8.18.2)
-          curl -fsSL https://github.com/gitleaks/gitleaks/releases/download/v8.18.2/gitleaks_8.18.2_linux_x64.tar.gz | \
-            tar xz -C /opt/data/.local/bin gitleaks
-          # trufflehog (matches CI action)
-          curl -sSfL https://raw.githubusercontent.com/trufflesecurity/trufflehog/main/scripts/install.sh | sh -s -- -b /opt/data/.local/bin
-          # yq
-          curl -fsSL https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -o /opt/data/.local/bin/yq && \
-            chmod +x /opt/data/.local/bin/yq
-          # go-task (Taskfile)
-          sh -c "$(curl --location https://taskfile.dev/install.sh)" -- -d -b /opt/data/.local/bin
-          # yamllint into a glibc-compatible site-packages dir (PYTHONPATH in main container)
-          pip3 install --quiet --target=/opt/data/.local/pylib yamllint pre-commit
-          # PATH wrapper for pre-commit (—target puts the console script in pylib/bin)
-          printf '#!/bin/sh\nexec python3 -m pre_commit "$@"\n' > /opt/data/.local/bin/pre-commit
-          chmod +x /opt/data/.local/bin/*
-          # Materialize the full skill tree from the git-managed hermes-skills
-          # ConfigMap into $HERMES_HOME/skills (the live tree the gateway loads
-          # at startup). ConfigMap keys cannot contain '/', so keys encode the
-          # path with '__' as the separator:
-          #   <cat>__<skill>.md                     -> <cat>/<skill>/SKILL.md
-          #   <skill>.md                            -> <skill>/SKILL.md (categoryless)
-          #   <cat>__<skill>__<dir>__<file.ext>     -> <cat>/<skill>/<dir>/<file.ext>
-          # The extension is preserved on supporting files, so the trailing '.md'
-          # above is only a marker on SKILL.md keys. Git is the source of truth:
-          # these copies override the image-bundled skills, and any runtime edit
-          # is reset on next pod start.
-          mkdir -p /opt/data/skills
-          for f in /skills/*; do
-            [ -f "$f" ] || continue
-            key="$(basename "$f")"
-            case "$key" in
-              *__*) ;;
-              *)  # categoryless skill
-                  name="$(basename "$key" .md)"
-                  dest="/opt/data/skills/$name/SKILL.md"
-                  mkdir -p "$(dirname "$dest")"
-                  cp "$f" "$dest" 2>/dev/null || true
-                  continue
-                  ;;
-            esac
-            cat="${key%%__*}"
-            rest="${key#*__}"
-            case "$rest" in
-              *__*)  # supporting file: nested path, extension kept verbatim
-                  skill="${rest%%__*}"
-                  nested="$(printf '%s' "${rest#*__}" | sed 's|__|/|g')"
-                  dest="/opt/data/skills/$cat/$skill/$nested"
-                  ;;
-              *)     # skill: the trailing .md was a marker for SKILL.md
-                  skill="$(basename "$rest" .md)"
-                  dest="/opt/data/skills/$cat/$skill/SKILL.md"
-                  ;;
-            esac
-            mkdir -p "$(dirname "$dest")"
-            cp "$f" "$dest" 2>/dev/null || true
-          done
+          set -eu
+          BIN=/opt/data/.local/bin
+          LIB=/opt/data/.local/pylib
+          # Bump when a pinned version below changes, or when a tool is added to or
+          # removed from the expected set, to force exactly one re-install.
+          TOOLS_REV=1
+
+          mkdir -p "$BIN" "$LIB"
+
+          # Every tool below lands on the 'data' PVC, so a restart has no reason to
+          # fetch it again. The stamp short-circuits the whole install block when the
+          # toolchain is already there. Without it every pod start re-downloaded ten
+          # tools SERIALLY: ~6m wall clock, which is past the Flux health-check
+          # deadline (see flux-system/syncs/ai-services-kustomization.yaml) and long
+          # enough for IngressDown to fire on hermes.kube.stevearnett.com every rollout.
+          # The stamp is checked per-binary as well as by revision, so a tool deleted
+          # or truncated on the volume still forces a repair.
+          tools_present() {
+            [ "$(cat "$BIN/.tools-rev" 2>/dev/null || true)" = "$TOOLS_REV" ] || return 1
+            for t in helm kubectl kustomize gh gitleaks trufflehog yq task jq pre-commit; do
+              [ -x "$BIN/$t" ] || return 1
+            done
+            return 0
+          }
+
+          if tools_present; then
+            echo "tools: rev $TOOLS_REV already on the volume, skipping install"
+          else
+            echo "tools: installing rev $TOOLS_REV"
+            apt-get update -qq
+            apt-get install -y -qq --no-install-recommends ca-certificates curl >/dev/null
+
+            # One subshell per tool, all in flight at once. The set is I/O bound on
+            # remote fetches, so serial execution is what made even the cold path slow.
+            #
+            # Every fetcher downloads to its own scratch dir FIRST and only then moves
+            # the result into $BIN. Two reasons, both learned the hard way:
+            #   * `curl … | tar …` reports tar's exit status, not curl's, so a failed
+            #     download looked like success and the run stamped a half-populated
+            #     toolchain that the stamp check then trusted forever.
+            #   * untarring straight into $BIN leaves a truncated file behind on
+            #     failure, which passes `[ -x ]` on the next start.
+            # helm
+            fetch_helm()      { d=$(mktemp -d) && \
+                                  curl -fsSL -o "$d/dl.tgz" https://get.helm.sh/helm-v3.16.4-linux-amd64.tar.gz && \
+                                  tar xzf "$d/dl.tgz" -C "$d" && mv "$d"/linux-amd64/helm "$BIN/" && rm -rf "$d"; }
+            # kubectl (pin to server minor)
+            fetch_kubectl()   { curl -fsSL https://dl.k8s.io/release/v1.35.6/bin/linux/amd64/kubectl -o "$BIN/kubectl" && chmod +x "$BIN/kubectl"; }
+            # kustomize (matches CI: v5.4.2)
+            fetch_kustomize() { d=$(mktemp -d) && \
+                                  curl -fsSL -o "$d/dl.tgz" \
+                                    "https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2Fv5.4.2/kustomize_v5.4.2_linux_amd64.tar.gz" && \
+                                  tar xzf "$d/dl.tgz" -C "$d" && mv "$d"/kustomize "$BIN/" && rm -rf "$d"; }
+            # GitHub CLI (matches runner Dockerfile: v2.47.0)
+            fetch_gh()        { d=$(mktemp -d) && \
+                                  curl -fsSL -o "$d/dl.tgz" https://github.com/cli/cli/releases/download/v2.47.0/gh_2.47.0_linux_amd64.tar.gz && \
+                                  tar xzf "$d/dl.tgz" -C "$d" && mv "$d"/gh_2.47.0_linux_amd64/bin/gh "$BIN/" && rm -rf "$d"; }
+            # gitleaks (matches pre-commit: v8.18.2)
+            fetch_gitleaks()  { d=$(mktemp -d) && \
+                                  curl -fsSL -o "$d/dl.tgz" \
+                                    https://github.com/gitleaks/gitleaks/releases/download/v8.18.2/gitleaks_8.18.2_linux_x64.tar.gz && \
+                                  tar xzf "$d/dl.tgz" -C "$d" gitleaks && mv "$d"/gitleaks "$BIN/" && rm -rf "$d"; }
+            # trufflehog (matches CI action)
+            fetch_trufflehog(){ d=$(mktemp -d) && \
+                                  curl -sSfL -o "$d/install.sh" https://raw.githubusercontent.com/trufflesecurity/trufflehog/main/scripts/install.sh && \
+                                  sh -s -- -b "$BIN" < "$d/install.sh" && rm -rf "$d"; }
+            # yq
+            fetch_yq()        { curl -fsSL https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -o "$BIN/yq" && chmod +x "$BIN/yq"; }
+            # jq: version pinned rather than /latest because the tag is immutable and a
+            # surprise major bump should not land inside a pod start.
+            fetch_jq()        { curl -fsSL https://github.com/jqlang/jq/releases/download/jq-1.7.1/jq-linux-amd64 -o "$BIN/jq" && chmod +x "$BIN/jq"; }
+            # go-task (Taskfile)
+            fetch_task()      { d=$(mktemp -d) && curl -fsSL -o "$d/install.sh" https://taskfile.dev/install.sh && sh -s -- -d -b "$BIN" < "$d/install.sh" && rm -rf "$d"; }
+            # yamllint into a glibc-compatible site-packages dir (PYTHONPATH in main container)
+            fetch_pylib()     { pip3 install --quiet --target="$LIB" yamllint pre-commit; }
+
+            pids=""
+            for fn in fetch_helm fetch_kubectl fetch_kustomize fetch_gh fetch_gitleaks \
+                      fetch_trufflehog fetch_yq fetch_jq fetch_task fetch_pylib; do
+              "$fn" &
+              pids="$pids $!"
+            done
+            # `set -e` does not fire for a background job, and a bare `wait` only
+            # reports the last one. Wait on each PID so a single failed download
+            # fails the init instead of leaving a half-populated toolchain behind.
+            rc=0
+            for p in $pids; do
+              wait "$p" || rc=1
+            done
+            [ "$rc" -eq 0 ] || { echo "tools: at least one download failed" >&2; exit 1; }
+
+            # PATH wrapper for pre-commit (--target puts the console script in pylib/bin)
+            printf '#!/bin/sh\nexec python3 -m pre_commit "$@"\n' > "$BIN/pre-commit"
+            chmod +x "$BIN"/*
+            printf '%s\n' "$TOOLS_REV" > "$BIN/.tools-rev"
+          fi
+          # Skills come from kg6zjl/skills, which is the source of truth. The ConfigMap
+          # delivery is retired: its keys were hand-maintained, so anything not listed
+          # silently never shipped, and it could not propagate a deletion.
+          # The branch tarball is fetched with the read token already mounted for the main
+          # container (this image has no git). /opt/data/skills also holds image-bundled
+          # skills that are not in the repo, so removals are limited to the paths listed in
+          # .repo_delivered by the previous start, which never removes a bundled skill.
+          # A fetch failure with a tree already on the PVC warns and continues: an
+          # unreachable GitHub must not stop the agent from booting.
+          if curl -fsSL -m 60 -H "Authorization: Bearer $(cat /etc/hermes/github-token)" \
+              https://codeload.github.com/kg6zjl/skills/tar.gz/refs/heads/main -o /tmp/skills.tgz; then
+            rm -rf /tmp/skills-repo
+            mkdir -p /tmp/skills-repo
+            tar xzf /tmp/skills.tgz -C /tmp/skills-repo --strip-components=1
+            if cd /tmp/skills-repo/skills; then
+              find . -type f | sed 's|^\./||' | sort > /tmp/skills-delivered.txt
+              while read -r rel; do
+                mkdir -p "/opt/data/skills/$(dirname "$rel")"
+                cp "$rel" "/opt/data/skills/$rel"
+              done < /tmp/skills-delivered.txt
+              if [ -f /opt/data/skills/.repo_delivered ]; then
+                comm -23 /opt/data/skills/.repo_delivered /tmp/skills-delivered.txt | while read -r rel; do
+                  rm -f "/opt/data/skills/$rel"
+                done
+              fi
+              cp /tmp/skills-delivered.txt /opt/data/skills/.repo_delivered
+              echo "skills: delivered $(wc -l < /tmp/skills-delivered.txt) file(s) from kg6zjl/skills"
+            else
+              echo "skills: unexpected archive layout; keeping the tree already on the PVC"
+            fi
+          else
+            echo "skills: fetch failed; keeping the tree already on the PVC"
+          fi
+          chown -R 10000:10000 /opt/data/skills
           # Seed the config file Hermes actually reads ($HERMES_HOME/config.yaml)
           # from the git-managed ConfigMap. Env vars (HERMES_MODEL_DEFAULT) are
           # NOT honored by the gateway; config.yaml wins. Keep it writable so
@@ -120,10 +184,10 @@ spec:
         volumeMounts:
         - name: data
           mountPath: /opt/data
-        - name: hermes-skills
-          mountPath: /skills
         - name: hermes-config
           mountPath: /hermes-config
+        - name: hermes-github-token
+          mountPath: /etc/hermes
       containers:
       - name: hermes
         image: nousresearch/hermes-agent:v2026.9.24
@@ -166,7 +230,13 @@ spec:
         # gateway at beast's llama.cpp (192.168.1.161:11434) and fed the now-removed
         # llamacpp provider. OpenRouter authenticates with OPENROUTER_API_KEY from
         # hermes-agent-secrets via envFrom below.
-        # Tools installed by install-tools initContainer into .local/bin (already on PATH)
+        # Tools installed by the install-tools initContainer live in /opt/data/.local/bin on the
+        # shared volume, but that dir is NOT on the image's PATH: gh, gitleaks, task, trufflehog,
+        # pre-commit and yq were all installed and unreachable (verified: `command -v yq` empty).
+        # Set PATH explicitly, prepending the two tool dirs and keeping the image defaults, so
+        # nothing system-level is displaced.
+        - name: PATH
+          value: /opt/data/.local/bin:/opt/data/home/.local/bin:/usr/local/bin:/usr/bin:/bin:/usr/local/sbin:/usr/sbin:/sbin
         - name: KUBECONFIG
           value: /opt/data/.kube/config
         - name: PYTHONPATH
@@ -253,9 +323,6 @@ spec:
           - key: GITHUB_TOKEN
             path: github-token
           defaultMode: 0444
-      - name: hermes-skills
-        configMap:
-          name: hermes-skills
       - name: hermes-config
         configMap:
           name: hermes-config
@@ -307,23 +374,3 @@ spec:
     name: dashboard
   selector:
     app: hermes-agent
----
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: hermes-agent-allow-openwebui
-  namespace: ai-services
-spec:
-  podSelector:
-    matchLabels:
-      app: hermes-agent
-  policyTypes:
-  - Ingress
-  ingress:
-  - from:
-    - podSelector:
-        matchLabels:
-          app: open-webui
-    ports:
-    - protocol: TCP
-      port: 8642

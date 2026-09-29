@@ -1,0 +1,61 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: spegel-allow
+  namespace: spegel
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  # Peers: the libp2p router (5001 tcp+udp) plus registry fetches from other mirrors (5000).
+  - from:
+    - podSelector: {}
+    ports:
+    - protocol: TCP
+      port: 5000
+    - protocol: TCP
+      port: 5001
+    - protocol: UDP
+      port: 5001
+  # The registry has no `from` on purpose: each node's containerd reaches it over
+  # hostPort 30020, which arrives as host traffic and cannot match a pod selector.
+  - ports:
+    - protocol: TCP
+      port: 5000
+  # Prometheus scrapes the ServiceMonitor.
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: monitoring
+    ports:
+    - protocol: TCP
+      port: 9090
+  egress:
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: kube-system
+    ports:
+    - protocol: UDP
+      port: 53
+    - protocol: TCP
+      port: 53
+  - to:
+    - podSelector: {}
+    ports:
+    - protocol: TCP
+      port: 5000
+    - protocol: TCP
+      port: 5001
+    - protocol: UDP
+      port: 5001
+  # Upstream registries on a cache miss. Spegel mirrors every registry a workload pulls
+  # from, so this cannot be narrowed to an ipBlock list without breaking cold pulls.
+  - to:
+    - ipBlock:
+        cidr: 0.0.0.0/0
+    ports:
+    - protocol: TCP
+      port: 443

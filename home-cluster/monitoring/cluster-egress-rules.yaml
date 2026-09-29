@@ -1,0 +1,59 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: cluster-egress-rules
+  namespace: monitoring
+  labels:
+    prometheus: kube-prometheus-stack-prometheus
+    app: kube-prometheus-stack-prometheus
+spec:
+  groups:
+  - name: cluster-egress
+    rules:
+    # Fires on the first bad sample rather than after a `for:` window: the check samples
+    # every 30m, so a debounce would only add latency to a state that is already 30m old.
+    # last_over_time[31m] keeps instant queries within Prometheus's 5m lookback delta.
+    - alert: ClusterEgressNotTunneled
+      expr: last_over_time(cluster_egress_ok[31m]) == 0
+      labels:
+        severity: warning
+      annotations:
+        summary: Cluster egress cannot reach the internet
+        description: >-
+          cluster-egress-exporter could not fetch the exit address, so no cluster traffic is
+          leaving through the ExpressVPN tunnel. Either the tunnel is down and the gateway's
+          kill switch is holding traffic (intended), or egress policy is blocking it. Check the
+          VPN-Routed policy and the ExpressVPN client state on the UniFi gateway.
+    - alert: ClusterEgressOnHomeIP
+      expr: last_over_time(cluster_egress_ip[31m]) == on(ip) last_over_time(home_wan_ip[31m])
+      labels:
+        severity: warning
+      annotations:
+        summary: Cluster egress is on the home IP ({{ $labels.ip }})
+        description: >-
+          The cluster's external address matches the address home.stevearnett.com resolves to,
+          so the VPN-Routed policy is not applying and traffic is leaving on the home IP. The
+          usual cause is the gateway dropping policy routes (seen across firmware updates) or a
+          target device's MAC no longer matching the policy's client list.
+    - alert: ClusterEgressExporterMissing
+      expr: absent_over_time(cluster_egress_ok[45m])
+      labels:
+        severity: warning
+      annotations:
+        summary: Cluster egress check is not reporting
+        description: >-
+          No cluster_egress_* sample for 45m, which is longer than the 30m scrape interval, so
+          the check itself is down and the tunnel state is unverified. Look at the
+          cluster-egress-exporter Deployment in the monitoring namespace.
+    - alert: ClusterEgressCompareBlind
+      expr: >-
+        last_over_time(home_wan_ok[31m]) == 0
+        or absent_over_time(home_wan_ip[45m])
+      labels:
+        severity: warning
+      annotations:
+        summary: Cluster egress cannot be compared against the home address
+        description: >-
+          home.stevearnett.com did not resolve, so there is nothing to compare the cluster's
+          exit address against and a policy-routing failure could go unnoticed. The DDNS updater
+          on the NAS is the usual cause.
