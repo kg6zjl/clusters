@@ -90,9 +90,6 @@ data:
           }
         }
       },
-      # TEMPORARY, revert to "info" once the cause is named. zot logs the *reason* it
-      # refused a token only at debug; the trivy server's fetch of the runner image is
-      # being refused and zot's info-level 401 says nothing about why.
       "log": {
         "level": "debug"
       }
