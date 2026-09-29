@@ -93,6 +93,12 @@ identity of its own to present.
   (`TokenPath` in `pkg/api/constants`), which accepts the credential as HTTP Basic with the token in
   the password field (`pkg/api/token_exchange.go`, v2.1.21). If a client ever reports it cannot find a
   token endpoint, look here first.
+- **A config change only reaches zot through a pod restart.** zot reads `/etc/zot/config.json` once at
+  start and never re-reads it, so this Deployment carries
+  `configmap.reloader.stakater.com/reload: "zot-config"` and Stakater Reloader rolls it. Without that
+  annotation a merged config change stops at the ConfigMap — measured: the realm fix was live in the
+  ConfigMap while the running pod still advertised the old realm. If a change appears to do nothing,
+  check the pod's age before debugging the change.
 - **`GET /v2/` returns `401` when unauthenticated, and that is correct.** With a bearer/OIDC
   authorizer configured, zot replies with the auth challenge; it is not an outage and it is not
   proof that anonymous access is broken. Consequences:
