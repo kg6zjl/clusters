@@ -9,4 +9,3 @@ resources:
   - service.yaml
   - ingressroute.yaml
   - network-policy.yaml
-  - servicemonitor.yaml
