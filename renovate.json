@@ -5,7 +5,7 @@
   ],
   "dependencyDashboard": true,
   "prConcurrentLimit": 1,
-  "enabledManagers": ["helmfile", "helm-values", "flux", "kubernetes", "custom.regex"],
+  "enabledManagers": ["helmfile", "helm-values", "flux", "kubernetes", "custom.regex", "dockerfile", "github-actions"],
   "customManagers": [
     {
       "customType": "regex",
