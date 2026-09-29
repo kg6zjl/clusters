@@ -48,6 +48,12 @@ spec:
     # ProdBackupStale, NodeMissingFromCluster and LokiNotReady are all evaluated against.
     # Only customResourceState and rbac.extraRules are wanted here.
     kube-state-metrics:
+      # 165Mi peak with no requests declared.
+      resources:
+        requests:
+          memory: 192Mi
+        limits:
+          memory: 320Mi
       # The chart renders this into a ConfigMap (key config.yaml) and mounts it; `config`
       # is that file's content.
       customResourceState:
@@ -188,6 +194,16 @@ spec:
       podMonitorSelectorNilUsesHelmValues: false
       prometheusSpec:
         retention: 10d
+        # 6h working set: 3.4Gi average, 3.8Gi peak - by far the largest consumer in
+        # the cluster. The chart default is `resources: {}`, so the scheduler could see
+        # none of it and the pod was first in line for eviction under node pressure.
+        # Request sits at the measured peak; the limit is well clear of it so series
+        # growth does not turn into an OOMKill.
+        resources:
+          requests:
+            memory: 3584Mi
+          limits:
+            memory: 5Gi
         # Without this, alert notifications carry Prometheus' in-cluster
         # generatorURL (http://kube-prometheus-stack-prometheus.monitoring:9090/...),
         # which is unreachable from a browser.
@@ -274,6 +290,13 @@ spec:
     grafana:
       enabled: true
       replicas: 1
+      # Grafana peaked at 584Mi and its two sidecars add ~150Mi more, all with no
+      # requests declared.
+      resources:
+        requests:
+          memory: 512Mi
+        limits:
+          memory: 1Gi
       # Grafana's own state lived on an emptyDir: its database (users, API keys, annotations and
       # the admin credential it stores on first boot) plus anything created in the UI. Without
       # this, only ConfigMap-provisioned dashboards and datasources survive a pod restart, and
@@ -302,3 +325,26 @@ spec:
       enabled: true
       alertmanagerSpec:
         configSecret: alertmanager-config
+        # 28Mi peak against a 200Mi request and no declared limit: this one was
+        # over-reserved rather than under.
+        resources:
+          requests:
+            memory: 64Mi
+          limits:
+            memory: 192Mi
+
+    # Subchart values. These are distinct from the `kubeStateMetrics`, `nodeExporter`
+    # and `prometheus` blocks above, which only control what gets scraped - setting
+    # resources there has no effect on the workloads themselves.
+    prometheus-node-exporter:
+      resources:
+        requests:
+          memory: 32Mi
+        limits:
+          memory: 64Mi
+    prometheusOperator:
+      resources:
+        requests:
+          memory: 64Mi
+        limits:
+          memory: 192Mi
