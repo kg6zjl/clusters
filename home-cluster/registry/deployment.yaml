@@ -57,9 +57,11 @@ spec:
               readOnly: true
             - name: data
               mountPath: /var/lib/registry
+            # A directory mount, deliberately: /etc/zot is already the config ConfigMap's mount, and
+            # a subPath file mount inside another volume mount fails at container init with
+            # `error mounting ... volume-subpaths/k8s-ca/zot/N ...: not a directory` (exit 128).
             - name: k8s-ca
-              mountPath: /etc/zot/k8s-ca.crt
-              subPath: ca.crt
+              mountPath: /etc/zot-ca
               readOnly: true
       volumes:
         - name: config
