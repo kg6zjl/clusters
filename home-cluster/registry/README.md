@@ -9,8 +9,9 @@ Read this before trusting the rest of the file.
 - **Verified:** the registry serves and challenges correctly. An unauthenticated `GET /v2/` returns
   `401` with `WWW-Authenticate: Bearer realm="https://registry.kube.stevearnett.com/zot/auth/token",service="registry.kube.stevearnett.com"`.
 - **Verified:** the rotator completes. The run on 2026-09-29T18:21:58Z finished `Complete 1/1` and
-  wrote the Secret: `created github-runners/registry-pull as
-  system:serviceaccount:registry:registry-pull, expires 2026-10-06T18:21:58Z (167h)`. That line prints
+  wrote the Secret: `created github-runners/registry-pull as registry-pull, expires
+  2026-10-06T18:21:58Z (167h)`. That run printed the username as
+  `system:serviceaccount:registry:registry-pull` — it is colon-free now, see Auth. That line prints
   only after the API accepts the write, which is the strongest confirmation obtainable from here — the
   Secret is not readable by agent identities, so it was not read back, and its contents have never been
   printed anywhere.
@@ -32,6 +33,14 @@ cluster's own OIDC workload identity:
 - A workload presents a **projected ServiceAccount token with `audience: zot`** as its registry
   password. zot maps the token's `sub` claim to the identity
   `system:serviceaccount:<namespace>:<name>` and authorizes it through `accessControl`.
+
+The **Basic username must not contain a colon.** zot reads the password out of the Basic credential,
+and Go's `http.Request.BasicAuth()` splits that value at the *first* colon — so passing
+`-u system:serviceaccount:<ns>:<sa>` hands zot the password `serviceaccount:<ns>:<sa>:<JWT>` instead
+of the token, and the JWT parse fails with `illegal base64 data at input byte 14` (byte 14 *is* that
+colon). zot takes the identity from the token's `sub` claim and ignores the username, so any
+colon-free value works. Cost a full debugging cycle on 2026-09-29: the same trap also made every
+kubelet pull against the rotator's Secret fail, before a single pull existed to notice.
 - Reads are **not** anonymous — bearer auth gates every request, pulls included. What governs reads is
   `defaultPolicy: ["read"]`, which covers *any* identity zot can authenticate. Any pod in this cluster
   can mint an `audience: zot` token for its own ServiceAccount with no RBAC at all, so **every workload
@@ -43,8 +52,10 @@ cluster's own OIDC workload identity:
 Pushing from a runner pod:
 
 ```bash
+# -u must be colon-free: Go's BasicAuth() splits at the first colon and zot would read the password
+# as "serviceaccount:...:<JWT>" instead of the token. See the Auth section.
 docker login registry.kube.stevearnett.com \
-  -u system:serviceaccount:github-runners:github-runner \
+  -u github-runner \
   --password-stdin < /var/run/secrets/registry.zot/token
 ```
 

@@ -30,8 +30,14 @@ jobs:
 
       - name: Log in to the cluster registry
         run: |
+          # The username must not contain a colon. Go's http.Request.BasicAuth() splits the Basic
+          # value at the *first* colon, so -u system:serviceaccount:github-runners:github-runner
+          # silently leaves zot with "serviceaccount:github-runners:github-runner:<JWT>" as the
+          # password, and the JWT parse fails with "illegal base64 data at input byte 14" -- byte 14
+          # is that colon. zot keys the identity off the token's `sub` claim, never off this username,
+          # so any colon-free value is correct.
           docker login registry.kube.stevearnett.com \
-            -u system:serviceaccount:github-runners:github-runner \
+            -u github-runner \
             --password-stdin < /var/run/secrets/registry.zot/token
 
       - name: Set up Buildx
