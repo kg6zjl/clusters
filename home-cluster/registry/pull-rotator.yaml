@@ -8,8 +8,20 @@
 # zot against the cluster's own OIDC issuer, so the registry never shares a secret with anyone either.
 #
 # Rotation runs daily and rewrites the Secret every time, rather than once at the end of the token's
-# life: if the apiserver ever caps the requested lifetime lower (--service-account-max-token-expiration),
-# a daily run still keeps it valid, and the Job fails loudly instead of quietly serving a stale token.
+# life: the daily rewrite is what bounds how stale the delivered credential can be, and it turns an
+# apiserver lifetime cap into a failed run instead of pulls that break weeks later.
+#
+# The lifetime is a week, not a year, because a bound ServiceAccount token cannot be revoked on its
+# own -- there is no per-token revocation, only deleting the ServiceAccount (which breaks every
+# consumer at once) or rotating the cluster's signing key. Its lifetime *is* the exposure window if a
+# copy leaks, and a year of non-revocable access is the wrong shape for a credential whose only job is
+# to authorise a pull. The runner's push token is 1h on the same reasoning; kubelet cannot re-request
+# a token, which is why this one is days rather than an hour.
+#
+# Not yet wired to a consumer, deliberately: no pod pulls an image from this registry yet (the runner
+# image still comes from Docker Hub), so naming the Secret in a pod spec today would only make kubelet
+# log FailedToRetrieveImagePullSecret at every pod start. The consumer reference belongs in the change
+# that first builds an image into this registry.
 #
 # Two traps this Job has already hit, both of which present as "the apiserver is unreachable": the
 # cluster CA has no keyUsage extension and Python 3.13's TLS defaults reject that (see tls_context()),
@@ -44,8 +56,13 @@ data:
     NAMESPACES = [ns.strip() for ns in os.environ.get("CONSUMER_NAMESPACES", "").split(",") if ns.strip()]
     REGISTRY_HOST = os.environ["REGISTRY_HOST"]
     SECRET_NAME = os.environ.get("SECRET_NAME", "registry-pull")
-    TOKEN_SECONDS = int(os.environ.get("TOKEN_SECONDS", "31536000"))
-    MIN_VALID_DAYS = int(os.environ.get("MIN_VALID_DAYS", "30"))
+    TOKEN_SECONDS = int(os.environ.get("TOKEN_SECONDS", "604800"))
+    # Below this, the token would expire before the next daily run could replace it.
+    MIN_VALID_HOURS = int(os.environ.get("MIN_VALID_HOURS", "36"))
+    # Everything here is stripped from error text before it is printed. The one path where a minted
+    # token could reach a log is an apiserver error body echoing back the request it rejected, and the
+    # request that carries the token is the one that writes the Secret.
+    REDACT = set()
 
 
     def read(path):
@@ -63,7 +80,9 @@ data:
         Python 3.13 enables VERIFY_X509_STRICT by default, and strict mode refuses a CA that carries no
         keyUsage extension -- which this cluster's CA is ("No extensions in certificate", measured).
         Python 3.12 accepted it, every other client here (kubelet, kubectl, Go) accepts it, and the
-        first run of this Job died on exactly that check. Chain and hostname are still verified.
+        first run of this Job died on exactly that check. Chain and hostname are still verified, and
+        the only trust anchor is the cluster CA mounted into this pod, so no other issuer can be
+        accepted here. Revisit if the cluster CA is ever regenerated with a keyUsage extension.
         """
         context = ssl.create_default_context(cafile=f"{SA_DIR}/ca.crt")
         context.verify_flags &= ~getattr(ssl, "VERIFY_X509_STRICT", 0)
@@ -105,12 +124,12 @@ data:
         status = result["status"]
         expires = status["expirationTimestamp"]
         remaining = datetime.fromisoformat(expires.replace("Z", "+00:00")) - datetime.now(timezone.utc)
-        if remaining < timedelta(days=MIN_VALID_DAYS):
+        if remaining < timedelta(hours=MIN_VALID_HOURS):
             sys.exit(
-                f"FATAL: apiserver issued a token expiring {expires}, {remaining.days}d from now, "
-                f"below the {MIN_VALID_DAYS}d floor -- image pulls would break before the next run"
+                f"FATAL: apiserver issued a token expiring {expires}, {remaining} from now, below the "
+                f"{MIN_VALID_HOURS}h floor -- image pulls would break before the next run could replace it"
             )
-        return status["token"], expires, remaining.days
+        return status["token"], expires, remaining
 
 
     def write_secret(namespace, jwt, username):
@@ -135,11 +154,16 @@ data:
     def main():
         if not NAMESPACES:
             sys.exit("FATAL: CONSUMER_NAMESPACES is empty -- refusing to mint a token nothing consumes")
-        jwt, expires, days = mint()
+        jwt, expires, remaining = mint()
+        REDACT.add(jwt)
         username = f"system:serviceaccount:{NS}:{PULL_SA}"
         for namespace in NAMESPACES:
             action = write_secret(namespace, jwt, username)
-            print(f"{action} {namespace}/{SECRET_NAME} as {username}, expires {expires} ({days}d)", flush=True)
+            print(
+                f"{action} {namespace}/{SECRET_NAME} as {username}, expires {expires} "
+                f"({int(remaining.total_seconds() // 3600)}h)",
+                flush=True,
+            )
 
 
     if __name__ == "__main__":
@@ -147,6 +171,8 @@ data:
             main()
         except urllib.error.HTTPError as error:
             body = error.read().decode(errors="replace").strip()
+            for secret in REDACT:
+                body = body.replace(secret, "<redacted>")
             sys.exit(f"FATAL: HTTP {error.code} from {error.url}: {body[:400]}")
         except urllib.error.URLError as error:
             sys.exit(f"FATAL: cannot reach the apiserver: {error.reason}")
@@ -158,19 +184,29 @@ metadata:
   namespace: registry
 spec:
   schedule: "17 4 * * *"
+  # A run still going at the next slot is skipped by Forbid anyway. If the controller itself was down,
+  # skip the missed slot rather than fire it late: the next slot is a day away and the token lives a
+  # week, so a late run buys nothing and only muddies the record of when this actually ran.
+  startingDeadlineSeconds: 3600
   concurrencyPolicy: Forbid
   successfulJobsHistoryLimit: 2
   failedJobsHistoryLimit: 2
   jobTemplate:
     spec:
-      backoffLimit: 2
+      # One retry, not two: the failures that matter here are deterministic (a 403, a wrong path) and the
+      # FATAL line is the evidence, but a DNS or apiserver blip on a once-a-day job is worth one more go.
+      backoffLimit: 1
+      # Keep a failed pod's log readable for an hour. Earlier failures were garbage-collected before
+      # anyone could read them and had to be recovered from Loki.
+      ttlSecondsAfterFinished: 3600
       template:
         spec:
           restartPolicy: OnFailure
           serviceAccountName: registry-pull-rotator
           containers:
             - name: rotate
-              image: python:3.13-alpine
+              # Pinned patch tag, not the floating 3.13-alpine series, so Renovate can bump it.
+              image: python:3.13.13-alpine
               command: ["python3", "/scripts/rotate.py"]
               env:
                 - name: REGISTRY_HOST

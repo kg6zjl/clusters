@@ -460,7 +460,9 @@ Use `192.168.1.0/24` to cover all ranges.
     --password-stdin < /var/run/secrets/registry.zot/token
   ```
 - Reads are **not** anonymous in zot v2.1.21 — bearer auth gates every request, so a kubelet pull
-  needs a credential too. Open design decision; see `home-cluster/registry/README.md`.
+  needs a credential too. kubelet cannot project a token, so the registry owns a `registry-pull`
+  imagePullSecret minted in-cluster by `registry/pull-rotator.yaml`; nothing in git holds it. Not yet
+  exercised by a real pull. See `home-cluster/registry/README.md`.
 - Other secrets (API keys, webhooks) still come from ESO in the `github-runners` namespace.
 
 ### Adding Secrets to Runners

@@ -12,13 +12,24 @@ data:
   # `WWW-Authenticate: Bearer realm=<realm>,service=...,scope=...` and docker/containerd fetch a token
   # from <realm> -- so it has to be an absolute URL. The bare string "zot" (both the vendor example's
   # value and what this file used to say) parses as a relative path and no client can follow it, which
-  # is why nothing could ever authenticate. zot serves the endpoint at <namespace>/auth/token and
-  # accepts the credential as HTTP Basic, password-only, per pkg/api/token_exchange.go.
+  # is why nothing could ever authenticate. zot serves the endpoint at <namespace>/auth/token
+  # (`TokenPath` in pkg/api/constants/consts.go) and accepts the credential as HTTP Basic,
+  # password-only, per pkg/api/token_exchange.go (both read at the pinned v2.1.21 tag).
   #
-  # anonymousPolicy is dead config under bearer auth: bearerAuth replaces the middleware that reads it
-  # and ends every unauthenticated request at 401. defaultPolicy is what applies, and it covers any
-  # authenticated cluster identity. Images are not secrets here, so any pod may read them; only the
-  # runner ServiceAccount may write.
+  # service is what the challenge advertises to clients, and the vendor guidance is that it be the
+  # registry host and port clients connect to -- the placeholder "zot-service" it shipped was neither.
+  # The local token exchange does not validate service or scope, so the wrong value was inert, but an
+  # advertised service no client can address is a 401 waiting for a real client that checks it.
+  #
+  # anonymousPolicy is deliberately absent. Under bearer auth it is inert -- bearerAuth replaces the
+  # middleware that reads it and ends every unauthenticated request at 401 -- so it does nothing today,
+  # and leaving it in would silently grant anonymous reads the day zot ships its unified middleware.
+  # defaultPolicy is what governs, and it grants read to any identity zot can authenticate: any pod in
+  # this cluster can mint an `audience: zot` token for its own ServiceAccount with no RBAC at all, so
+  # repository reads are cluster-wide. That is accepted here (images are not secrets: kubectl, alpine,
+  # the runner image), and it is why there is no per-repository confidentiality to lose. Only the
+  # runner ServiceAccount may write. Scope the write policy to the repositories CI actually publishes
+  # before any image here becomes load-bearing.
   config.json: |
     {
       "distSpecVersion": "1.1.1",
@@ -37,7 +48,7 @@ data:
         "auth": {
           "bearer": {
             "realm": "https://registry.kube.stevearnett.com/zot/auth/token",
-            "service": "zot-service",
+            "service": "registry.kube.stevearnett.com",
             "oidc": [
               {
                 "issuer": "https://kubernetes.default.svc",
@@ -53,7 +64,6 @@ data:
         "accessControl": {
           "repositories": {
             "**": {
-              "anonymousPolicy": ["read"],
               "defaultPolicy": ["read"],
               "policies": [
                 {
