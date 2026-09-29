@@ -29,6 +29,8 @@ spec:
               set -eu
               mkdir -p /opt/hostedtoolcache/tools
               chmod 1777 /opt/hostedtoolcache
+              # alpine ships no curl, and busybox wget cannot retry or bound a stalled transfer.
+              command -v curl >/dev/null || apk add --no-cache curl
               cd /opt/hostedtoolcache/tools
               V="${TRUFFLEHOG_VERSION:?}"
               DIR="trufflehog_${V}_linux_amd64"
