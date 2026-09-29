@@ -459,7 +459,8 @@ Use `192.168.1.0/24` to cover all ranges.
     -u system:serviceaccount:github-runners:github-runner \
     --password-stdin < /var/run/secrets/registry.zot/token
   ```
-- Reads are anonymous, so pulling an image needs no credential at all.
+- Reads are **not** anonymous in zot v2.1.21 — bearer auth gates every request, so a kubelet pull
+  needs a credential too. Open design decision; see `home-cluster/registry/README.md`.
 - Other secrets (API keys, webhooks) still come from ESO in the `github-runners` namespace.
 
 ### Adding Secrets to Runners

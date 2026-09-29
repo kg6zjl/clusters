@@ -589,7 +589,8 @@ kubectl get namespace | grep <name>
     -u system:serviceaccount:github-runners:github-runner \
     --password-stdin < /var/run/secrets/registry.zot/token
   ```
-- Reads are anonymous (kubelet pulls need no credential).
+- Reads are **not** anonymous in zot v2.1.21 — bearer auth gates every request, so a kubelet pull
+  needs a credential too. Open design decision; see `home-cluster/registry/README.md`.
 
 ### Runner Tools
 
