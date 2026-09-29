@@ -13,6 +13,13 @@ on:
       - '.pre-commit-config.yaml'
       - '.githooks/**'
 
+env:
+  # Single pin for the trufflehog CLI, shared by this workflow's fallback and the
+  # runner-toolcache-warmer DaemonSet. Renovate keeps both in step (see customManagers in
+  # renovate.json); a rename here breaks that, so keep the token intact.
+  # renovate: datasource=github-releases depName=trufflesecurity/trufflehog
+  TRUFFLEHOG_VERSION: "3.97.9"
+
 jobs:
   lint:
     name: Lint
@@ -74,7 +81,7 @@ jobs:
             # Runner pods from a pre-warmup template have an empty cache; prefer a pinned,
             # checksum-verified local copy over the per-job image pull either way.
             echo "No cached trufflehog on this runner - fetching pinned copy"
-            V=3.97.9
+            V="${TRUFFLEHOG_VERSION:?TRUFFLEHOG_VERSION is not set}"
             mkdir -p "$RUNNER_TEMP/th"
             cd "$RUNNER_TEMP/th"
             curl -sSfLO "https://github.com/trufflesecurity/trufflehog/releases/download/v${V}/trufflehog_${V}_linux_amd64.tar.gz"
