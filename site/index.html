@@ -159,22 +159,56 @@
 </section>
 
 <section aria-labelledby="webhooks">
-  <h2 id="webhooks">Not yet built: letting the cluster trigger the agent</h2>
+  <h2 id="webhooks">Letting the cluster trigger the agent</h2>
   <p>
-    Today the agent starts its own work. A person asks it something, or a schedule fires. The next
-    step is the reverse: the cluster pages the agent. An alert fires, a webhook carries the payload,
-    and the agent wakes up already knowing what broke and where to look.
+    The agent can also be started by the cluster instead of by a person. A detector runs
+    every five minutes, reads what Alertmanager is currently firing, and posts the alerts it
+    has not announced before to a webhook route on the agent, HMAC-signed. The agent wakes up
+    knowing what broke, examines the resources and logs involved, and answers in the
+    notification channel. It holds the same read-only access as any other session, so the
+    worst an unattended run can do is investigate and talk — and if the alert needs a
+    manifest change, it opens a pull request and stops. Merging stays with the human who was
+    asleep.
   </p>
   <p>
-    It is worth writing about later, because it changes the trust model in a way that is easy to get
-    wrong. Everything on this site assumes a human is somewhere in the conversation. An inbound
-    trigger removes that: anything that can reach the webhook can start a run. So the questions to
-    answer first are plain ones. Who is allowed to trigger it? What may an unattended run do — read
-    only, or open a pull request? How many runs an hour can it start before it becomes the incident?
-    And what happens when the trigger itself is the thing that is broken?
+    That answers the questions this page used to say had to come first, and the answers are
+    the trust model, so they are worth stating plainly.
   </p>
+  <ul>
+    <li>
+      <strong>Who may trigger it.</strong> Not "anything that can reach the port". The
+      listener is a cluster-only address, a network policy narrows callers to the namespaces
+      with business sending, and every request must carry an HMAC signature nobody can
+      produce without the key. The key is not in the repository; it is rendered from the
+      vault into the sender's environment at run time.
+    </li>
+    <li>
+      <strong>What an unattended run may do.</strong> Diagnose, and propose. Read-only
+      cluster access, no secret access, and — the part that matters — a pull request, never a
+      merge. The prompt says so, and the credential cannot merge the cluster repository in
+      any case.
+    </li>
+    <li>
+      <strong>How much it can start.</strong> An alert is announced once, not once per poll:
+      the filter is the alert's own start time, and the request carries an idempotency key so
+      an overlapping poll is dropped rather than waking the agent twice. One poll starts at
+      most one run, which caps it at twelve wakes an hour by construction, with a per-route
+      rate limit as a backstop for a sender that loops.
+    </li>
+    <li>
+      <strong>What happens when the trigger breaks.</strong> Its freshness is alerted on like
+      any other scheduled job here, and that alert travels the ordinary path — Alertmanager
+      to the notification channel. The agent noticing a problem, and the cluster noticing that
+      the agent is no longer being woken, are deliberately two separate mechanisms, so
+      neither failure can hide the other.
+    </li>
+  </ul>
   <p class="small">
-    None of this is implemented yet. It is on the list, and it is the honest edge of this design.
+    Deliberately a pull rather than a push. Alertmanager cannot sign an inbound webhook, so
+    something in-cluster has to read the alerts and sign them itself, and polling is what
+    makes the deduplication stateless — there is no memory to lose in a pod that is recreated
+    every five minutes. The price is latency: the agent wakes within one poll interval, not
+    within seconds.
   </p>
 </section>
 

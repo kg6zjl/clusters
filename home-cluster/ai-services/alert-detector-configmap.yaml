@@ -1,0 +1,153 @@
+# The sender the webhook route needs. Alertmanager cannot sign an inbound HMAC (its
+# webhook_configs have no headers field), so the agent needs something in-cluster that can.
+# The script is mounted read-only at /app/detector.py by the alert-detector CronJob.
+#
+# Generated from the tested script and verified byte-for-byte by the same tool; edit the
+# script and re-run the generator rather than patching the embedded copy.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: alert-detector-script
+  namespace: ai-services
+data:
+  detector.py: |
+    #!/usr/bin/env python3
+    """Wake the agent when the cluster is already firing.
+
+    Reads the active alerts from Alertmanager, keeps the ones that started since the previous
+    poll, and POSTs them to the Hermes webhook route as one HMAC-signed request. One poll
+    produces at most one agent run, and an alert is announced once: the filter is the alert's
+    own start time, so there is no state to keep in a pod that is recreated every five
+    minutes.
+    """
+    import hashlib
+    import hmac
+    import json
+    import os
+    import sys
+    import time
+    import urllib.error
+    import urllib.request
+    from datetime import datetime, timedelta, timezone
+
+    ALERTS_URL = os.environ["ALERTS_URL"].rstrip("/")
+    WEBHOOK_URL = os.environ["WEBHOOK_URL"]
+    SECRET = os.environ["WEBHOOK_SECRET"]
+    SEVERITIES = {s.strip() for s in os.environ.get("ALERT_SEVERITIES", "critical").split(",") if s.strip()}
+    LOOKBACK_SECONDS = int(os.environ.get("LOOKBACK_SECONDS", "420"))
+    MAX_ALERTS = int(os.environ.get("MAX_ALERTS", "20"))
+    TIMEOUT_SECONDS = int(os.environ.get("HTTP_TIMEOUT_SECONDS", "20"))
+    UI_URL = os.environ.get("ALERTMANAGER_UI_URL", "").rstrip("/")
+
+
+    def request(url, data=None, headers=None):
+        req = urllib.request.Request(url, data=data, headers=headers or {})
+        with urllib.request.urlopen(req, timeout=TIMEOUT_SECONDS) as resp:
+            raw = resp.read()
+            return resp.status, (json.loads(raw) if raw else None)
+
+
+    def started_at(value):
+        if not value:
+            return None
+        try:
+            parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        except ValueError:
+            return None
+        return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
+
+
+    def link_for(alertname):
+        """The same deep link the Alertmanager Discord template builds. The UI parses a matcher
+        set, so the braces and the JSON-quoted value are both required or it shows everything."""
+        if not UI_URL or not alertname:
+            return ""
+        return "%s/#/alerts?filter=%%7Balertname%%3D%%22%s%%22%%7D" % (UI_URL, alertname)
+
+
+    def new_alerts():
+        status, alerts = request(ALERTS_URL + "/api/v2/alerts?active=true&silenced=false&inhibited=false")
+        if status != 200 or not isinstance(alerts, list):
+            raise RuntimeError("Alertmanager returned %s" % status)
+        cutoff = datetime.now(timezone.utc) - timedelta(seconds=LOOKBACK_SECONDS)
+        fresh = []
+        for alert in alerts:
+            labels = alert.get("labels") or {}
+            if SEVERITIES and labels.get("severity") not in SEVERITIES:
+                continue
+            started = started_at(alert.get("startsAt"))
+            if started is None or started < cutoff:
+                continue
+            annotations = alert.get("annotations") or {}
+            alertname = labels.get("alertname", "unknown")
+            fresh.append({
+                "alertname": alertname,
+                "severity": labels.get("severity", "unknown"),
+                "starts_at": alert.get("startsAt", ""),
+                "fingerprint": alert.get("fingerprint", ""),
+                "labels": labels,
+                "summary": annotations.get("summary", ""),
+                "description": annotations.get("description", ""),
+                "link": link_for(alertname),
+            })
+        fresh.sort(key=lambda a: (a["severity"], a["alertname"]))
+        return fresh
+
+
+    def signature_for(secret, timestamp, body):
+        """Generic HMAC V2: hex HMAC-SHA256 of "<timestamp>.<body>"."""
+        return hmac.new(secret.encode(), timestamp.encode() + b"." + body, hashlib.sha256).hexdigest()
+
+
+    def sign_and_post(alerts, extra=None):
+        payload = {
+            "source": "alert-detector",
+            "type": "cluster-alerts",
+            "detected_at": datetime.now(timezone.utc).isoformat(),
+            "alert_count": len(alerts),
+            "truncated": bool(extra and extra.get("truncated")),
+            "alerts": alerts,
+        }
+        body = json.dumps(payload).encode()
+        timestamp = str(int(time.time()))
+        # The request id doubles as the adapter's idempotency key, so an overlapping poll
+        # re-sending the same alert set is dropped instead of waking the agent twice.
+        digest = hashlib.sha256(";".join(sorted(
+            "%s@%s" % (a["fingerprint"], a["starts_at"]) for a in alerts)).encode()).hexdigest()
+        return request(WEBHOOK_URL, data=body, headers={
+            "Content-Type": "application/json",
+            "X-Webhook-Timestamp": timestamp,
+            "X-Webhook-Signature-V2": signature_for(SECRET, timestamp, body),
+            "X-Request-ID": digest[:32],
+        })
+
+
+    def main():
+        if not SECRET:
+            print("WEBHOOK_SECRET is empty - refusing to post", file=sys.stderr)
+            return 2
+        try:
+            alerts = new_alerts()
+        except (urllib.error.URLError, RuntimeError, ValueError) as exc:
+            print("could not read alerts: %s" % exc, file=sys.stderr)
+            return 1
+        if not alerts:
+            print("no firing alerts started in the last %ss" % LOOKBACK_SECONDS)
+            return 0
+        capped = alerts[:MAX_ALERTS]
+        try:
+            status, response = sign_and_post(capped, {"truncated": len(capped) < len(alerts)})
+        except urllib.error.HTTPError as exc:
+            print("webhook rejected the post: HTTP %s %s" % (exc.code, exc.read()[:200]), file=sys.stderr)
+            return 1
+        except urllib.error.URLError as exc:
+            print("could not reach %s: %s" % (WEBHOOK_URL, exc), file=sys.stderr)
+            return 1
+        print("posted %s alert(s) [%s] -> HTTP %s %s" % (
+            len(capped), ", ".join(a["alertname"] for a in capped), status,
+            (response or {}).get("status", "")))
+        return 0
+
+
+    if __name__ == "__main__":
+        sys.exit(main())

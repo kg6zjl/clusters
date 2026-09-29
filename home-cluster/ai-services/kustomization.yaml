@@ -27,6 +27,10 @@ resources:
   - hermes-gitconfig.yaml
   - hermes-soul-configmap.yaml
   - hermes-config-configmap.yaml
+  - hermes-webhook-service.yaml
+  - network-policy-hermes-webhook.yaml
+  - alert-detector-configmap.yaml
+  - alert-detector-cronjob.yaml
 
 configMapGenerator:
 
