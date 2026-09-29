@@ -5,7 +5,9 @@ set -euo pipefail
 # Run as:  ssh steve@192.168.1.161 "sudo bash /tmp/beast-exporters.sh"
 # See ai-services/README.md "Monitoring the GPU box" for details.
 
+# renovate: datasource=github-releases depName=prometheus/node_exporter
 NODE_EXPORTER_VERSION="1.8.2"
+# renovate: datasource=github-releases depName=utkuozdemir/nvidia_gpu_exporter
 GPU_EXPORTER_VERSION="1.15.1"
 NODE_IPS="192.168.1.144 192.168.1.175 192.168.1.121 192.168.1.146"
 ARCH="linux-$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/')"
