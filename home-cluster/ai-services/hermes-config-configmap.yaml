@@ -96,6 +96,11 @@ data:
         enabled: true
         extra:
           port: 8644
+          # Backstop, not throughput. The detector posts at most one batched wake per poll
+          # (12/hour) and the leak route is event-driven; the adapter's default is 30/min per
+          # route, which is far more agent runs than a looping or rogue sender should be able
+          # to buy. Exceeding this answers 429 instead of starting work.
+          rate_limit: 6
           routes:
             credential-leak:
               # Woken by a leak report rather than a generic alert: the ask is a
@@ -127,6 +132,32 @@ data:
 
                 Never print, echo or commit the credential value or any secret. If the
                 payload contains the secret itself, do not repeat it back.
+            # Unattended wake from the cluster's own alerting. The alert-detector CronJob
+            # is the only sender: it reads Alertmanager and re-posts signed, so nothing
+            # here trusts a POST merely because it arrived from the LAN.
+            cluster-alert:
+              deliver: discord
+              skills: [systematic-debugging, cluster-gitops, monitoring-alerting]
+              prompt: |
+                The cluster woke you: one or more alerts are firing, and nobody is in this
+                conversation except you. Payload:
+
+                {__raw__}
+
+                Rules for an unattended run, in order of importance:
+                1. Diagnose before you change anything, and use read-only commands only:
+                   kubectl get / describe / logs. Never apply, edit, patch, delete or scale
+                   anything, and never restart a workload to see whether that fixes it.
+                2. If a fix is warranted, open a pull request on kg6zjl/clusters and stop
+                   there. Never merge it, not even a one-line manifest change - the human
+                   who is asleep decides that. Work in a fresh worktree, branch off
+                   origin/main, and never push to main.
+                3. Never print, echo or commit a secret value, and never use a leaked
+                   credential to test whether it is still live.
+                4. Say what you verified and what you are guessing. If the evidence does
+                   not explain the alert, say so plainly rather than inventing a cause.
+                5. Keep the reply short: what is firing, what you found, what you did, and
+                   the PR link if you opened one.
     display:
       platforms:
         discord:
