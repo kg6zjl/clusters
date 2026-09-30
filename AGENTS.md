@@ -13,6 +13,8 @@ This file provides guidance for AI coding agents operating in this repository.
 3. **Only use kubectl for READ-ONLY operations** - get, describe, logs, etc.
 4. **All changes MUST go through PR → GitHub Actions → Flux**
 5. **If you break these rules, you lose permissions**
+6. **NEVER use `--yolo` or any flag that bypasses dangerous-command approval prompts** - The prompts are the review layer; bypassing them means nothing is checked, including the commands the scanner correctly refuses. Not on a one-off, not "just this once", not to unblock a stalled script.
+7. **Composing a shell command** - Inline full binary paths instead of a variable in the command position (a `K=/path/kubectl` helper is refused as a dynamically selected executable), keep long text in a file rather than inline in the command, and keep one risk class per command - bundling makes an unparsable payload out of a safe action and loses the whole chain to an unanswered prompt.
 
 If you need to fix something in the cluster: Edit YAML → Branch → Commit → PR → Merge → Wait for Flux
 
