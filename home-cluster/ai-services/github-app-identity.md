@@ -1,5 +1,14 @@
 # The agent's own GitHub identity
 
+> **Status: phase 1 of 2.** This PR lands the plumbing (the App credentials Secret and the
+> minting script) plus a verification Job (`github-app-verify`), and deliberately changes
+> nothing about how the agent authenticates today: the owner's PAT is still mounted and still
+> the only credential the agent reads. The switch described below — the Deployment reading a
+> minted installation token, the removal of the PAT, and `CODEOWNERS` — lands separately, and
+> only once the verification Job has run green against the real API. Sequencing the removal
+> behind a passing proof is the point: a credential is not retired until its replacement is
+> demonstrated by the consumer that will depend on it.
+
 **Decision.** The Hermes agent authenticates to GitHub as a **GitHub App owned by @kg6zjl**,
 installed on `kg6zjl/clusters` and `kg6zjl/skills` only. The owner's personal access token is
 no longer mounted into the pod. Because the agent is now a distinct identity, the branch

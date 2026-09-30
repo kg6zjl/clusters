@@ -178,3 +178,69 @@ data:
 
     if __name__ == "__main__":
         sys.exit(main())
+  # Proves the App credentials work, for the verification Job that gates the switch
+  # away from the owner's PAT. Deliberately here rather than in the Job so the Job stays
+  # a thin manifest. Reads only the file mint.py just wrote; prints no token material.
+  verify.py: |
+    #!/usr/bin/env python3
+    """Ask GitHub what identity the freshly minted token confers.
+
+    Checks the installation's repo scope and the App's own permissions, and fails loudly on
+    anything unexpected -- including an App holding more than it was designed to.
+    """
+    import json
+    import os
+    import sys
+    import urllib.request
+
+    TOKEN_PATH = os.environ.get("TOKEN_PATH", "/etc/hermes/github-token")
+    API = os.environ.get("GITHUB_API", "https://api.github.com")
+    EXPECTED = ("kg6zjl/clusters", "kg6zjl/skills")
+
+
+    def call(path, token):
+        request = urllib.request.Request(
+            API + path,
+            headers={
+                "Authorization": "Bearer " + token,
+                "Accept": "application/vnd.github+json",
+                "X-GitHub-Api-Version": "2022-11-28",
+                "User-Agent": "hermes-github-app-verify",
+            },
+        )
+        with urllib.request.urlopen(request, timeout=20) as response:
+            return json.load(response)
+
+
+    def main():
+        with open(TOKEN_PATH) as handle:
+            token = handle.read().strip()
+        print("installation token shape (ghs_ prefix):", token.startswith("ghs_"))
+        if not token.startswith("ghs_"):
+            print("FAIL: not an installation token", file=sys.stderr)
+            return 1
+
+        repos = [r["full_name"] for r in call("/installation/repositories", token).get("repositories", [])]
+        print("installation covers", len(repos), "repo(s):", ", ".join(repos) or "(none)")
+
+        problems = []
+        for wanted in EXPECTED:
+            if wanted not in repos:
+                problems.append(f"{wanted}: not in the installation")
+                continue
+            permissions = call("/repos/" + wanted, token).get("permissions", {})
+            print(f"{wanted}: push={permissions.get('push')} admin={permissions.get('admin')}")
+            if not permissions.get("push"):
+                problems.append(f"{wanted}: not writable with this token")
+            if permissions.get("admin"):
+                problems.append(f"{wanted}: has admin, which is more than the design allows")
+        if problems:
+            for problem in problems:
+                print("FAIL:", problem, file=sys.stderr)
+            return 1
+        print("OK: the App can push to both repos, and holds no admin")
+        return 0
+
+
+    if __name__ == "__main__":
+        sys.exit(main())

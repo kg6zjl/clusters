@@ -1,0 +1,78 @@
+# One-shot proof that the GitHub App credentials mint a usable token.
+#
+# This exists to gate the switch away from the owner's PAT: the App path has to be shown
+# working before the PAT is removed, by the same code the minter will use, against the real
+# API. Until this runs green, nothing in the Deployment changes and the agent keeps using the
+# PAT exactly as it does today.
+#
+# CronJob rather than Job: a bare Job in a Flux kustomization is re-applied on every reconcile,
+# and Jobs carry immutable fields, so any later edit would error. The schedule is far in the
+# future; the job template is applied once. Run it on demand with:
+#   kubectl create job --from=cronjob/github-app-verify github-app-verify-manual -n ai-services
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: github-app-verify
+  namespace: ai-services
+  labels:
+    app: github-app-verify
+spec:
+  schedule: "0 4 1 1 *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    metadata:
+      labels:
+        app: github-app-verify
+    spec:
+      backoffLimit: 0
+      template:
+        metadata:
+          labels:
+            # Matches network-policy-github-app-verify.yaml and nothing else. The agent's own
+            # internet egress is scoped to app=hermes-agent, and is deliberately not reused
+            # here: that policy also permits API-server and webhook egress this pod never needs.
+            app: github-app-verify
+        spec:
+          restartPolicy: Never
+          containers:
+          - name: verify
+            image: python:3.13.13-alpine
+            command:
+            - /bin/sh
+            - -c
+            - |
+              set -eu
+              python3 -B /app/mint.py --once
+              python3 -B /app/verify.py
+            env:
+            # Throwaway path: this pod must never write the file the running agent reads.
+            - name: TOKEN_PATH
+              value: /tmp/github-token
+            volumeMounts:
+            - name: minter
+              mountPath: /app
+              readOnly: true
+            - name: app-creds
+              mountPath: /app-creds
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+            securityContext:
+              allowPrivilegeEscalation: false
+              readOnlyRootFilesystem: true
+              runAsNonRoot: true
+              runAsUser: 10000
+              runAsGroup: 10000
+              capabilities:
+                drop: ["ALL"]
+          volumes:
+          - name: minter
+            configMap:
+              name: hermes-github-token-minter
+          - name: app-creds
+            secret:
+              secretName: hermes-github-app
+          - name: tmp
+            emptyDir: {}

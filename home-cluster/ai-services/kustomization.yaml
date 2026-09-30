@@ -23,6 +23,8 @@ resources:
   - hermes-external-secret.yaml
   - hermes-github-app-external-secret.yaml
   - hermes-github-token-minter.yaml
+  - github-app-verify-cronjob.yaml
+  - network-policy-github-app-verify.yaml
   - hermes-gitconfig.yaml
   - hermes-soul-configmap.yaml
   - hermes-config-configmap.yaml
