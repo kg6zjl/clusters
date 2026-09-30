@@ -7,7 +7,6 @@ resources:
   - network-policy.yaml
   - vpn-qbittorent.yaml
   - ingressroute-qbittorrent.yaml
-  - dnsendpoint-qbittorrent.yaml
   - external-secrets.yaml
   - external-secrets-ovpn.yaml
 

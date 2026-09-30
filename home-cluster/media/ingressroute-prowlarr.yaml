@@ -3,9 +3,6 @@ kind: IngressRoute
 metadata:
   name: prowlarr
   namespace: media
-  annotations:
-    external-dns.alpha.kubernetes.io/hostname: prowlarr.kube.stevearnett.com
-    external-dns.alpha.kubernetes.io/target: kube.stevearnett.com
 spec:
   entryPoints:
     - websecure
