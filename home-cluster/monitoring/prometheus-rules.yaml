@@ -343,8 +343,11 @@ spec:
     rules:
     - alert: CronJobStale
       expr: |
-        (time() - kube_cronjob_status_last_successful_time > 172800)
-        or (time() - kube_cronjob_created > 172800 unless on (namespace, cronjob) kube_cronjob_status_last_successful_time)
+        (
+          (time() - kube_cronjob_status_last_successful_time > 172800)
+          or (time() - kube_cronjob_created > 172800 unless on (namespace, cronjob) kube_cronjob_status_last_successful_time)
+        )
+        unless on (namespace, cronjob) kube_cronjob_spec_suspend == 1
       for: 15m
       labels:
         severity: warning
@@ -361,10 +364,20 @@ spec:
     #
     # Second branch for the same reason as above: a detector that has never once succeeded
     # has no last-successful series at all, so a plain staleness comparison goes quiet.
+    #
+    # Suspend-aware, as is the 48h backstop above: a deliberately suspended CronJob is not a
+    # stale one, and without the guard a cost decision (suspend: true on the CronJob, 2026-09-30)
+    # converts into a permanent page. Do not remove the trailing `unless` - a runtime Alertmanager
+    # silence would hide the alarm without fixing the rule, expire on its own, and die with the
+    # Alertmanager volume. The guard is a no-op for a running CronJob, so resuming the detector
+    # brings this alert back by itself after the staleness window.
     - alert: AlertDetectorStale
       expr: |
-        (time() - kube_cronjob_status_last_successful_time{namespace="ai-services",cronjob="alert-detector"} > 3600)
-        or (time() - kube_cronjob_created{namespace="ai-services",cronjob="alert-detector"} > 3600 unless on (namespace, cronjob) kube_cronjob_status_last_successful_time)
+        (
+          (time() - kube_cronjob_status_last_successful_time{namespace="ai-services",cronjob="alert-detector"} > 3600)
+          or (time() - kube_cronjob_created{namespace="ai-services",cronjob="alert-detector"} > 3600 unless on (namespace, cronjob) kube_cronjob_status_last_successful_time)
+        )
+        unless on (namespace, cronjob) kube_cronjob_spec_suspend{namespace="ai-services",cronjob="alert-detector"} == 1
       for: 15m
       labels:
         severity: warning
