@@ -45,25 +45,19 @@ metadata:
   namespace: media
 spec:
   replicas: 1
-  # Step 1 of a two-commit migration to Recreate.
   # The config claim is ReadWriteOnce and this is a single replica, so a RollingUpdate rollout
   # starts the new pod while the old pod still holds the volume on its node: the attach controller
   # refuses it (Multi-Attach), the new pod sits in ContainerCreating until progressDeadlineSeconds
   # marks the Deployment Failed, and Flux rolls the release back. Recreate frees the volume first.
   # Same defect class as jellyfin's chart-driven rollout (media/jellyfin-helmrelease.yaml).
   #
-  # Recreate cannot be set in the same apply that removes rollingUpdate. strategy.rollingUpdate is
-  # defaulted by the API server at create time, so no field manager ever owned it, and server-side
-  # apply can only delete fields it owns -- asking it to drop an unowned field leaves the defaulted
-  # object in place and the apply is rejected: "spec.strategy.rollingUpdate: Forbidden: may not be
-  # specified when strategy 'type' is 'Recreate'". Stating the values that are already live makes
-  # kustomize-controller the owner without changing anything in the cluster, which is what lets the
-  # follow-up commit set type: Recreate with rollingUpdate: null.
+  # rollingUpdate: null is load-bearing. The API server defaults this block in, so left alone it
+  # survives next to type: Recreate and the apply is rejected with "spec.strategy.rollingUpdate:
+  # Forbidden: may not be specified when strategy 'type' is 'Recreate'". Writing null deletes it
+  # instead. That only works because #865 first made kustomize-controller the owner of this block.
   strategy:
-    type: RollingUpdate
-    rollingUpdate:
-      maxSurge: 25%
-      maxUnavailable: 25%
+    type: Recreate
+    rollingUpdate: null
   revisionHistoryLimit: 5
   selector:
     matchLabels:
