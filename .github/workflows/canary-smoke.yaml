@@ -46,16 +46,22 @@ jobs:
       - name: Agent identity
         run: |
           set -euo pipefail
-          # ARC sets RUNNER_* for registration and the entrypoint unsets them before exec'ing
-          # run.sh, so these must be empty here. A leaked RUNNER_TOKEN would be a credential
-          # exposed to every job step.
-          for v in RUNNER_NAME RUNNER_TOKEN RUNNER_REPO RUNNER_ORG RUNNER_LABELS; do
+          # The entrypoint unsets ARC's registration env before exec'ing run.sh, so none of it
+          # should reach the job. A leaked RUNNER_TOKEN would be a credential handed to every step.
+          #
+          # RUNNER_NAME is deliberately NOT in this list: GitHub documents it as one of the
+          # runner's own default job variables, so the agent re-sets it after the entrypoint unsets
+          # it. Asserting on it produced a false positive. It is printed below instead, where its
+          # value is itself the evidence that the agent set it (it is the pod name, not an ARC
+          # registration value).
+          for v in RUNNER_TOKEN RUNNER_REPO RUNNER_ORG RUNNER_ENTERPRISE RUNNER_LABELS RUNNER_GROUP; do
             if [ -n "${!v:-}" ]; then
               echo "LEAK: $v is set in the job environment"
               exit 1
             fi
           done
           echo "no ARC registration env leaked into the job"
+          echo "RUNNER_NAME (agent-set): ${RUNNER_NAME:-<unset>}"
           echo "tool cache: ${RUNNER_TOOL_CACHE:-<unset>}"
           echo "work dir:   ${GITHUB_WORKSPACE:-<unset>}"
 
@@ -91,3 +97,26 @@ jobs:
             /runner/*) echo "workspace is on the mounted volume: $GITHUB_WORKSPACE" ;;
             *) echo "workspace is NOT under /runner: $GITHUB_WORKSPACE"; exit 1 ;;
           esac
+
+  # Control group. The canary asserts things about a runner image; this asserts the same things
+  # about the pool that has been working all along, so a failure in `smoke` can be read as "the
+  # in-house image differs" rather than "the assertion was wrong".
+  #
+  # It exists for one specific question: is RUNNER_NAME in a job's environment a leak from our
+  # entrypoint, or one of the runner's own default variables? summerwind's startup.sh unsets
+  # RUNNER_NAME/RUNNER_REPO/RUNNER_TOKEN exactly as ours does, so whatever this job sees is the
+  # baseline the in-house image should be compared against. Run both jobs; they must agree.
+  baseline:
+    runs-on: [self-hosted, kubernetes]
+    timeout-minutes: 10
+    steps:
+      - name: Report RUNNER_* the same way the canary does
+        run: |
+          set -euo pipefail
+          echo "image:    ${{ runner.name }}"
+          for v in RUNNER_TOKEN RUNNER_REPO RUNNER_ORG RUNNER_ENTERPRISE RUNNER_LABELS RUNNER_GROUP; do
+            if [ -n "${!v:-}" ]; then echo "$v: SET (leak)"; else echo "$v: empty"; fi
+          done
+          echo "RUNNER_NAME (agent-set): ${RUNNER_NAME:-<unset>}"
+          echo "tool cache: ${RUNNER_TOOL_CACHE:-<unset>}"
+          echo "work dir:   ${GITHUB_WORKSPACE:-<unset>}"
