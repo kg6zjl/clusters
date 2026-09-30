@@ -45,6 +45,13 @@ metadata:
   namespace: media
 spec:
   replicas: 1
+  # The config claim is ReadWriteOnce and this is a single replica, so a RollingUpdate rollout
+  # starts the new pod while the old pod still holds the volume on its node: the attach controller
+  # refuses it (Multi-Attach), the new pod sits in ContainerCreating until progressDeadlineSeconds
+  # marks the Deployment Failed, and Flux rolls the release back. Recreate frees the volume first.
+  # Same defect class as jellyfin's chart-driven rollout (media/jellyfin-helmrelease.yaml).
+  strategy:
+    type: Recreate
   revisionHistoryLimit: 5
   selector:
     matchLabels:
