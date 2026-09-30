@@ -47,6 +47,7 @@ jobs:
       # Tagged by commit, never ":latest". A moving tag is the thing this change moves the runners
       # away from; the RunnerDeployment pins one of these by digest when it is flipped over.
       - name: Build and push
+        id: build
         uses: docker/build-push-action@v6
         with:
           context: home-cluster/github-runners
@@ -56,3 +57,33 @@ jobs:
           labels: |
             org.opencontainers.image.source=https://github.com/kg6zjl/clusters
             org.opencontainers.image.revision=${{ github.sha }}
+
+      # Scans the runner image once per build, keyed to the digest that was just pushed -- which is
+      # exactly what runner-deployment.yaml later pins. Replaces the operator scanning every runner
+      # pod's clone three times over, which never finished inside its 5m deadline.
+      #
+      # The action and the CLI it installs are SHA-pinned, not tag-pinned: Aqua's own guidance says
+      # to pin by commit since the March 2026 supply-chain incident, and v0.36.0 is the first release
+      # after it. Renovate tracks the trailing version comment, so the pin stays current without
+      # needing a loose tag.
+      #
+      # Registry auth: none configured here on purpose. The docker login step above already wrote the
+      # projected token into ~/.docker/config.json, and Trivy falls back to that file (go-container-
+      # registry's DefaultKeychain) when it is given no explicit credentials. Handing it the token
+      # through TRIVY_PASSWORD instead would print a credential into the job log, since a projected
+      # ServiceAccount token is not a GitHub secret and so is never auto-masked.
+      #
+      # Report-only on purpose (exit-code: 0). The base image is upstream and fat, so a HIGH or
+      # CRITICAL that nobody upstream can fix would otherwise fail every build forever and freeze the
+      # runner image on an old digest -- strictly worse than the alert this replaces. To gate on
+      # findings, set exit-code: 1; do that once the current backlog is triaged.
+      - name: Scan runner image
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: registry.kube.stevearnett.com/github-runners/runner@${{ steps.build.outputs.digest }}
+          format: table
+          # Matches the cluster-side filter, so a finding here and a finding in-cluster agree on
+          # what counts as reportable.
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: 0

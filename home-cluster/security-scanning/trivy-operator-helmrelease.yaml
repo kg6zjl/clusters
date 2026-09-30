@@ -36,6 +36,16 @@ spec:
                 annotations:
                   configmap.reloader.stakater.com/reload: "trivy-operator-config"
   values:
+    # Top-level, NOT under operator: -- values.yaml declares excludeNamespaces beside
+    # targetNamespaces, and Helm silently ignores an unknown operator.* key, so nesting it there
+    # renders OPERATOR_EXCLUDE_NAMESPACES="" and looks applied while excluding nothing.
+    #
+    # github-runners is excluded because the runner image is too big for the scan job's fixed 5m
+    # deadline: a scan job is a clone of the scanned pod, so each runner pod spawns three scans of
+    # the same 558MiB image, and every one of them dies DeadlineExceeded and pages on KubeJobFailed
+    # without ever producing a report. The image is scanned once per build instead, by digest, in
+    # .github/workflows/build-runner-image.yaml.
+    excludeNamespaces: "github-runners"
     operator:
       builtInTrivyServer: true
       scanJobTTL: "30m"
