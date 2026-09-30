@@ -8,6 +8,12 @@ on:
       - 'home-cluster/**'
       - 'node-config/**'
       - 'renovate.json'
+      # Root AGENTS.md loads into every agent context, so a change to it is a change to what every
+      # agent is permitted to do -- it belongs in the same gate as the manifests. Without this line a
+      # PR touching only AGENTS.md is skipped by this filter, never reports the required checks, and
+      # is unmergeable: branch protection requires Lint/Secret Scan/Validate with enforce_admins, so
+      # no admin can override the missing reports. #852 is stuck in exactly that state.
+      - 'AGENTS.md'
       - '.github/workflows/**'
       - '.gitleaks.toml'
       - '.pre-commit-config.yaml'
