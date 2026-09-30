@@ -1,0 +1,28 @@
+# Ingress to the dedupe gate from the one in-namespace sender, the alert-detector CronJob.
+#
+# ai-services-allow-egress is a namespace-wide ingress allowlist that admits only the
+# traefik namespace, so without this peer the detector's connect to redis:6379 is dropped
+# and the CronJob fails closed on a silent timeout. Additive: policies union, so this adds
+# the detector and does not remove traefik.
+#
+# No egress rule here: ai-services-allow-egress already egresses to every pod
+# (namespaceSelector: {}), which covers the detector -> redis direction.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: redis-allow-detector
+  namespace: ai-services
+spec:
+  podSelector:
+    matchLabels:
+      app: redis
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          app: alert-detector
+    ports:
+    - protocol: TCP
+      port: 6379

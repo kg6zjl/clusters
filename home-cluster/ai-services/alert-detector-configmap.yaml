@@ -2,8 +2,8 @@
 # webhook_configs have no headers field), so the agent needs something in-cluster that can.
 # The script is mounted read-only at /app/detector.py by the alert-detector CronJob.
 #
-# Generated from the tested script and verified byte-for-byte by the same tool; edit the
-# script and re-run the generator rather than patching the embedded copy.
+# The header below used to claim a generator produced this file. There is no generator in
+# this repo (checked): edit the embedded script directly and say so in the PR.
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -14,31 +14,40 @@ data:
     #!/usr/bin/env python3
     """Wake the agent when the cluster is already firing.
 
-    Reads the active alerts from Alertmanager, keeps the ones that started since the previous
-    poll, and POSTs them to the Hermes webhook route as one HMAC-signed request. One poll
-    produces at most one agent run, and an alert is announced once: the filter is the alert's
-    own start time, so there is no state to keep in a pod that is recreated every five
-    minutes.
+    Reads the active alerts from Alertmanager and POSTs the ones worth an agent run to the
+    Hermes webhook route as one HMAC-signed request. Which alerts are worth a run is the
+    exact, deliberately small ALERT_INCLUDE_ALERTNAMES allow-list; ALERT_SEVERITIES
+    (critical only) and ALERT_EXCLUDE_ALERTNAMES / ALERT_EXCLUDE_LABELS stay as defence in
+    depth on either side of it.
 
-    "Announced once" is keyed on the pair (fingerprint, start time), so what wakes the agent is
-    a new alert, not a fresh reading of an old one. A change that matters is a change to the
-    label set: Alertmanager fingerprints an alert from its labels alone, so a label change - a
-    new instance joining the group, a severity escalation from warning to critical - is stored
-    as a new alert with a new start time and does wake the agent. A change to annotations only
-    - the summary or description being re-rendered as the value moves - keeps the fingerprint
-    and the start time, so it does not wake; re-waking on text churn would cost an agent run on
-    every poll and tell the agent nothing it was not already told.
+    Runs HOURLY (0 * * * *) with LOOKBACK_SECONDS longer than the schedule. The wake path is
+    not the paging path: every allow-listed alert already notifies the human on Discord/ntfy
+    inside its own `for:` window, so the agent is the second responder and up to ~65 minutes
+    of latency is accepted in exchange for a hard cap of <=24 runs/day. The allow-list, not
+    the schedule, is what keeps the run count low.
 
-    An alert is dropped before the post if its name is in ALERT_EXCLUDE_ALERTNAMES or if it
-    carries every label pair in ALERT_EXCLUDE_LABELS. The second exists because a name cannot
-    express "this alertname, but only for this image": drop one image_repository, one
-    namespace, without muting the whole class. Either way the rule and the metric stay - the
-    alert still fires and still routes to ntfy and Discord - it just never wakes the agent.
+    "Announced once" is keyed on the pair (fingerprint, start time) AND on a Redis gate. The
+    long lookback means the same standing alert is seen by many consecutive polls; two things
+    stop it waking the agent every hour. The gateway adapter's idempotency cache is exactly
+    one hour, so it expires at the next poll - the Redis key, with its much longer TTL, is the
+    one that does the work. A key is only written after the POST returns 2xx, so a webhook
+    failure loses no wake.
+
+    A change that matters is a change to the label set: Alertmanager fingerprints an alert
+    from its labels alone, so a label change - a new instance joining the group, a severity
+    escalation - is a new alert with a new start time and does wake the agent. A change to
+    annotations only keeps the fingerprint and the start time and does not wake; re-waking on
+    text churn would cost an agent run per hour and tell the agent nothing new.
+
+    The script fails closed. Alertmanager or Redis unreachable means nothing is posted: failing
+    open is the hourly wake storm this exists to prevent, and the human is still paged by the
+    normal routes either way.
     """
     import hashlib
     import hmac
     import json
     import os
+    import socket
     import sys
     import time
     import urllib.error
@@ -49,13 +58,28 @@ data:
     WEBHOOK_URL = os.environ["WEBHOOK_URL"]
     SECRET = os.environ["WEBHOOK_SECRET"]
     SEVERITIES = {s.strip() for s in os.environ.get("ALERT_SEVERITIES", "critical").split(",") if s.strip()}
-    LOOKBACK_SECONDS = int(os.environ.get("LOOKBACK_SECONDS", "420"))
+    LOOKBACK_SECONDS = int(os.environ.get("LOOKBACK_SECONDS", "3900"))
     MAX_ALERTS = int(os.environ.get("MAX_ALERTS", "20"))
     TIMEOUT_SECONDS = int(os.environ.get("HTTP_TIMEOUT_SECONDS", "20"))
     UI_URL = os.environ.get("ALERTMANAGER_UI_URL", "").rstrip("/")
-    # Alertnames that must never wake the agent. The rules still fire and still page wherever
-    # else they route; only this path is deaf to them, so a class of alert the operator has
-    # decided not to act on cannot cost an agent run and an approval prompt.
+
+    # The dedupe gate. A key per (fingerprint, start time) with a long TTL, so a standing
+    # alert seen by many consecutive hourly polls is announced once. The host is a default
+    # rather than a requirement so a missing env cannot silently disable the gate.
+    REDIS_HOST = os.environ.get("REDIS_HOST", "redis.ai-services.svc.cluster.local")
+    REDIS_PORT = int(os.environ.get("REDIS_PORT", "6379"))
+    REDIS_TIMEOUT_SECONDS = float(os.environ.get("REDIS_TIMEOUT_SECONDS", "5"))
+    DEDUPE_TTL_SECONDS = int(os.environ.get("DEDUPE_TTL_SECONDS", "604800"))
+
+    # An alert must be named here to wake the agent at all (empty = no include filter). This
+    # is the cost lever: a small list of names an unattended read-only-plus-PR agent can turn
+    # into a useful investigation. Widening it is a one-line change beside the schedule.
+    INCLUDE_ALERTNAMES = {s.strip() for s in os.environ.get("ALERT_INCLUDE_ALERTNAMES", "").split(",") if s.strip()}
+
+    # Alertnames that must never wake the agent, whatever their severity. The rules still fire
+    # and still page wherever else they route; only this path is deaf to them, so a class the
+    # operator has decided not to act on cannot cost an agent run. Defence in depth behind the
+    # allow-list.
     EXCLUDE_ALERTNAMES = {s.strip() for s in os.environ.get("ALERT_EXCLUDE_ALERTNAMES", "").split(",") if s.strip()}
 
 
@@ -112,6 +136,53 @@ data:
         return "%s/#/alerts?filter=%%7Balertname%%3D%%22%s%%22%%7D" % (UI_URL, alertname)
 
 
+    def redis_reply_line(sock):
+        """Read one CRLF-terminated reply line. RESP replies we expect are an integer for EXISTS
+        (':0' / ':1') and a simple string for SET ('+OK'), so no bulk-string handling is needed."""
+        buf = b""
+        while not buf.endswith(b"\r\n"):
+            chunk = sock.recv(1)
+            if not chunk:
+                raise OSError("redis closed the connection without a reply")
+            buf += chunk
+        return buf[:-2].decode("utf-8", "replace")
+
+
+    def redis_command(*parts):
+        """One inline RESP command on its own connection, one reply line back. The key is a hex
+        digest and the TTL is digits, so no part ever needs quoting or escaping. Stdlib only:
+        ai-services has no internet egress, so `import redis` is not an option."""
+        with socket.create_connection((REDIS_HOST, REDIS_PORT), REDIS_TIMEOUT_SECONDS) as sock:
+            sock.sendall((" ".join(parts) + "\r\n").encode())
+            return redis_reply_line(sock)
+
+
+    def dedupe_key(alert):
+        raw = "%s@%s" % (alert["fingerprint"], alert["starts_at"])
+        return "wake:" + hashlib.sha256(raw.encode()).hexdigest()[:32]
+
+
+    def unseen(alerts):
+        """Keep the alerts no earlier poll announced. Fails closed: any reply that is not ':0'
+        or ':1' raises rather than being read as 'unseen', because reading a failure as unseen
+        is exactly the duplicate wake this gate exists to stop."""
+        new = []
+        for alert in alerts:
+            reply = redis_command("EXISTS", dedupe_key(alert))
+            if reply == ":0":
+                new.append(alert)
+            elif reply != ":1":
+                raise OSError("unexpected EXISTS reply %r" % reply)
+        return new
+
+
+    def mark_seen(alerts):
+        for alert in alerts:
+            reply = redis_command("SET", dedupe_key(alert), "1", "EX", str(DEDUPE_TTL_SECONDS))
+            if reply != "+OK":
+                raise OSError("unexpected SET reply %r" % reply)
+
+
     def new_alerts():
         status, alerts = request(ALERTS_URL + "/api/v2/alerts?active=true&silenced=false&inhibited=false")
         if status != 200 or not isinstance(alerts, list):
@@ -119,18 +190,22 @@ data:
         cutoff = datetime.now(timezone.utc) - timedelta(seconds=LOOKBACK_SECONDS)
         fresh = []
         excluded = []
+        off_list = []
         for alert in alerts:
             labels = alert.get("labels") or {}
             alertname = labels.get("alertname", "unknown")
+            if SEVERITIES and labels.get("severity") not in SEVERITIES:
+                continue
             if alertname in EXCLUDE_ALERTNAMES or excluded_by_labels(labels):
                 excluded.append(alertname)
                 continue
-            if SEVERITIES and labels.get("severity") not in SEVERITIES:
+            if INCLUDE_ALERTNAMES and alertname not in INCLUDE_ALERTNAMES:
+                off_list.append(alertname)
                 continue
             # Selection is on the alert's own start time, which Alertmanager resets when the
             # label set changes because the fingerprint it dedupes on is a hash of the labels
-            # alone. So this wakes on a new or a relabelled alert (new instance, severity
-            # escalation) and stays quiet when only the annotations are re-rendered.
+            # alone. So this picks up a new or a relabelled alert and stays quiet when only the
+            # annotations are re-rendered.
             started = started_at(alert.get("startsAt"))
             if started is None or started < cutoff:
                 continue
@@ -149,12 +224,14 @@ data:
         # alphabetical: on 2026-09-30 the 07:55Z poll dropped two Falco criticals because
         # their alertname was "unknown" and 44 standing Trivy criticals sorted ahead of
         # them, so the poll woke nobody. Recency is the property that matters - an alert
-        # that just started is the one worth a wake - and a large standing group can no
-        # longer starve a new one out of the cap.
+        # that just started is the one worth a wake.
         fresh.sort(key=lambda a: a["starts_at"], reverse=True)
         if excluded:
             print("excluded %s alert(s): %s" % (
                 len(excluded), ", ".join(sorted(set(excluded)))))
+        if off_list:
+            print("filtered %s alert(s) not on the include-list: %s" % (
+                len(off_list), ", ".join(sorted(set(off_list)))))
         return fresh
 
 
@@ -174,8 +251,8 @@ data:
         }
         body = json.dumps(payload).encode()
         timestamp = str(int(time.time()))
-        # The request id doubles as the adapter's idempotency key, so an overlapping poll
-        # re-sending the same alert set is dropped instead of waking the agent twice.
+        # The request id doubles as the adapter's idempotency key, a second gate behind the
+        # Redis one for an overlapping poll inside the adapter's one-hour cache window.
         digest = hashlib.sha256(";".join(sorted(
             "%s@%s" % (a["fingerprint"], a["starts_at"]) for a in alerts)).encode()).hexdigest()
         return request(WEBHOOK_URL, data=body, headers={
@@ -198,16 +275,31 @@ data:
         if not alerts:
             print("no firing alerts started in the last %ss" % LOOKBACK_SECONDS)
             return 0
-        capped = alerts[:MAX_ALERTS]
         try:
-            status, response = sign_and_post(capped, {"truncated": len(capped) < len(alerts)})
+            new = unseen(alerts)
+        except (OSError, ValueError) as exc:
+            print("dedupe store unreachable: %s - refusing to post" % exc, file=sys.stderr)
+            return 1
+        if not new:
+            print("%s firing alert(s) in window, 0 new after dedupe" % len(alerts))
+            return 0
+        capped = new[:MAX_ALERTS]
+        try:
+            status, response = sign_and_post(capped, {"truncated": len(capped) < len(new)})
         except urllib.error.HTTPError as exc:
             print("webhook rejected the post: HTTP %s %s" % (exc.code, exc.read()[:200]), file=sys.stderr)
             return 1
         except urllib.error.URLError as exc:
             print("could not reach %s: %s" % (WEBHOOK_URL, exc), file=sys.stderr)
             return 1
-        print("posted %s alert(s) [%s] -> HTTP %s %s" % (
+        try:
+            mark_seen(capped)
+        except (OSError, ValueError) as exc:
+            # The wake landed; only the record of it did not. Say so loudly - the same alert may
+            # wake the agent once more next hour - but do not fail the job, because a non-zero
+            # exit would alert on a run that actually succeeded.
+            print("wake delivered but dedupe mark failed: %s" % exc, file=sys.stderr)
+        print("posted %s new alert(s) [%s] -> HTTP %s %s" % (
             len(capped), ", ".join(a["alertname"] for a in capped), status,
             (response or {}).get("status", "")))
         return 0
