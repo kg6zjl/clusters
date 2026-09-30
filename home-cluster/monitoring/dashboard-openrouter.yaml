@@ -23,6 +23,77 @@ data:
             "type": "prometheus",
             "uid": "prometheus"
           },
+          "description": "Purchased account credit still available: total credits purchased minus total credits used (openrouter_account_credits_total - openrouter_account_usage_total). Account scope, read from the management key's /credits endpoint - this is the balance OpenRouter itself shows. It is NOT the API key's spend limit.",
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "thresholds"
+              },
+              "decimals": 2,
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "red",
+                    "value": null
+                  },
+                  {
+                    "color": "orange",
+                    "value": 3
+                  },
+                  {
+                    "color": "green",
+                    "value": 10
+                  }
+                ]
+              },
+              "unit": "currencyUSD"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 5,
+            "w": 4,
+            "x": 0,
+            "y": 0
+          },
+          "id": 11,
+          "options": {
+            "colorMode": "value",
+            "graphMode": "none",
+            "justifyMode": "auto",
+            "orientation": "auto",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "textMode": "auto",
+            "wideLayout": true
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "expr": "(openrouter_account_credits_total - openrouter_account_usage_total)",
+              "legendFormat": "",
+              "refId": "A"
+            }
+          ],
+          "title": "Account credit balance remaining (USD)",
+          "type": "stat"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "description": "Remaining spend allowance on the inference API key. OpenRouter enforces this as a per-key cap, separate from the account balance; -1 means the key is unlimited. This is NOT the account credit balance.",
           "fieldConfig": {
             "defaults": {
               "color": {
@@ -54,7 +125,7 @@ data:
           "gridPos": {
             "h": 5,
             "w": 4,
-            "x": 0,
+            "x": 4,
             "y": 0
           },
           "id": 1,
@@ -84,7 +155,7 @@ data:
               "refId": "A"
             }
           ],
-          "title": "Credit limit remaining (USD)",
+          "title": "API key spend limit remaining (USD)",
           "type": "stat"
         },
         {
@@ -115,7 +186,7 @@ data:
           "gridPos": {
             "h": 5,
             "w": 4,
-            "x": 4,
+            "x": 8,
             "y": 0
           },
           "id": 2,
@@ -176,7 +247,7 @@ data:
           "gridPos": {
             "h": 5,
             "w": 4,
-            "x": 8,
+            "x": 12,
             "y": 0
           },
           "id": 3,
@@ -237,8 +308,8 @@ data:
           "gridPos": {
             "h": 5,
             "w": 4,
-            "x": 12,
-            "y": 0
+            "x": 0,
+            "y": 5
           },
           "id": 4,
           "options": {
@@ -302,8 +373,8 @@ data:
           "gridPos": {
             "h": 5,
             "w": 4,
-            "x": 16,
-            "y": 0
+            "x": 4,
+            "y": 5
           },
           "id": 5,
           "options": {
@@ -367,8 +438,8 @@ data:
           "gridPos": {
             "h": 5,
             "w": 4,
-            "x": 20,
-            "y": 0
+            "x": 8,
+            "y": 5
           },
           "id": 6,
           "options": {
@@ -458,7 +529,7 @@ data:
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 5
+            "y": 10
           },
           "id": 7,
           "options": {
@@ -563,7 +634,7 @@ data:
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 5
+            "y": 10
           },
           "id": 8,
           "options": {
@@ -668,7 +739,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 13
+            "y": 18
           },
           "id": 9,
           "options": {
@@ -755,7 +826,7 @@ data:
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 13
+            "y": 18
           },
           "id": 10,
           "options": {
