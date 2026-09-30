@@ -28,13 +28,19 @@ spec:
       # to turn them into config.sh + run.sh, so with only the base's `Cmd: ["/bin/bash"]` the pods
       # started bash, hit EOF and exited 0. None ever registered. See #802.
       #
-      # This digest was not taken on a green build. It was promoted only after a canary pod from it
-      # appeared in GitHub's runner list (agentId 22323, online, "Listening for Jobs") and ran a real
-      # job, which asserted the agent is alive, that no RUNNER_* leaks into the job, that
-      # kubectl/kustomize/yamllint resolve, that the node-local toolcache is mounted with trufflehog
-      # in it, and that docker works. Those assertions are kept, now pointed at this pool, in
-      # .github/workflows/runner-selftest.yaml. The image config was also read back out of the
-      # registry before promotion: Entrypoint ['/usr/bin/entrypoint.sh'], which is the fix.
+      # Built by build-runner-image.yaml from 0d74718 in run 36646234928, which passed. It was then
+      # promoted only after a canary pod from it appeared in GitHub's runner list (agentId 22323,
+      # online, "Listening for Jobs") and ran a real job, which asserted the agent is alive, that no
+      # RUNNER_* leaks into the job, that kubectl/kustomize/yamllint resolve, that the node-local
+      # toolcache is mounted with trufflehog in it, and that docker works. Those assertions are kept,
+      # now pointed at this pool, in .github/workflows/runner-selftest.yaml, which has since passed
+      # here on its own. The image config was also read back out of the registry before promotion:
+      # Entrypoint ['/usr/bin/entrypoint.sh'], which is the fix.
+      #
+      # A later build of 585f1a4 (run 36648463343) produced sha256:a275717b..., and is deliberately
+      # NOT pinned. Its only difference is one log line (the agentId fix in #810), and the digest
+      # that is running has now carried real repo CI. Re-pin it when the next image change gives
+      # something substantive to promote; the self-test gates that.
       #
       # Pinned by digest so the runners cannot drift under us, and so a rollback is a one-line
       # revert to summerwind/actions-runner:v2.337.0-ubuntu-24.04.
