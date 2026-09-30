@@ -405,9 +405,10 @@ spec:
   # only thing excluded; every other kind passes through, so a kind added later alerts by
   # default and fails loud instead of silent.
   #
-  # The corpus is large by design (44 running workloads carry a fixable Critical today), so
-  # the Discord rendering is expected to truncate - the per-alert Alertmanager link is the
-  # authoritative list.
+  # The corpus is large by design (44 running workloads carry a fixable Critical today). The
+  # discord receiver rolls any group larger than 3 alerts up to a count, a sample of 8 and the
+  # per-alert Alertmanager link, so a group this size no longer truncates the Discord message -
+  # the link is still the authoritative list.
   - name: trivy
     rules:
     - alert: TrivyCriticalVulnerability
