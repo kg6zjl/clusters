@@ -1,0 +1,13 @@
+# The registry is published through an IngressRoute; external-dns reads service,
+# ingress and crd sources only, so this record is declared here instead.
+apiVersion: externaldns.k8s.io/v1alpha1
+kind: DNSEndpoint
+metadata:
+  name: registry
+  namespace: registry
+spec:
+  endpoints:
+  - dnsName: registry.kube.stevearnett.com
+    recordType: CNAME
+    targets:
+    - kube.stevearnett.com
