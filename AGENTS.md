@@ -87,6 +87,70 @@ helmfile sync
 task apply
 ```
 
+**Exception (non-persisting, safe to use for validation):**
+```bash
+# --dry-run=server performs NO write. The apiserver evaluates the apply and
+# discards it. This is the only reliable way to answer "will Flux's apply be
+# accepted?" -- and it catches SSA/validation errors that --dry-run=client
+# cannot see. See the Recreate migration note below.
+kubectl apply --server-side --dry-run=server -n <ns> -f <file>
+```
+
+### ⚠️ Single-replica workloads on RWO volumes MUST use `strategy: Recreate`
+
+A `replicas: 1` Deployment that mounts a `ReadWriteOnce` claim and uses the
+default `RollingUpdate` **will deadlock on any image bump**:
+
+- The surge pod is scheduled on a node that cannot attach the volume (RWO has no
+  multi-attach), so it sits in `Init:0/1` forever.
+- The old pod is never released: `maxUnavailable: 25%` of `replicas: 1` floors
+  to **0**, so the controller may not take it down until the new pod is Ready.
+- The Deployment trips `ProgressDeadlineExceeded`. Both sides wait on each other.
+
+Every such workload in this repo sets `strategy: type: Recreate`. Before adding
+a new one that mounts a PVC, check the claim's `accessModes` — if it is
+`ReadWriteOnce`/`ReadWriteOncePod`, `Recreate` is required. There is no
+zero-downtime option here: with one non-shared, non-replicated volume, downtime
+during the swap is the honest behaviour.
+
+Do **not** convert these to StatefulSets to "fix" it. A StatefulSet would require
+moving the claim into a `volumeClaimTemplate`, which **renames the PVC** and so
+requires migrating live volume contents, and it renames the pod
+(`meshmonitor-74f8b6cfd-x` → `meshmonitor-0`), breaking label selectors and the
+`configmap.reloader.stakater.com/reload` annotations. `Recreate` is already the
+convention.
+
+#### The SSA trap: you cannot flip an *existing* object to `Recreate` in one PR
+
+`spec.strategy.rollingUpdate` in a live Deployment is an **apiserver-defaulted**
+field that `kustomize-controller` never applied, so the controller does not own
+it. Server-side apply only removes fields the applying manager previously owned,
+so the live `maxSurge`/`maxUnavailable` block **survives** the merge and the
+apiserver rejects the result:
+
+```
+spec.strategy.rollingUpdate: Forbidden: may not be specified when strategy `type` is 'Recreate'
+```
+
+Omitting the field, setting it to `null`, and setting it to an explicit value all
+fail identically. `--force` is not an acceptable workaround: it strips fields
+owned by other managers (e.g. `Reloader`'s `STAKATER_*` env vars).
+
+**The transition needs two applies:**
+
+1. First apply `type: RollingUpdate` with an explicit
+   `rollingUpdate: {maxSurge: 0, maxUnavailable: 1}`. This is itself a valid
+   delete-before-replace config, so it is safe to ship and it *also* unblocks any
+   rollout already stuck in the deadlock. Applying the block explicitly hands
+   ownership to `kustomize-controller`.
+2. Then apply `type: Recreate` with no `rollingUpdate`. Now the controller owns
+   the field, so dropping it is a legal removal.
+
+**Always validate a manifest that changes a live object's shape with
+`--dry-run=server` before opening the PR.** The alternative is merging a PR that
+Flux rejects every reconcile while the workload stays broken — which is what
+happened in PR #882.
+
 ### Validate Manifests
 
 ```bash
