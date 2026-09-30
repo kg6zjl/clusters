@@ -8,6 +8,7 @@ resources:
   - netalertx-kustomization.yaml
   - speedtest-kustomization.yaml
   - headlamp-kustomization.yaml
+  - sso-kustomization.yaml
   - mqtt-kustomization.yaml
   - meshtastic-kustomization.yaml
   - cloudflared-kustomization.yaml

@@ -1,0 +1,121 @@
+---
+# Dex, the in-cluster OIDC identity provider.
+#
+# Why Dex rather than a proxy in front of Headlamp: a forward-auth proxy authenticates the
+# *browser*, but Headlamp still talks to the apiserver as its own ServiceAccount, so everyone
+# through the gate is the same cluster-admin identity with nothing in the audit log. Dex is an
+# issuer the apiserver itself trusts (see node-config/roles/node/templates/apiserver.args.j2), so
+# Headlamp can present a real per-user OIDC token and Kubernetes RBAC decides what it may do.
+#
+# The secret-looking values below are all `$VAR` references or public identifiers. Dex expands
+# $VARS in its config file, and the env vars come from Secrets synced by ESO out of 1Password.
+# There is no credential material in this file -- see dex-external-secrets.yaml.
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: dex
+  namespace: sso
+spec:
+  interval: 1h
+  chart:
+    spec:
+      chart: dex
+      version: 0.25.2
+      sourceRef:
+        kind: HelmRepository
+        name: dex
+        namespace: flux-system
+  install:
+    createNamespace: false
+  upgrade:
+    remediation:
+      retries: 3
+  values:
+    # Dex never calls the Kubernetes API. It only issues and validates tokens, so it gets no
+    # ServiceAccount and no bindings at all -- the chart would otherwise mint a ClusterRole.
+    rbac:
+      create: false
+    serviceAccount:
+      create: false
+
+    config:
+      # MUST be reachable by a browser (Headlamp redirects there) AND by the apiserver (which
+      # fetches the discovery document). TLS terminates at Traefik with the cert-manager
+      # Let's Encrypt wildcard, so it chains to a publicly trusted root and the apiserver needs
+      # no --oidc-ca-file.
+      issuer: https://sso.kube.stevearnett.com/dex
+
+      storage:
+        type: sqlite3
+        config:
+          file: /data/dex.db
+
+      oauth2:
+        # One IdP, one user: an approval screen is a click with no security value here.
+        skipApprovalScreen: true
+        # Authorization Code only. Implicit flow is deprecated and mints long-lived tokens.
+        responseTypes: ["code"]
+
+      staticClients:
+        # The apiserver's --oidc-client-id. It never sends a client secret, so this stays a
+        # public client with no secret.
+        - id: kubernetes
+          name: Kubernetes API
+          redirectURIs:
+            - urn:ietf:wg:oauth:2.0:oob
+        # Headlamp's built-in OIDC client. Note `secretEnv` takes the env var NAME with no `$` --
+        # that is the documented form for staticClients, unlike connector config which uses `$VAR`.
+        - id: headlamp
+          name: Headlamp
+          redirectURIs:
+            - https://headlamp.kube.stevearnett.com/oidc-callback
+          secretEnv: DEX_HEADLAMP_CLIENT_SECRET
+
+      connectors:
+        - type: google
+          id: google
+          name: Google
+          config:
+            clientID: $DEX_GOOGLE_CLIENT_ID
+            # The field is `clientSecret`, not `secret`. A wrong key here is silently ignored by
+            # the connector, so login would fail with an empty credential rather than a clear error.
+            clientSecret: $DEX_GOOGLE_CLIENT_SECRET
+            # Dex appends /callback to the issuer path. This must match the redirect URI
+            # registered on the Google OAuth client exactly.
+            redirectURI: https://sso.kube.stevearnett.com/dex/callback
+
+    # Rendered as raw container env, so these can use valueFrom rather than literal values.
+    envVars:
+      - name: DEX_GOOGLE_CLIENT_ID
+        valueFrom:
+          secretKeyRef:
+            name: dex-google-connector
+            key: DEX_GOOGLE_CLIENT_ID
+      - name: DEX_GOOGLE_CLIENT_SECRET
+        valueFrom:
+          secretKeyRef:
+            name: dex-google-connector
+            key: DEX_GOOGLE_CLIENT_SECRET
+      - name: DEX_HEADLAMP_CLIENT_SECRET
+        valueFrom:
+          secretKeyRef:
+            name: dex-headlamp-client
+            key: secret
+
+    # sqlite3 needs a writable /data. emptyDir rather than a PVC: the only things Dex persists
+    # are in-flight auth codes and refresh tokens, and losing them on restart just means the user
+    # signs in again. A PVC here would be state to back up for no benefit.
+    volumes:
+      - name: data
+        emptyDir: {}
+    volumeMounts:
+      - name: data
+        mountPath: /data
+
+    resources:
+      requests:
+        cpu: 50m
+        memory: 128Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
