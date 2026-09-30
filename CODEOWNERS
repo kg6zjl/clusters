@@ -1,2 +1,16 @@
 # Default owner for all files
 * @kg6zjl
+
+# The agent's own GitHub identity and access. Listed explicitly so the intent is legible
+# even though the wildcard above already covers them: changes to how the agent
+# authenticates, what it is allowed to reach, and the workflows that gate its PRs are
+# reviewed by the owner. For these to bind, branch protection on main must enable
+# "Require review from Code Owners" -- see home-cluster/ai-services/github-app-identity.md.
+/home-cluster/ai-services/hermes-agent.yaml                @kg6zjl
+/home-cluster/ai-services/hermes-external-secret.yaml      @kg6zjl
+/home-cluster/ai-services/hermes-github-app-external-secret.yaml @kg6zjl
+/home-cluster/ai-services/hermes-github-token-minter.yaml  @kg6zjl
+/home-cluster/ai-services/hermes-gitconfig.yaml            @kg6zjl
+/home-cluster/ai-services/hermes-rbac.yaml                 @kg6zjl
+/.github/workflows/                                        @kg6zjl
+/CODEOWNERS                                                @kg6zjl

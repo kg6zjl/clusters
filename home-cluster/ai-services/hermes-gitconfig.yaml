@@ -22,3 +22,6 @@ data:
       echo username=x-access-token
       echo "password=$(cat /etc/hermes/github-token)"
     fi
+  # The file now holds a GitHub App installation token issued to the App owned by
+  # @kg6zjl (see github-app-identity.md), not the owner's PAT. `x-access-token` is the
+  # documented username for an installation token, so this helper needs no change.
