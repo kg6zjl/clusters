@@ -12,8 +12,9 @@ spec:
   egress:
   # GitHub API/git tooling: GitHub's published ranges rotate across many
   # CIDRs (api.github.com currently resolves to Azure-hosted IPs), so follow
-  # the open-webui internet-egress convention: 443/80 to anywhere. The token
-  # is a fine-grained PAT scoped to kg6zjl/clusters only.
+  # the open-webui internet-egress convention: 443/80 to anywhere. The
+  # credential is a GitHub App installation token: scoped to the two repositories
+  # the App is installed on, and expiring within the hour. See github-app-identity.md.
   - to:
     - ipBlock:
         cidr: 0.0.0.0/0

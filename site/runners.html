@@ -4,13 +4,14 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Runners: CI as a cluster citizen</title>
-<meta name="description" content="Self-hosted GitHub Actions runners inside a Kubernetes cluster: ephemeral pods, credentials from the vault instead of GitHub secrets, image builds to an internal registry, and the least-privilege work still outstanding.">
+<meta name="description" content="Self-hosted GitHub Actions runners inside a Kubernetes cluster: ephemeral pods, credentials from the vault instead of GitHub secrets, image builds to an internal registry authenticated by workload identity, and no cluster RBAC at all.">
 <link rel="stylesheet" href="assets/style.css">
 </head>
 <body>
 <nav class="topnav">
   <ul>
     <li><a href="index.html">The model</a></li>
+    <li><a href="architecture.html">Architecture</a></li>
     <li><a href="limits.html">Permissions</a></li>
     <li><a href="network.html">Network</a></li>
     <li><a href="state.html">State &amp; storage</a></li>
@@ -72,41 +73,42 @@
     <li><strong>A warm tool cache.</strong> Toolchains are pre-downloaded into the cache by a periodic
       job, so a build does not spend its first ninety seconds fetching a compiler. Cheap to run, and
       the difference between a fast pipeline and one people stop watching.</li>
-    <li><strong>Registry auth from the vault.</strong> The image build logs in to the internal
-      registry with credentials already mounted, then builds and pushes with the standard build
-      action. No credential appears in the workflow file.</li>
+    <li><strong>Registry auth with no stored credential.</strong> The build logs in to the internal
+      registry with the runner pod's own projected ServiceAccount token. The registry verifies it
+      against the cluster's OIDC issuer, so there is no shared password in the vault, in the workflow
+      or anywhere else — and the identity in the registry's log is the pod that pushed.</li>
     <li><strong>Notifications from the pipeline.</strong> CI posts its own failures to the same chat
       channel the agent uses, so a red pipeline is visible without anyone polling anything.</li>
   </ul>
 </section>
 
 <section aria-labelledby="gap">
-  <h2 id="gap">The least-privilege work still outstanding</h2>
+  <h2 id="gap">The least-privilege work that got done</h2>
+  <p>
+    The runners used to be the exception to everything on this site. Their ServiceAccount was bound
+    to a cluster role of <code>*</code> on <code>*</code> — full cluster control in every namespace —
+    and the namespace allowed unrestricted egress. Every job inherited both, including whatever a
+    pull request asked the pipeline to run.
+  </p>
+  <p>
+    That identity now holds <strong>no cluster RBAC at all</strong>: the ServiceAccount exists only so
+    the registry can map its projected token to push rights. Egress is an explicit list — DNS, the
+    API server, the registry behind the ingress proxy, and web ports to the outside with every
+    private address range excluded, so the rule cannot become a path back into the cluster or the LAN.
+  </p>
+  <p>
+    The migration was the boring version of the plan: enumerate what the builds actually reached, write
+    those as named rules, remove the blanket, and let a build fail loudly if a destination was missing.
+  </p>
   <div class="note">
-    <span class="label">Named plainly, because this is the biggest hole in the design</span>
+    <span class="label">What a build still inherits</span>
     <p>
-      In the reference setup the runner service account is bound to a role with <code>*</code> on
-      <code>*</code>, and the runner namespace allows unrestricted egress. Both were pragmatic choices
-      to unblock real builds, and both are exactly what the rest of this site argues against. A
-      pipeline that holds cluster-admin and can reach anything is the highest-value target on the
-      network, and it is the one component in this setup that has not been given the treatment
-      everything else got.
+      The registry's pull-secret rotator is allowed to create Secrets in the runner namespace, because
+      a <code>create</code> cannot be scoped by name — the object does not exist when authorization
+      runs. Everything that can be scoped is scoped to a single name, and the grant is documented in
+      the manifest next to the reason it exists.
     </p>
   </div>
-  <p>
-    The migration is not mysterious, but it is genuinely fiddly, which is why it is still here:
-  </p>
-  <ol>
-    <li>Enumerate what each workflow actually needs. Most need almost nothing; a few need to write
-      specific resources in specific namespaces.</li>
-    <li>Replace one broad binding with per-purpose roles — a role per workflow family, scoped to the
-      namespaces and resource types that family touches.</li>
-    <li>Write the egress allow-list from observed traffic: registry, package mirrors, source control,
-      the API server. Prove it by letting a build fail loudly if a destination is missing, in a PR
-      whose required check is that build.</li>
-    <li>Keep the wide role only for the pipelines that genuinely reconcile the cluster, and treat that
-      as a documented exception with a name attached.</li>
-  </ol>
 </section>
 
 <section aria-labelledby="lessons">
