@@ -24,7 +24,10 @@ spec:
       sourceRef:
         kind: HelmRepository
         name: dex
-        namespace: flux-system
+        # The sso Kustomization sets targetNamespace: sso, which rewrites every namespaced
+        # resource in this directory -- the HelmRepository included -- into ns sso. Naming
+        # flux-system here resolves to nothing and the release never gets its chart.
+        namespace: sso
   install:
     createNamespace: false
   upgrade:
