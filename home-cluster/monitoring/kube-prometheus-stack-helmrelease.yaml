@@ -37,7 +37,7 @@ spec:
     # those reconciles recovered a minute later.
     #
     # kube-state-metrics reads the CRs directly and exports gotk_resource_info{ready=...},
-    # which prometheus-rules.yaml uses for FluxResourceNotReady (15m hysteresis).
+    # which flux-resource-alerts.yaml uses for FluxResourceNotReady (15m hysteresis).
     #
     # Deliberately NOT copied from the upstream example config
     # (fluxcd/flux2-monitoring-example/monitoring/controllers/kube-prometheus-stack/
@@ -187,7 +187,7 @@ spec:
     #       - deployments=[alert-on-down]
     #
     # Still not applied - that is a separate decision, and prod availability is already covered
-    # by the ProdServiceDown rule in prometheus-rules.yaml. What blocked it was the endless
+    # by the ProdServiceDown rule in service-down-alerts.yaml. What blocked it was the endless
     # upgrade loop described on spec.timeout above, which is now fixed.
     prometheus:
       serviceMonitorSelectorNilUsesHelmValues: false
@@ -334,6 +334,18 @@ spec:
       enabled: true
       alertmanagerSpec:
         configSecret: alertmanager-config
+        # Both mounts move text out of the config's own YAML string and into files:
+        #   configMaps -> /etc/alertmanager/configmaps/<name>/ (what the `templates:` list at the
+        #                 top of alertmanager.yaml names), so the message templates are a normal
+        #                 .tmpl file instead of Go template escaped inside an ExternalSecret.
+        #   secrets    -> /etc/alertmanager/secrets/<name>/<key> (what discord_configs'
+        #                 webhook_url_file names), so the Discord webhook URL never enters the
+        #                 rendered alertmanager.yaml at all.
+        # The paths are the operator's, not ours: each entry resolves under the directory above.
+        configMaps:
+          - alertmanager-templates
+        secrets:
+          - alertmanager-discord
         # 28Mi peak against a 200Mi request and no declared limit: this one was
         # over-reserved rather than under.
         resources:

@@ -57,6 +57,46 @@
     },
     {
       "customType": "regex",
+      "description": "promtool pin in the CI workflow, where the alerting rule check reads it",
+      "managerFilePatterns": [
+        "/^\\.github/workflows/ci\\.ya?ml$/"
+      ],
+      "matchStrings": [
+        "# renovate: datasource=(?<datasource>.*?) depName=(?<depName>.*?)\\s*(?:\\r?\\n)+\\s*PROMETHEUS_VERSION: \"(?<currentValue>.*?)\""
+      ]
+    },
+    {
+      "customType": "regex",
+      "description": "promtool pin in the node-local cache warmer DaemonSet",
+      "managerFilePatterns": [
+        "/^home-cluster/github-runners/toolcache-warmer\\.ya?ml$/"
+      ],
+      "matchStrings": [
+        "# renovate: datasource=(?<datasource>.*?) depName=(?<depName>.*?)\\s*(?:\\r?\\n)+\\s*- name: PROMETHEUS_VERSION\\s*(?:\\r?\\n)+\\s*value: \"(?<currentValue>.*?)\""
+      ]
+    },
+    {
+      "customType": "regex",
+      "description": "amtool pin in the CI workflow, where the alerting config check reads it",
+      "managerFilePatterns": [
+        "/^\\.github/workflows/ci\\.ya?ml$/"
+      ],
+      "matchStrings": [
+        "# renovate: datasource=(?<datasource>.*?) depName=(?<depName>.*?)\\s*(?:\\r?\\n)+\\s*ALERTMANAGER_VERSION: \"(?<currentValue>.*?)\""
+      ]
+    },
+    {
+      "customType": "regex",
+      "description": "amtool pin in the node-local cache warmer DaemonSet",
+      "managerFilePatterns": [
+        "/^home-cluster/github-runners/toolcache-warmer\\.ya?ml$/"
+      ],
+      "matchStrings": [
+        "# renovate: datasource=(?<datasource>.*?) depName=(?<depName>.*?)\\s*(?:\\r?\\n)+\\s*- name: ALERTMANAGER_VERSION\\s*(?:\\r?\\n)+\\s*value: \"(?<currentValue>.*?)\""
+      ]
+    },
+    {
+      "customType": "regex",
       "description": "node_exporter release pin in the Beast exporter bootstrap script",
       "managerFilePatterns": [
         "/^home-cluster/ai-services/scripts/beast-exporters\\.sh$/"
