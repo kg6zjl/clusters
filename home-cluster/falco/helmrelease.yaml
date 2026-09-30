@@ -194,6 +194,10 @@ spec:
         # reconciler Jobs 6. Matched on the image repository, not the process name, because a
         # shell inside one of these pods keeps the image; `kubectl` as a name is exactly what
         # the rule is for. An unlisted container talking to the API server still fires.
+        # The ingress-blackbox reconciler is matched on its namespace and pod name instead:
+        # its image is docker.io/library/python, and allow-listing that would exempt every
+        # python container in the cluster. It writes Probe CRs from reconcile.py and has a
+        # deliberate Role/ClusterRole and egress policy for it.
         - macro: user_known_contact_k8s_api_server_activities
           condition: >
             (container.image.repository in (
@@ -202,6 +206,7 @@ spec:
               quay.io/kiwigrid/k8s-sidecar, docker.io/kiwigrid/k8s-sidecar,
               reg.kyverno.io/kyverno/kyverno, ghcr.io/kyverno/kyverno,
               ghcr.io/project-zot/zot-linux-amd64, ghcr.io/project-zot/zot))
+            or (k8s.ns.name = "monitoring" and k8s.pod.name startswith "ingress-blackbox-reconciler-")
 
         # from rules/main (list)
         - list: grep_binaries

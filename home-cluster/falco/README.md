@@ -95,9 +95,11 @@ privileged: "privileged busybox" is exactly a shape an attacker would use.
 `user_known_contact_k8s_api_server_activities` (upstream: `never_true`) lists the API clients measured
 in this cluster - headlamp, the agent's own `ai-services` pod, the grafana `k8s-sidecar`, kyverno and
 zot - matched on the image repository, not the process name, because a shell inside one of those pods
-keeps the image while `kubectl` as a name is exactly what the rule is for. This is a sensor with a
-growing allow-list, not a finished rule; see the known gaps for the measurement and the argument that
-it should be dropped outright.
+keeps the image while `kubectl` as a name is exactly what the rule is for. The `ingress-blackbox`
+reconciler Job is the one client matched on namespace + pod name instead: it runs
+`docker.io/library/python`, and allow-listing that repository would exempt every python container in
+the cluster from the rule. This is a sensor with a growing allow-list, not a finished rule; see the
+known gaps for the measurement and the argument that it should be dropped outright.
 
 CRITICAL (2) - reserved for indicators that are essentially never legitimate:
 
