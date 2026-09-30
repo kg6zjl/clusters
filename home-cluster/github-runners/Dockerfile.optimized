@@ -1,55 +1,84 @@
-# Dockerfile for Optimized Mainline GitHub Runner
-FROM ghcr.io/actions/actions-runner:latest
+# In-house runner image.
+#
+# Base is the first-party runner image, pinned by digest rather than a floating tag: the artifact
+# that runs every CI job here should not be a third party's rebuild of the GitHub runner agent.
+# actions/runner's current release is v2.337.0, which is the version this digest carries.
+#
+# The tooling below is exactly what this repo's workflows call: kubectl and kustomize (ci.yaml's
+# Validate job) and yamllint (Lint). Trufflehog is deliberately absent -- it lives in the node-local
+# toolcache that the runner-toolcache-warmer DaemonSet keeps warm, so baking it here would duplicate
+# a solved problem. Every download is pinned by version and verified by checksum: an image build that
+# silently picks up a new kubectl is how "it worked yesterday" starts.
+FROM ghcr.io/actions/actions-runner@sha256:e5496277be5d09bc968b3d64911b74e219ac4a3f2edce956a3ecf9271bea1ef4
 
 USER root
 
-# Install dependencies
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    curl \
-    wget \
-    tar \
-    bash \
-    python3 \
-    python3-pip \
-    python3-venv \
-    git \
-    jq \
-    unzip \
-    openssl \
-    ca-certificates \
-    && rm -rf /var/lib/apt/lists/*
+ARG KUBECTL_VERSION=v1.37.1
+ARG KUBECTL_SHA256=65691ff77eb6fa44c908b77a1082c9f092c3b9733b5cefabec0d1104890e21a8
+ARG KUSTOMIZE_VERSION=v5.8.1
+ARG YAMLLINT_VERSION=1.38.0
 
-# Install kubectl
-RUN curl -LO --retry 5 --retry-delay 5 "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl" && \
-    chmod +x kubectl && mv kubectl /usr/local/bin/
+RUN set -eux; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends ca-certificates curl python3 python3-venv; \
+    rm -rf /var/lib/apt/lists/*
 
-# Install Helm
-RUN for i in {1..10}; do \
-    curl -fsSL https://get.helm.sh/helm-v3.16.4-linux-amd64.tar.gz -o /tmp/helm.tar.gz && break || \
-    sleep 10; \
-    done && \
-    tar -zxf /tmp/helm.tar.gz -C /tmp && \
-    mv /tmp/linux-amd64/helm /usr/local/bin/ && rm -rf /tmp/linux-amd64 /tmp/helm.tar.gz
+# kubectl: dl.k8s.io publishes the digest next to the binary.
+RUN set -eux; \
+    curl -fsSLo /usr/local/bin/kubectl \
+      "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl"; \
+    echo "${KUBECTL_SHA256}  /usr/local/bin/kubectl" | sha256sum -c -; \
+    chmod +x /usr/local/bin/kubectl
 
-# Install Kustomize
-RUN curl -s --retry 5 --retry-delay 5 "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh" | bash && \
-    mv kustomize /usr/local/bin/
+# kustomize: the release ships a checksums.txt that covers the tarball.
+RUN set -eux; \
+    curl -fsSLo "/tmp/kustomize_${KUSTOMIZE_VERSION}_linux_amd64.tar.gz" \
+      "https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2F${KUSTOMIZE_VERSION}/kustomize_${KUSTOMIZE_VERSION}_linux_amd64.tar.gz"; \
+    curl -fsSLo /tmp/kustomize-checksums.txt \
+      "https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2F${KUSTOMIZE_VERSION}/checksums.txt"; \
+    cd /tmp; \
+    grep "kustomize_${KUSTOMIZE_VERSION}_linux_amd64.tar.gz" kustomize-checksums.txt | sha256sum -c -; \
+    tar -xzf "/tmp/kustomize_${KUSTOMIZE_VERSION}_linux_amd64.tar.gz" -C /usr/local/bin kustomize; \
+    chmod +x /usr/local/bin/kustomize; \
+    rm -f "/tmp/kustomize_${KUSTOMIZE_VERSION}_linux_amd64.tar.gz" /tmp/kustomize-checksums.txt
 
-# Install GitHub CLI (gh)
-RUN curl -fsSL --retry 5 --retry-delay 5 https://github.com/cli/cli/releases/download/v2.47.0/gh_2.47.0_linux_amd64.tar.gz | tar -zxf - -C /tmp && \
-    mv /tmp/gh_2.47.0_linux_amd64/bin/gh /usr/local/bin/ && rm -rf /tmp/gh*
-
-# Install Gitleaks
-RUN curl -fsSL --retry 5 --retry-delay 5 https://github.com/gitleaks/gitleaks/releases/download/v8.18.2/gitleaks_8.18.2_linux_x64.tar.gz | tar -zxf - -C /usr/local/bin/ gitleaks
-
-# Install yq
-RUN curl -L --retry 5 --retry-delay 5 "https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64" -o /usr/local/bin/yq && \
-    chmod +x /usr/local/bin/yq
-
-# Install Yamllint via pip (system-wide for easier access)
-RUN pip3 install --no-cache-dir --break-system-packages yamllint
-
-# Add Trufflehog (binary install)
-RUN curl -sSfL https://raw.githubusercontent.com/trufflesecurity/trufflehog/main/scripts/install.sh | sh -s -- -b /usr/local/bin
+# yamllint goes in its own venv. The base image's python belongs to the distro, and installing into
+# it with --break-system-packages is a habit that breaks the day the distro changes.
+RUN set -eux; \
+    python3 -m venv /opt/yamllint; \
+    /opt/yamllint/bin/pip install --no-cache-dir "yamllint==${YAMLLINT_VERSION}"; \
+    ln -sf /opt/yamllint/bin/yamllint /usr/local/bin/yamllint
 
 USER runner
+
+# Fail the build here rather than in a job that only finds out at 3am.
+RUN kubectl version --client && kustomize version && yamllint --version
+
+# The ARC entrypoint contract. This is the one thing the first-party actions/* base does not give us
+# and summerwind's image does. Without it the container inherits `Cmd: ["/bin/bash"]`, starts bash,
+# hits EOF on empty stdin and exits 0 in under a second: every runner pod "succeeded", none ever
+# registered, and ARC churned replacements forever. A green build and a fast image pull prove
+# nothing about this, which is why the flip-over is gated on a pod actually appearing in GitHub.
+# Already mode 0755 in git, so COPY carries the exec bit. Do not add a `RUN chmod +x` here: this
+# stage runs as USER runner, COPY leaves the file root-owned, and a non-root chmod of a root-owned
+# file in /usr/bin fails with EPERM. That failure cost a 15-minute build.
+COPY entrypoint.sh /usr/bin/entrypoint.sh
+
+# Where the agent looks for pre-installed tools. The RunnerDeployment mounts the node-local cache
+# warmed by the runner-toolcache-warmer DaemonSet at this path, and ci.yaml reads trufflehog from
+# /opt/hostedtoolcache/tools/trufflehog. summerwind's image bakes this ENV; the base image does not
+# set it, so without it the runner searches the default /opt/hostedtoolcache path for a different
+# layout and every job that calls trufflehog fails to find it.
+ENV RUNNER_TOOL_CACHE=/opt/hostedtoolcache
+
+# The agent is already unpacked in this image at /home/runner (owned by the runner user), so the
+# entrypoint runs config.sh/run.sh in place. Deliberately NOT /runner: ARC mounts an emptyDir over
+# /runner, and summerwind populates that mount by copying the agent in from /runnertmp. There is
+# nothing to copy here, so pointing RUNNER_HOME at it would just make config.sh a missing file.
+# Job checkouts still go to the emptyDir at RUNNER_WORKDIR, which ARC mounts for us.
+ENV RUNNER_HOME=/home/runner
+
+# Exec form, not `bash -c`: it starts the script directly with no extra shell layer, and the script
+# ends in `exec ./run.sh` so the agent ends up as PID 1. The base image's RUNNER_MANUALLY_TRAP_SIG=1
+# is what makes it install its own SIGTERM handler and deregister when a pod is deleted.
+ENTRYPOINT ["/usr/bin/entrypoint.sh"]

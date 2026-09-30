@@ -22,6 +22,19 @@ spec:
   upgrade:
     remediation:
       retries: -1
+  postRenderers:
+    - kustomize:
+        patches:
+          - target:
+              kind: Deployment
+              name: trivy-operator
+            patch: |
+              apiVersion: apps/v1
+              kind: Deployment
+              metadata:
+                name: trivy-operator
+                annotations:
+                  configmap.reloader.stakater.com/reload: "trivy-operator-config"
   values:
     operator:
       builtInTrivyServer: true
@@ -29,7 +42,18 @@ spec:
       scanJobsInSameNamespace: false
       metricsVulnIdEnabled: true
       infraAssessmentScannerEnabled: false
+      # A scan job is a clone of the scanned pod's spec with every container swapped for trivy,
+      # but the built-in *server* does the image fetching and carries no imagePullSecrets of its
+      # own. Without this it asks zot for the runner manifest with no usable credential and gets
+      # 401, so every scan of a private image dies instead of reporting. The value is the
+      # namespace the scanned workload lives in, not this one.
+      privateRegistryScanSecretsNames: {"github-runners": "registry-pull-read"}
     trivy:
+      # Only report what gets triaged. The full CVE list on a fat base image produces a
+      # report larger than both the apiserver's 3 MiB request cap and the trivy
+      # client-server 2 MiB gRPC message cap, so those scans fail outright instead of
+      # reporting anything at all.
+      severity: "HIGH,CRITICAL"
       ignoreUnfixed: true
       timeout: "5m0s"
       resources:

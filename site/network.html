@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Network: default deny, then ask</title>
+<meta name="description" content="Default-deny NetworkPolicies around an in-cluster AI agent: the explicit egress list, why namespaceSelector never covers the API server, and the A/B test that settles which policy is blocking.">
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<nav class="topnav">
+  <ul>
+    <li><a href="index.html">The model</a></li>
+    <li><a href="limits.html">Permissions</a></li>
+    <li><a href="network.html" aria-current="page">Network</a></li>
+    <li><a href="state.html">State &amp; storage</a></li>
+    <li><a href="skills.html">Skills</a></li>
+    <li><a href="workflow.html">The loop</a></li>
+    <li><a href="secrets.html">Secrets</a></li>
+    <li><a href="paging.html">Paging</a></li>
+    <li><a href="runners.html">Runners</a></li>
+    <li><a href="interesting.html">Interesting bits</a></li>
+    <li><a href="proud.html">Proud of</a></li>
+    <li><a href="checklist.html">Build your own</a></li>
+  </ul>
+</nav>
+
+<header class="page-head">
+  <p class="eyebrow">Boundary 2</p>
+  <h1>Network: default deny, then ask</h1>
+  <p class="lede">
+    Every namespace this agent touches is default-deny for both directions. Nothing reaches it and
+    nothing leaves it except what an explicit, reviewed rule allows. The policy is a first-class
+    suspect in every failure, and the policy lives in git like everything else.
+  </p>
+</header>
+
+<main>
+
+<section aria-labelledby="why">
+  <h2 id="why">Why bother when RBAC already restricts it</h2>
+  <p>
+    Read-only RBAC limits what the agent can <em>ask the API for</em>. It does nothing about what a
+    compromised or confused pod can <em>reach</em>: a database port, an admin UI on the LAN, another
+    tenant's service, the internet. Default-deny is what turns "the agent holds no credentials" into
+    "the agent has nowhere to send them anyway".
+  </p>
+  <p>
+    It also has a quieter benefit: it makes the agent's dependencies explicit. Its egress list is the
+    honest diagram of what it needs to do its job — DNS, the API server, its own upstreams — and
+    anything it needs later is a visible diff in a pull request.
+  </p>
+</section>
+
+<section aria-labelledby="shape">
+  <h2 id="shape">The agent namespace's egress list</h2>
+  <p>
+    Three kinds of rule, each with a reason:
+  </p>
+  <ul>
+    <li><strong>DNS to the cluster's resolver</strong> — UDP and TCP on port 53, selected by the
+      namespace label. TCP matters: a large answer over UDP gets a truncated reply, and the retry
+      needs TCP.</li>
+    <li><strong>The API server</strong> — which is where everyone gets it wrong (next section).</li>
+    <li><strong>Its upstreams</strong> — the model gateway or internal services it calls, by name
+      where they are pods and by address block where they are not. Each one is a deliberate line,
+      because reaching an internal service is a decision and should read like one.</li>
+  </ul>
+  <p>
+    Ingress is the mirror image: the namespace takes traffic only from the ingress proxy or the
+    controller that owns it, and nothing else — including nothing from other namespaces that happen
+    to want to call it.
+  </p>
+  <p class="small">
+    Cross-namespace selectors use the namespace's <code>kubernetes.io/metadata.name</code> label,
+    which the control plane sets automatically. No label bookkeeping, and no rule that silently stops
+    matching because someone renamed something.
+  </p>
+</section>
+
+<section aria-labelledby="apiserver">
+  <h2 id="apiserver">The mistake everyone makes: the API server is not a pod</h2>
+  <p>
+    A <code>namespaceSelector</code> rule covers pods. The kube-apiserver is not a pod. It is a <strong>host process</strong> on the nodes. So a policy built only from namespace selectors leaves it unreachable, and the symptom sends people down the wrong path: <code>dial tcp &lt;service-address&gt;:443: i/o timeout</code>. That reads like a broken control plane. It is usually a one-line egress rule nobody wrote.
+  </p>
+  <p>
+    Two <code>ipBlock</code> rules fix it, and both are needed because the packet path differs:
+  </p>
+<pre><code>egress:
+  # ClusterIP of the kubernetes service — the service CIDR on 443
+  - to:
+    - ipBlock:
+        cidr: &lt;service CIDR&gt;
+    ports:
+    - { protocol: TCP, port: 443 }
+
+  # Node addresses, post-DNAT, on the API server's secure port
+  - to:
+    - ipBlock:
+        cidr: &lt;node subnet&gt;
+    ports:
+    - { protocol: TCP, port: 443 }
+    - { protocol: TCP, port: &lt;apiserver secure port&gt; }</code></pre>
+  <p>
+    This exact class of bug has been found and fixed at least three times in the reference setup —
+    once for the agent, once for the load-balancer controller, once for the dashboard — which is the
+    argument for writing it down in the operator's instructions rather than leaving it as folklore.
+  </p>
+</section>
+
+<section aria-labelledby="debug">
+  <h2 id="debug">Debug order: the policy comes before the packet</h2>
+  <p>
+    When something cannot reach something else, do not start at the application. Start at the policy,
+    because in a default-deny cluster it is the likeliest cause and the cheapest to check:
+  </p>
+  <ol>
+    <li>List the policies for the source namespace and read every egress rule. Every one.</li>
+    <li>Assume a policy is the cause until disproved. "It looks like allow-all" is not disproof.</li>
+    <li>
+      Run the definitive test: the <strong>same request from the same image, twice</strong> — once
+      from a namespace with no policy at all, once from the namespace under investigation. One works,
+      one times out: the policy is the cause, full stop.
+    </li>
+    <li>Only after exoneration, look at DNS, endpoints, or the app's own configuration.</li>
+  </ol>
+  <div class="note">
+    <span class="label">Tell-tales worth memorising</span>
+    <p>
+      A selector that "used to work" is usually a label that stopped matching. A controller
+      that cannot list its own resources after a reboot is usually the missing service-CIDR rule.
+      A project that fetches one specific host and times out on that host alone is not the policy —
+      it is the <a href="network.html#egress-path">egress path</a> leaving through something that
+      cannot reach it.
+    </p>
+  </div>
+</section>
+
+<section aria-labelledby="gap">
+  <h2 id="gap">The gap to close in your own setup</h2>
+  <p>
+    In the reference cluster the CI runners are the exception: their namespace carries an
+    expedient allow-all egress. It was added to unblock image builds, it works, and it is a hole
+    — the same reasoning that makes default-deny worth having applies to the runners too, and they
+    are the processes that hold the widest credentials.
+  </p>
+  <p>
+    The honest migration is not "delete the rule". It is: enumerate what the builds actually reach
+    (registry, package mirrors, the API server, source control), write those as explicit rules, then
+    remove the blanket — and prove it in a PR where the required check is the build that used to
+    depend on the blanket.
+  </p>
+</section>
+
+<section aria-labelledby="egress-path">
+  <h2 id="egress-path">Egress is a path, not a promise</h2>
+  <p>
+    A permissive egress rule says a packet may leave. It says nothing about whether it arrives. In
+    the reference setup the cluster's default route leaves through a router that policy-routes
+    traffic over a tunnel, with a kill switch: if the tunnel is down, traffic stops rather than
+    falling back to the direct route. That is the intended behaviour for a privacy-conscious
+    network, and it means one class of failure looks exactly like a broken application:
+    <strong>one destination times out while every other destination works</strong>.
+  </p>
+  <p>
+    Learn to recognise the shape of the failure. The wrong reflex — restart the app, widen the policy — costs an hour:
+  </p>
+  <ul>
+    <li>Timeouts to one host, HTTP 200 from the same pod to another host a second later → the path,
+      not the policy and not the service.</li>
+    <li>The alerting pipeline reporting failures for one receiver while a second receiver keeps
+      delivering → same class, different symptom.</li>
+  </ul>
+  <p>
+    The fix is an explicit exemption for the destination on the router — a route that sends just
+    that traffic out the direct path. Two things are worth knowing before you write it:
+  </p>
+  <ul>
+    <li><strong>Do not fix it by disabling the kill switch.</strong> That fails open for
+      <em>every</em> destination in the cluster, which silently undoes the reason the tunnel exists.
+      A destination-scoped rule is surgical; a global switch is not.</li>
+    <li><strong>A hostname-scoped exemption depends on DNS.</strong> If the router matches by domain,
+      it has to see the lookup — so the client must resolve through it. An address-scoped rule has no
+      such dependency, and a mismatched pair (domain rule, non-router resolver) fails in the
+      confusing way: the first attempt after the cache goes cold still takes the tunnel and times
+      out, and the retry seconds later succeeds. That softens a failure; it does not remove it.</li>
+  </ul>
+  <div class="note">
+    <span class="label">Paging is the destination that must not ride a tunnel it cannot reach</span>
+    <p>
+      Alert notifications are the one flow whose failure is invisible while it matters — the system
+      that would tell you something is wrong is the thing that is wrong. Whatever else you put behind
+      a tunnel, route the notification destinations directly. See <a href="paging.html">Paging</a>.
+    </p>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  <div class="wrap">
+    <p><a href="limits.html">← Permissions</a> · <a href="state.html">State &amp; storage →</a></p>
+  </div>
+</footer>
+</body>
+</html>

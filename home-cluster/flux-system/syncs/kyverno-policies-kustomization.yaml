@@ -1,0 +1,22 @@
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: kyverno-policies
+  namespace: flux-system
+spec:
+  interval: 1m0s
+  # Separate directory from the install on purpose. The Kyverno chart supplies
+  # the ClusterPolicy CRD, but Flux dry-runs a directory as a whole: a
+  # ClusterPolicy sitting next to the HelmRelease that installs its CRD fails the
+  # dry-run with "no matches for kind", the whole apply is abandoned, and the
+  # HelmRelease that would supply the CRD is never applied - a deadlock no retry
+  # can break. dependsOn waits for the install layer instead.
+  path: ./home-cluster/kyverno/policies
+  prune: true
+  dependsOn:
+    - name: kyverno
+  sourceRef:
+    kind: GitRepository
+    name: clusters
+  targetNamespace: kyverno
+  timeout: 2m0s

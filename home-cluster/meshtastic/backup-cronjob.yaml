@@ -12,16 +12,33 @@ spec:
   failedJobsHistoryLimit: 2
   jobTemplate:
     spec:
+      # A stuck pod must not wedge the schedule. ConcurrencyPolicy: Forbid (below)
+      # counts a Pending pod as an active job, so one that never starts blocks every
+      # later run silently - no failure, no alert on the job itself. A real run takes
+      # under a minute; 30 minutes is a ceiling, not a limit.
+      activeDeadlineSeconds: 1800
       template:
         metadata:
           labels:
             app: meshmonitor-backup
         spec:
           restartPolicy: OnFailure
+          # meshmonitor-data-longhorn is RWO, so Longhorn can only attach it to the node
+          # already running meshmonitor. Without this the pod lands on any node and sits
+          # ContainerCreating on the attach forever.
+          affinity:
+            podAffinity:
+              requiredDuringSchedulingIgnoredDuringExecution:
+              - labelSelector:
+                  matchLabels:
+                    app: meshmonitor
+                topologyKey: kubernetes.io/hostname
+                namespaces:
+                - meshtastic
           volumes:
           - name: meshmonitor-data
             persistentVolumeClaim:
-              claimName: meshmonitor-data
+              claimName: meshmonitor-data-longhorn
               readOnly: true
           - name: nas-creds
             secret:

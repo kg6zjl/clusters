@@ -18,8 +18,48 @@ spec:
   upgrade:
     remediation:
       retries: 3
+  # This is the ONLY actions-runner-controller installation in the cluster.
+  #
+  # Do not add a second HelmRelease on this chart in another namespace. Each install registers its
+  # own MutatingWebhookConfiguration, and both use the webhook name
+  # `mutate-runner-pod.webhook.actions.summerwind.dev`. The chart hardcodes that name, so two
+  # installs produce two webhook configurations with an identical name, and both match runner
+  # pods. Admission webhooks are all-or-nothing, so if the second one denies the request the pod
+  # is rejected even though the first one approved it. That is exactly how a GitHub-App
+  # controller that could not mint registration tokens ended up vetoing every runner pod created
+  # by this healthy PAT-authenticated controller.
+  #
+  # The controller reads its GitHub credential from the Secret once at pod start and never
+  # re-reads it, so a rotated PAT leaves it authenticating with a dead credential (401 Bad
+  # credentials) until the pod is replaced. Flux will not do that for us: the Secret is written
+  # by External Secrets, not by Helm, so the rendered Deployment is byte-identical before and
+  # after a rotation and no rollout happens. Reloader (already running in kube-system) restarts
+  # the controller when the Secret changes. The chart exposes no annotations field on its
+  # Deployment, so this is applied to the rendered output.
+  postRenderers:
+    - kustomize:
+        patches:
+          - target:
+              kind: Deployment
+              name: arc-operator-actions-runner-controller
+            patch: |
+              apiVersion: apps/v1
+              kind: Deployment
+              metadata:
+                name: arc-operator-actions-runner-controller
+                annotations:
+                  secret.reloader.stakater.com/reload: controller-manager
   values:
     certManagerEnabled: false
     githubTokenSecretRef:
       name: controller-manager
       key: github_token
+    resources:
+      # Steady state is ~56Mi (manager) plus ~16Mi (kube-rbac-proxy). The 1Gi request
+      # that used to show on the pod was never in this manifest - it was injected at
+      # admission - so the controller reserved 2Gi across both containers while using
+      # ~72Mi. Declaring it here makes the reservation small and visible in Git.
+      requests:
+        memory: 128Mi
+      limits:
+        memory: 1Gi

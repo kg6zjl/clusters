@@ -1,0 +1,48 @@
+# Publishes site/ to GitHub Pages.
+#
+# main only, deliberately: a Pages deployment is a publish, so a pull request must not be able to
+# trigger one. The workflow is also listed in its own paths filter, so a change to it is exercised
+# by the same push that lands it.
+#
+# Prerequisite (human, one time): Settings -> Pages -> Build and deployment -> Source = "GitHub
+# Actions". No API token available to the agent can set that, and until it is set the deploy step
+# fails loudly rather than silently doing nothing.
+name: Pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - site/**
+      - .github/workflows/pages.yaml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One publish at a time, and never cancel one in flight.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ${{ vars.CI_RUNNER || 'self-hosted' }}  # CI_RUNNER repo variable overrides this
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Static files, published as they sit: no Jekyll, no build step, no dependencies.
+      - name: Upload site
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+      - name: Deploy
+        id: deploy
+        uses: actions/deploy-pages@v4

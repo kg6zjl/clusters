@@ -1,0 +1,16 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: registry
+resources:
+  - namespace.yaml
+  - pvc.yaml
+  - configmap.yaml
+  - deployment.yaml
+  - service.yaml
+  - ingressroute.yaml
+  - dnsendpoint.yaml
+  - network-policy.yaml
+  - pull-identity.yaml
+  - pull-rotator-rbac.yaml
+  - pull-rotator.yaml
+  - oidc-discovery-rbac.yaml

@@ -1,0 +1,92 @@
+# Wakes the agent when the cluster is already broken. Alertmanager cannot sign an inbound
+# HMAC itself (its webhook_configs have no headers field), so it cannot POST to the agent
+# directly; this is the sender that can. It reads the firing alerts out of Alertmanager and
+# re-posts them to the webhook route, signed.
+#
+# Pull rather than push, deliberately: the alert's own start time decides what is new, so
+# one poll produces at most one agent run, an alert is announced once, and nothing has to
+# be remembered in a pod that is recreated every five minutes. The cost of that choice is
+# latency - the agent wakes within one poll interval, not within seconds.
+#
+# Severity filter is "critical" only. Widen ALERT_SEVERITIES to include warnings when the
+# agent's investigation is worth more than the extra runs it will start.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: alert-detector
+  namespace: ai-services
+  labels:
+    app: alert-detector
+spec:
+  schedule: "*/5 * * * *"
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 120
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      activeDeadlineSeconds: 120
+      template:
+        metadata:
+          labels:
+            app: alert-detector
+        spec:
+          restartPolicy: Never
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65534
+            runAsGroup: 65534
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+          - name: detector
+            image: python:3.13-slim
+            command: ["python", "/app/detector.py"]
+            env:
+            - name: ALERTS_URL
+              value: "http://kube-prometheus-stack-alertmanager.monitoring.svc.cluster.local:9093"
+            # Service name, not a pod IP: hermes-webhook is the stable address for the
+            # gateway's listener.
+            - name: WEBHOOK_URL
+              value: "http://hermes-webhook.ai-services.svc.cluster.local:8644/webhooks/cluster-alert"
+            # Only used to build the per-alert deep link in the payload.
+            - name: ALERTMANAGER_UI_URL
+              value: "https://alerts.kube.stevearnett.com"
+            - name: ALERT_SEVERITIES
+              value: "critical"
+            # Longer than the 5m schedule on purpose: an alert is then covered even if one
+            # run is delayed, and the duplicate it may produce is dropped by the adapter's
+            # idempotency key rather than starting a second run.
+            - name: LOOKBACK_SECONDS
+              value: "420"
+            - name: MAX_ALERTS
+              value: "20"
+            - name: PYTHONDONTWRITEBYTECODE
+              value: "1"
+            - name: WEBHOOK_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: hermes-agent-secrets
+                  key: WEBHOOK_SECRET
+            resources:
+              requests:
+                cpu: 10m
+                memory: 32Mi
+              limits:
+                cpu: 100m
+                memory: 128Mi
+            securityContext:
+              allowPrivilegeEscalation: false
+              readOnlyRootFilesystem: true
+              capabilities:
+                drop:
+                - ALL
+            volumeMounts:
+            - name: script
+              mountPath: /app
+              readOnly: true
+          volumes:
+          - name: script
+            configMap:
+              name: alert-detector-script

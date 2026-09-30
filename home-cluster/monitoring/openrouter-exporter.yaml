@@ -6,6 +6,9 @@ metadata:
   labels:
     app: openrouter-exporter
     alert-on-down: "true"
+  annotations:
+    configmap.reloader.stakater.com/reload: "openrouter-exporter-script"
+    secret.reloader.stakater.com/reload: "openrouter-exporter-secret"
 spec:
   replicas: 1
   selector:
@@ -34,6 +37,13 @@ spec:
             secretKeyRef:
               name: openrouter-exporter-secret
               key: api-key
+        - name: OPENROUTER_MANAGEMENT_KEY
+          valueFrom:
+            secretKeyRef:
+              name: openrouter-exporter-secret
+              key: management-key
+        - name: OPENROUTER_POLL_CREDITS
+          value: "true"
         - name: SCRAPE_INTERVAL_SECONDS
           value: "60"
         - name: PORT

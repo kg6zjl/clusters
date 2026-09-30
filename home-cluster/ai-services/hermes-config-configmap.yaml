@@ -82,6 +82,137 @@ data:
       model: "deepseek/deepseek-v4.1-flash"
       model_provider: openrouter
 
+    # Inbound webhooks, for intra-net senders only: Alertmanager, the CI runners, a
+    # detector CronJob, LAN tooling. Nothing here faces the internet - the pod sits
+    # behind the LAN and hermes-agent-allow-webhook is the whole allowlist. The HMAC
+    # signing key arrives as WEBHOOK_SECRET from hermes-agent-secrets (see
+    # hermes-external-secret.yaml); no key material is committed here.
+    #
+    # Reachable at http://hermes-webhook.ai-services.svc.cluster.local:8644/webhooks/<route>
+    # from inside the cluster. A LAN device would additionally need a NodePort or an
+    # Ingress, which the network policy already allows for.
+    #
+    # Webhook runs are locked down by default: toolsets.py ships hermes-webhook with
+    # _HERMES_WEBHOOK_SAFE_TOOLS (web_search, web_extract, vision_analyze, clarify) because
+    # webhook payloads are untrusted third-party content. Ours are not. The Service is
+    # ClusterIP with no Ingress, hermes-agent-allow-webhook is the whole allowlist, every POST
+    # is HMAC-SHA256-verified against WEBHOOK_SECRET, and the only sender is the alert-detector
+    # CronJob in this namespace. Left at the default a wake can read the alert and do nothing
+    # else - no kubectl, no files, no PR - which is a notification, not a wake. Worse, its own
+    # route prompt instructs it to run kubectl and open a PR it has no tool for.
+    #
+    # `coding` is the composite bundle (file + terminal + search + web + skills + todo + memory
+    # + session_search + clarify + code_execution + delegation + vision). kanban is called for
+    # by the credential-leak route, whose prompt records the leak as a ticket.
+    platform_toolsets:
+      webhook: [coding, kanban]
+    platforms:
+      webhook:
+        enabled: true
+        extra:
+          port: 8644
+          # Backstop, not throughput. The detector posts at most one batched wake per poll
+          # (12/hour) and the leak route is event-driven; the adapter's default is 30/min per
+          # route, which is far more agent runs than a looping or rogue sender should be able
+          # to buy. Exceeding this answers 429 instead of starting work.
+          rate_limit: 6
+          # Every route's prompt OPENS with a trigger banner naming the class and the sender, so a
+          # wake is self-identifying: the run, the session log and Discord all say which path fired
+          # it, without anyone correlating timestamps afterwards. Two classes:
+          #   ALERT    - fired by the cluster's alerting stack (Alertmanager -> alert-detector)
+          #   INTERNAL - any other in-cluster sender posting directly (detector, CI, LAN tooling)
+          # A new sender gets its own route: the class belongs to the sender, not the payload, and
+          # reusing a route destroys the distinction these banners exist to keep.
+          routes:
+            credential-leak:
+              # Woken by a leak report rather than a generic alert: the ask is a
+              # suggested resolution that gets recorded, not just a notification.
+              deliver: discord
+              skills: [credential-rotation, monitoring-alerting]
+              prompt: |
+                [TRIGGER: INTERNAL WEBHOOK - route=credential-leak, sender=a secret-scanning
+                detector. Not an Alertmanager alert; nothing is wired to this route yet.]
+
+                A credential leak was reported to Hermes. This is not a routine alert: the
+                user wants a suggested resolution, recorded so it stays pending instead of
+                being lost in a notification.
+
+                Payload:
+                {__raw__}
+
+                Work in this order, and do not stop at describing the problem:
+                1. Identify the leak from the payload: repository, where it is (commit, issue
+                   body, comment, PR), the secret type, and whether it is publicly visible.
+                2. Determine whether the exposed credential is still live. Do this WITHOUT
+                   using the credential and WITHOUT reading or printing its value. If liveness
+                   cannot be established that way, say so plainly instead of guessing.
+                3. Propose the resolution as concrete steps: revoke/rotate the credential in
+                   its provider, remove it from whatever leaked it, store the new value in
+                   1Password, then force-sync the ExternalSecret(s) that consume it so
+                   reloader restarts the consumers.
+                4. Open a kanban ticket recording the leak, the evidence found and the
+                   proposed steps, so the work is pending and traceable.
+                5. Reply in Discord with the short version: what leaked, whether it is live,
+                   what is proposed, and the ticket id.
+
+                Never print, echo or commit the credential value or any secret. If the
+                payload contains the secret itself, do not repeat it back.
+            # Unattended wake from the cluster's own alerting. The alert-detector CronJob
+            # is the only sender: it reads Alertmanager and re-posts signed, so nothing
+            # here trusts a POST merely because it arrived from the LAN.
+            cluster-alert:
+              deliver: discord
+              skills: [systematic-debugging, cluster-gitops, monitoring-alerting]
+              prompt: |
+                [TRIGGER: ALERT WEBHOOK - route=cluster-alert, sender=the alert-detector CronJob
+                reading Alertmanager. The cluster's own alerting path, not an internal post.]
+
+                The cluster woke you: one or more alerts are firing, and nobody is in this
+                conversation except you. Payload:
+
+                {__raw__}
+
+                Rules for an unattended run, in order of importance:
+                1. Diagnose before you change anything, and use read-only commands only:
+                   kubectl get / describe / logs. Never apply, edit, patch, delete or scale
+                   anything, and never restart a workload to see whether that fixes it.
+                2. If a fix is warranted, open a pull request on kg6zjl/clusters and stop
+                   there. Never merge it, not even a one-line manifest change - the human
+                   who is asleep decides that. The repo is already cloned: work in a fresh
+                   worktree under /opt/data/worktrees branched off origin/main, and fetch
+                   first - the shared clone at /opt/data/workspace/clusters can be stale.
+                   Never push to main. Read home-cluster/AGENTS.md before acting; it is
+                   the operating contract for this cluster.
+                3. Never print, echo or commit a secret value, and never use a leaked
+                   credential to test whether it is still live.
+                4. Say what you verified and what you are guessing. If the evidence does
+                   not explain the alert, say so plainly rather than inventing a cause.
+                5. Keep the reply short: what is firing, what you found, what you did, and
+                   the PR link if you opened one.
+            # In-cluster tooling rather than the alerting stack. Nothing posts here yet; it exists
+            # so a sender has a route whose banner already reads INTERNAL instead of borrowing the
+            # alert route and making every wake look like an Alertmanager page.
+            internal:
+              deliver: discord
+              skills: [cluster-gitops]
+              prompt: |
+                [TRIGGER: INTERNAL WEBHOOK - route=internal, sender=an in-cluster process. This
+                is NOT an Alertmanager alert.]
+
+                An in-cluster process woke you; nobody is in this conversation except you.
+                Payload:
+
+                {__raw__}
+
+                Rules for an unattended run:
+                1. Read the payload first and work out what the sender wants. If it is only a
+                   notification, say so and stop; do not invent work.
+                2. Read-only kubectl only, and read home-cluster/AGENTS.md before acting.
+                3. A fix goes through a pull request on kg6zjl/clusters - never merge it, never
+                   push to main. Work in a fresh worktree under /opt/data/worktrees branched off
+                   origin/main, and fetch first.
+                4. Never print, echo or commit a secret value.
+                5. Keep the reply short: who woke you, what the payload wanted, what you did.
     display:
       platforms:
         discord:

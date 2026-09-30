@@ -1,0 +1,73 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: kyverno
+  namespace: kyverno
+spec:
+  # Every Kyverno controller pod carries app.kubernetes.io/part-of: kyverno
+  # (chart helper `kyverno.matchLabels.common`, merged into each component's
+  # matchLabels). Selecting the whole set in one object is deliberate: this
+  # namespace is otherwise completely open, so this NetworkPolicy is what makes
+  # it a restricted namespace, and a second, narrower object could silently
+  # re-open the rest.
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/part-of: kyverno
+  # Both directions. A policy that lists only `Ingress` here would leave egress
+  # unrestricted; listing Egress is what actually isolates the pod's outbound
+  # traffic, and Calico (this cluster's CNI) enforces the union of all policies
+  # that select the pod.
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # kube-apiserver -> admission webhook (Service kyverno-svc:443 -> pod:9443).
+    # The apiserver is a HOST process on a node, not a pod: its source address is
+    # the node's LAN IP, so a namespaceSelector can never match it and an ipBlock
+    # is required. 192.168.1.0/24 is the real source (all three nodes are
+    # apiserver endpoints, per the default/kubernetes EndpointSlice); the service
+    # CIDR is included defensively for a CNI that preserves the original ClusterIP
+    # as the source address. No pod has an address in the service CIDR, so this
+    # second block grants nothing in practice.
+    - from:
+        - ipBlock:
+            cidr: 192.168.1.0/24
+        - ipBlock:
+            cidr: 10.152.183.0/16
+      ports:
+        - protocol: TCP
+          port: 9443
+    # Prometheus (monitoring) scraping the controllers' metrics.
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+      ports:
+        - protocol: TCP
+          port: 8000
+  egress:
+    # DNS. `to: []` matches every destination on the DNS port, which is the shape
+    # security-scanning/network-policies.yaml already uses here and is the one
+    # that survives Calico's post-DNAT evaluation of a CoreDNS ClusterIP.
+    - to: []
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # kube-apiserver, pre-DNAT (Service ClusterIP) ...
+    - to:
+        - ipBlock:
+            cidr: 10.152.183.0/16
+      ports:
+        - protocol: TCP
+          port: 443
+    # ... and post-DNAT (node LAN host port from the EndpointSlice).
+    - to:
+        - ipBlock:
+            cidr: 192.168.1.0/24
+      ports:
+        - protocol: TCP
+          port: 443
+        - protocol: TCP
+          port: 16443

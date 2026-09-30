@@ -450,12 +450,20 @@ Use `192.168.1.0/24` to cover all ranges.
 
 - **Use `docker/build-push-action` for building and pushing images** - NOT kaniko (kaniko is deprecated/archived)
 - Image registry: `registry.kube.stevearnett.com`
-- **No GitHub secrets needed** - secrets are mounted from ESO into the runner pod
-- Secrets must be added to ESO in the `github-runners` namespace
+- **No registry secret exists, and none should.** Registry auth is the runner pod's ServiceAccount
+  identity: the pod carries a projected token with `audience: zot`, and zot verifies it against the
+  cluster's own OIDC issuer. See `home-cluster/registry/README.md`.
 - Authentication in workflow:
   ```bash
-  echo "$REGISTRY_PASSWORD" | docker login $REGISTRY -u "$REGISTRY_USERNAME" --password-stdin
+  docker login registry.kube.stevearnett.com \
+    -u system:serviceaccount:github-runners:github-runner \
+    --password-stdin < /var/run/secrets/registry.zot/token
   ```
+- Reads are **not** anonymous in zot v2.1.21 — bearer auth gates every request, so a kubelet pull
+  needs a credential too. kubelet cannot project a token, so the registry owns a `registry-pull`
+  imagePullSecret minted in-cluster by `registry/pull-rotator.yaml`; nothing in git holds it. Not yet
+  exercised by a real pull. See `home-cluster/registry/README.md`.
+- Other secrets (API keys, webhooks) still come from ESO in the `github-runners` namespace.
 
 ### Adding Secrets to Runners
 
@@ -482,7 +490,7 @@ The self-hosted runner has these tools installed via init container:
 
 ### Build Workflow Pattern
 
-For meshtastic-bot-style builds:
+For image builds in this repo:
 1. Secrets are already mounted - no auth setup needed
 2. `docker/login-action@v3` or `docker login` for registry auth
 3. `docker/setup-buildx-action@v3` for buildx

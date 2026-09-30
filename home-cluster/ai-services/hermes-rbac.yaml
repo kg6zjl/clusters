@@ -124,8 +124,35 @@ rules:
     verbs: ["get", "list", "watch"]
 
   # Monitoring / observability CRDs (read-only)
+  # `prometheuses` is the one that matters for diagnosis: the Prometheus CR is the only
+  # place serviceMonitorSelector / serviceMonitorNamespaceSelector /
+  # serviceMonitorSelectorNilUsesHelmValues live. Without reading it, a scrape job that was
+  # never rendered is indistinguishable from a ServiceMonitor that was never selected, and
+  # the ServiceMonitor object itself looks perfectly correct either way. That gap produced
+  # exactly that mistake on the Loki scrape issue: a confident wrong root cause.
   - apiGroups: ["monitoring.coreos.com"]
-    resources: ["servicemonitors", "podmonitors", "prometheusrules", "probes"]
+    resources:
+      - servicemonitors
+      - podmonitors
+      - prometheusrules
+      - probes
+      - prometheuses
+      - prometheuses/status
+    verbs: ["get", "list", "watch"]
+
+  # Flux Operator CRDs (read-only). The FluxInstance is the object that will own the four Flux
+  # controllers once the takeover lands, so its status is the only place that says which
+  # distribution version is actually running and which components the operator believes it
+  # manages. Without read access the takeover's own verification checklist
+  # (`kubectl -n flux-system get fluxinstance flux`) is unusable to the agent doing the work,
+  # and a failed takeover would be indistinguishable from a successful one - which matters
+  # because a broken Flux cannot be repaired by this agent at all.
+  - apiGroups: ["fluxcd.controlplane.io"]
+    resources:
+      - fluxinstances
+      - fluxinstances/status
+      - fluxreports
+      - fluxreports/status
     verbs: ["get", "list", "watch"]
 
   # Secrets operators / cert-manager / external-dns (read-only)
@@ -152,6 +179,32 @@ rules:
       - appcatalog.appscode.com
       - metrics.appscode.com
     resources: ["*"]
+    verbs: ["get", "list", "watch"]
+
+  # Trivy operator reports (read-only) — the full-fidelity scan results. The Grafana
+  # panels and Prometheus metrics are aggregates, so without these the findings can only
+  # be inferred from a count, not triaged.
+  - apiGroups: ["aquasecurity.github.io"]
+    resources:
+      - vulnerabilityreports
+      - clustervulnerabilityreports
+      - configauditreports
+      - clusterconfigauditreports
+      - rbacassessmentreports
+      - clusterrbacassessmentreports
+    verbs: ["get", "list", "watch"]
+
+  # Crossplane pilot (read-only): the Provider's install state and the managed RepositoryWebhook.
+  # Without these, the objects can only be inferred from the provider pod's liveness.
+  - apiGroups: ["pkg.crossplane.io"]
+    resources:
+      - providers
+      - providerrevisions
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["repo.github.m.upbound.io", "github.m.upbound.io"]
+    resources:
+      - repositorywebhooks
+      - providerconfigs
     verbs: ["get", "list", "watch"]
 --- 
 apiVersion: rbac.authorization.k8s.io/v1

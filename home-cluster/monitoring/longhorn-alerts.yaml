@@ -1,0 +1,124 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: longhorn
+  namespace: monitoring
+  labels:
+    prometheus: kube-prometheus-stack-prometheus
+    app: kube-prometheus-stack-prometheus
+spec:
+  groups:
+  # Longhorn's chart ships no alerts, and nothing watched Longhorn storage before
+  # these. The only volume rule in the cluster was the upstream
+  # KubePersistentVolumeFillingUp, which reads kubelet stats and so only sees volumes
+  # that are mounted by a running pod. Everything below was evaluated against the live
+  # Prometheus before this file was written.
+  # The manager exposes per-condition gauges (1/0) rather than state strings, and node
+  # storage as capacity/usage - there is no _available_bytes series to alert on.
+  - name: longhorn
+    rules:
+    # Degraded means a replica is gone. With replicaCount 2 that is one lost, and
+    # there is no backup target yet (t_36d200c5), so the second loss is unrecoverable.
+    # Warning, not critical: Longhorn rebuilds a lost replica on its own, and a rebuild
+    # spanning a patching reboot would otherwise page at 3am. If it cannot rebuild, the
+    # volume goes faulted, which does page.
+    # 15m clears the noise from a node reboot plus the replica rebuild that follows it.
+    - alert: LonghornVolumeDegraded
+      expr: longhorn_volume_robustness{state="degraded"} == 1
+      for: 15m
+      labels:
+        severity: warning
+      annotations:
+        summary: "Longhorn volume {{ $labels.pvc }} (ns {{ $labels.pvc_namespace }}) is degraded"
+        description: "Volume {{ $labels.volume }} is serving from fewer replicas than configured. Find the failed replica's node and disk in the Longhorn UI before touching anything - rebuilding onto the same disk is what turns one lost replica into a faulted volume."
+    # Faulted means no healthy replica left: the volume is not serving data and
+    # whatever mounts it is stuck. Paged faster than degraded on purpose.
+    - alert: LonghornVolumeFaulted
+      expr: longhorn_volume_robustness{state="faulted"} == 1
+      for: 5m
+      labels:
+        severity: critical
+      annotations:
+        summary: "Longhorn volume {{ $labels.pvc }} (ns {{ $labels.pvc_namespace }}) is faulted"
+        description: "No healthy replica remains for volume {{ $labels.volume }}, so the workload using it cannot read or write. Do not delete or recreate the PVC before checking whether the underlying data is still on the nodes."
+    # Measured off Longhorn's own accounting rather than kubelet stats, so this also
+    # covers a volume whose pod is not running. actual_size is what the replicas have
+    # written, capacity is the claim.
+    - alert: LonghornVolumeSpaceFillingUp
+      expr: |
+        longhorn_volume_actual_size_bytes
+        / longhorn_volume_capacity_bytes > 0.85
+      for: 15m
+      labels:
+        severity: warning
+      annotations:
+        summary: "Longhorn volume {{ $labels.pvc }} is {{ $value | humanizePercentage }} full"
+        description: "Volume {{ $labels.volume }} (ns {{ $labels.pvc_namespace }}) is above 85% of its claim. Longhorn volumes can be grown online, or reclaim by clearing old snapshots if a schedule is keeping too many."
+    - alert: LonghornVolumeSpaceFull
+      expr: |
+        longhorn_volume_actual_size_bytes
+        / longhorn_volume_capacity_bytes > 0.95
+      for: 5m
+      labels:
+        severity: critical
+      annotations:
+        summary: "Longhorn volume {{ $labels.pvc }} is {{ $value | humanizePercentage }} full"
+        description: "Volume {{ $labels.volume }} (ns {{ $labels.pvc_namespace }}) has under 5% left and the workload writing to it is about to fail. Grow the claim or free space now."
+    # Node storage is a budget shared by every replica on that node. When Longhorn's
+    # own floor is crossed (storageMinimalAvailablePercentage, currently 15) it stops
+    # scheduling replicas there and existing volumes can no longer grow.
+    - alert: LonghornNodeStorageLow
+      expr: |
+        (longhorn_node_storage_capacity_bytes - longhorn_node_storage_usage_bytes)
+        / longhorn_node_storage_capacity_bytes < 0.25
+      for: 15m
+      labels:
+        severity: warning
+      annotations:
+        summary: "Longhorn storage on {{ $labels.node }} is {{ $value | humanizePercentage }} free"
+        description: "Node {{ $labels.node }} is approaching the point where Longhorn stops placing replicas. Check which volumes have grown here and whether the node's other data can move."
+    - alert: LonghornNodeStorageExhausted
+      expr: |
+        (longhorn_node_storage_capacity_bytes - longhorn_node_storage_usage_bytes)
+        / longhorn_node_storage_capacity_bytes < 0.15
+      for: 10m
+      labels:
+        severity: critical
+      annotations:
+        summary: "Longhorn storage on {{ $labels.node }} is {{ $value | humanizePercentage }} free"
+        description: "Node {{ $labels.node }} is at or below Longhorn's minimal available percentage, so replicas are no longer scheduled there and volumes on it may fail to grow. Free space or move replicas off before a write fails."
+    # A disk Longhorn cannot use is worse than a full one: every replica on it goes
+    # degraded at once and the node drops out of scheduling.
+    - alert: LonghornDiskNotReady
+      expr: longhorn_disk_status{condition="ready"} == 0
+      for: 10m
+      labels:
+        severity: critical
+      annotations:
+        summary: "Longhorn disk {{ $labels.disk }} on {{ $labels.node }} is not ready"
+        description: "Longhorn cannot use disk {{ $labels.disk }} on {{ $labels.node }}. Every replica stored there is affected, so expect volume alerts to follow. Check the disk's mountpoint is present and writable."
+    # allowScheduling goes to 0 by itself when storage runs low, or by hand if someone
+    # toggles a node off in the UI. Warning rather than critical: a volume whose
+    # replicas are already placed keeps running.
+    - alert: LonghornNodeUnschedulable
+      expr: longhorn_node_status{condition="allowScheduling"} == 0
+      for: 30m
+      labels:
+        severity: warning
+      annotations:
+        summary: "{{ $labels.node }} is not schedulable for Longhorn"
+        description: "Longhorn will not place new replicas on {{ $labels.node }}. Either it ran out of the storage it is allowed to use, or scheduling was disabled manually - confirm which before re-enabling it."
+    # Attaching and detaching normally take seconds. Wedged here it leaves a pod
+    # unable to start, or a volume pinned to a node it cannot leave, so 30m is safely
+    # abnormal.
+    - alert: LonghornVolumeStuckState
+      expr: longhorn_volume_state{state=~"creating|deleting|attaching|detaching"} == 1
+      for: 30m
+      labels:
+        severity: warning
+      annotations:
+        summary: "Longhorn volume {{ $labels.pvc }} is stuck {{ $labels.state }}"
+        description: "Volume {{ $labels.volume }} has been in state {{ $labels.state }} for 30 minutes. Check the Longhorn UI for the engine and replica status, and the longhorn-manager logs on the volume's node."
+    # Deliberately not alerted on: longhorn_volume_last_backup_at is 0 for every volume
+    # because there is still no backup target (t_36d200c5). A rule on it would fire
+    # forever and train everyone to ignore Longhorn alerts. Add it with the target.

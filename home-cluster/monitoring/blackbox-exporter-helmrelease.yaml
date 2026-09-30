@@ -13,10 +13,75 @@ spec:
         kind: HelmRepository
         name: prometheus-community
         namespace: flux-system
+  postRenderers:
+    - kustomize:
+        patches:
+          - target:
+              kind: Deployment
+              name: blackbox-exporter-prometheus-blackbox-exporter
+            patch: |
+              apiVersion: apps/v1
+              kind: Deployment
+              metadata:
+                name: blackbox-exporter-prometheus-blackbox-exporter
+                annotations:
+                  configmap.reloader.stakater.com/reload: "blackbox-exporter-prometheus-blackbox-exporter"
   values:
     config:
       modules:
+        # Transport failure or a non-2xx final status fails the probe. Redirects
+        # are followed, which matters here: Grafana hands back a 30x before the 200,
+        # so without this it would read as down.
         http_2xx:
           prober: http
           http:
             follow_redirects: true
+        # Opt-in alternative for a target whose certificate the exporter does not
+        # trust. Selected per ingress with:
+        #   blackbox.stevearnett.com/module: http_2xx_insecure
+        # Every host routed by Traefik uses the wildcard cert from the
+        # traefik/default TLSStore, so nothing needs this today and nothing uses
+        # it by default.
+        http_2xx_insecure:
+          prober: http
+          http:
+            follow_redirects: true
+            tls_config:
+              insecure_skip_verify: true
+        # For a host that front-ends an SSO proxy: every unauthenticated request comes
+        # back 302 to the identity provider, and http_2xx follows it all the way to
+        # that provider's login page - so the host's probe_success ends up measuring
+        # whether an external site answers inside the 5s module timeout. This module
+        # stops at the redirect and asserts what the probe is for: DNS resolved,
+        # Traefik routed, TLS terminated, the backend answered. A 5xx, a refused
+        # connection or a bad certificate still fails it. Selected per ingress with:
+        #   blackbox.stevearnett.com/module: http_2xx_or_redirect
+        # Nothing selects it today: its only two consumers, auth.kube.stevearnett.com
+        # and dashboard.kube.stevearnett.com, were removed on 2026-09-30 with the rest
+        # of the auth namespace. Kept provisioned, like http_2xx_insecure above, for
+        # the next host that sits behind an identity provider.
+        http_2xx_or_redirect:
+          prober: http
+          timeout: 5s
+          http:
+            follow_redirects: false
+            valid_status_codes: [200, 302]
+        # For a backend that gates every request behind auth: zot answers 401 on
+        # /v2/ and 404 on /, and http_2xx reads both as the host being down. This
+        # asserts what is actually worth knowing about such a host - DNS resolved,
+        # Traefik routed, TLS terminated, the backend answered - so a 5xx, a
+        # refused connection or a failed cert still fails it, and a definitive
+        # 401/403/404 passes. Selected per ingress with:
+        #   blackbox.stevearnett.com/module: http_auth_gated
+        http_auth_gated:
+          prober: http
+          http:
+            follow_redirects: true
+            valid_status_codes: [200, 401, 403, 404]
+
+    # 30Mi peak with no requests declared.
+    resources:
+      requests:
+        memory: 32Mi
+      limits:
+        memory: 64Mi

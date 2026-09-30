@@ -5,6 +5,12 @@ metadata:
   namespace: monitoring
 spec:
   interval: 1h
+  # The kube-prometheus-stack upgrade takes ~11 minutes. The Helm action timeout defaults to
+  # 5m0s, so every upgrade was abandoned before it could finish, the next reconcile started
+  # another one, and the release never settled (in-sync -> out-of-sync -> upgrade, endlessly).
+  # That loop - not the values themselves - is why no change to this release was safe to make.
+  # 20m lets the upgrade finish and the release settle.
+  timeout: 20m
   chart:
     spec:
       chart: kube-prometheus-stack
@@ -22,6 +28,155 @@ spec:
       enabled: false
     crds:
       enabled: true
+    # Flux resource state as metrics. There was no way to alert on "a Kustomization has
+    # been Ready=False for N minutes" before this: the controllers stopped recording
+    # gotk_reconcile_condition long ago (it still exists in fluxcd/pkg, but nothing emits
+    # it - verified: count({__name__=~"gotk_.*"}) was empty on this Prometheus), and the
+    # only signal left was the event Flux emits on every *attempt*. That gap is what made
+    # the 2026-09-27 datastore write failures page Discord nine times while every one of
+    # those reconciles recovered a minute later.
+    #
+    # kube-state-metrics reads the CRs directly and exports gotk_resource_info{ready=...},
+    # which prometheus-rules.yaml uses for FluxResourceNotReady (15m hysteresis).
+    #
+    # Deliberately NOT copied from the upstream example config
+    # (fluxcd/flux2-monitoring-example/monitoring/controllers/kube-prometheus-stack/
+    # kube-state-metrics-config.yaml): its `collectors: []` and
+    # `extraArgs: [--custom-resource-state-only=true]`. Those two lines exist because that
+    # example installs KSM with custom collectors only, and in this cluster they would
+    # disable every built-in collector - which is what ProdServiceDown, CIRunnerPoolEmpty,
+    # ProdBackupStale, NodeMissingFromCluster and LokiNotReady are all evaluated against.
+    # Only customResourceState and rbac.extraRules are wanted here.
+    kube-state-metrics:
+      # 165Mi peak with no requests declared.
+      resources:
+        requests:
+          memory: 192Mi
+        limits:
+          memory: 320Mi
+      # The chart renders this into a ConfigMap (key config.yaml) and mounts it; `config`
+      # is that file's content.
+      customResourceState:
+        enabled: true
+        config:
+          spec:
+            resources:
+              - groupVersionKind:
+                  group: kustomize.toolkit.fluxcd.io
+                  version: v1
+                  kind: Kustomization
+                metricNamePrefix: gotk
+                metrics:
+                  - name: "resource_info"
+                    help: "The current state of a Flux Kustomization resource."
+                    each:
+                      type: Info
+                      info:
+                        labelsFromPath:
+                          name: [metadata, name]
+                    labelsFromPath:
+                      exported_namespace: [metadata, namespace]
+                      ready: [status, conditions, "[type=Ready]", status]
+                      suspended: [spec, suspend]
+                      revision: [status, lastAppliedRevision]
+                      source_name: [spec, sourceRef, name]
+              - groupVersionKind:
+                  group: helm.toolkit.fluxcd.io
+                  version: v2
+                  kind: HelmRelease
+                metricNamePrefix: gotk
+                metrics:
+                  - name: "resource_info"
+                    help: "The current state of a Flux HelmRelease resource."
+                    each:
+                      type: Info
+                      info:
+                        labelsFromPath:
+                          name: [metadata, name]
+                    labelsFromPath:
+                      exported_namespace: [metadata, namespace]
+                      ready: [status, conditions, "[type=Ready]", status]
+                      suspended: [spec, suspend]
+                      revision: [status, history, "0", chartVersion]
+                      chart_name: [status, history, "0", chartName]
+                      chart_app_version: [status, history, "0", appVersion]
+                      chart_ref_name: [spec, chartRef, name]
+                      chart_source_name: [spec, chart, spec, sourceRef, name]
+              - groupVersionKind:
+                  group: source.toolkit.fluxcd.io
+                  version: v1
+                  kind: GitRepository
+                metricNamePrefix: gotk
+                metrics:
+                  - name: "resource_info"
+                    help: "The current state of a Flux GitRepository resource."
+                    each:
+                      type: Info
+                      info:
+                        labelsFromPath:
+                          name: [metadata, name]
+                    labelsFromPath:
+                      exported_namespace: [metadata, namespace]
+                      ready: [status, conditions, "[type=Ready]", status]
+                      suspended: [spec, suspend]
+                      revision: [status, artifact, revision]
+                      url: [spec, url]
+              - groupVersionKind:
+                  group: source.toolkit.fluxcd.io
+                  version: v1
+                  kind: OCIRepository
+                metricNamePrefix: gotk
+                metrics:
+                  - name: "resource_info"
+                    help: "The current state of a Flux OCIRepository resource."
+                    each:
+                      type: Info
+                      info:
+                        labelsFromPath:
+                          name: [metadata, name]
+                    labelsFromPath:
+                      exported_namespace: [metadata, namespace]
+                      ready: [status, conditions, "[type=Ready]", status]
+                      suspended: [spec, suspend]
+                      revision: [status, artifact, revision]
+                      url: [spec, url]
+              - groupVersionKind:
+                  group: source.toolkit.fluxcd.io
+                  version: v1
+                  kind: HelmRepository
+                metricNamePrefix: gotk
+                metrics:
+                  - name: "resource_info"
+                    help: "The current state of a Flux HelmRepository resource."
+                    each:
+                      type: Info
+                      info:
+                        labelsFromPath:
+                          name: [metadata, name]
+                    labelsFromPath:
+                      exported_namespace: [metadata, namespace]
+                      ready: [status, conditions, "[type=Ready]", status]
+                      suspended: [spec, suspend]
+                      revision: [status, artifact, revision]
+                      url: [spec, url]
+      rbac:
+        # The chart's own roles cover core resources only; its values file is explicit that
+        # the CRs named in customResourceState.config need list/watch granted here. Read
+        # only, and only the groups above.
+        extraRules:
+          - apiGroups:
+              - kustomize.toolkit.fluxcd.io
+              - helm.toolkit.fluxcd.io
+              - source.toolkit.fluxcd.io
+            resources:
+              - kustomizations
+              - helmreleases
+              - gitrepositories
+              - ocirepositories
+              - helmrepositories
+            verbs:
+              - list
+              - watch
     # NOTE: exposing the `alert-on-down` resource label needs the SUBCHART's values, i.e.
     # `kube-state-metrics:` - not `kubeStateMetrics:`, which at this level is only the
     # component toggle. Setting the allowlist under `kubeStateMetrics:` is accepted
@@ -31,17 +186,24 @@ spec:
     #     metricLabelsAllowlist:
     #       - deployments=[alert-on-down]
     #
-    # Deliberately NOT applied yet. Touching these values restarts an upgrade loop on this
-    # release: the upgrade takes ~11 minutes, longer than the 5m action timeout, so each
-    # attempt overlaps the previous one and the release never settles
-    # (in-sync -> out-of-sync -> upgrade, endlessly). Churning the prod monitoring stack
-    # is worse than a missing label, so prod availability is covered by the
-    # ProdServiceDown rule in prometheus-rules.yaml, which needs no allowlist at all.
+    # Still not applied - that is a separate decision, and prod availability is already covered
+    # by the ProdServiceDown rule in prometheus-rules.yaml. What blocked it was the endless
+    # upgrade loop described on spec.timeout above, which is now fixed.
     prometheus:
       serviceMonitorSelectorNilUsesHelmValues: false
       podMonitorSelectorNilUsesHelmValues: false
       prometheusSpec:
         retention: 10d
+        # 6h working set: 3.4Gi average, 3.8Gi peak - by far the largest consumer in
+        # the cluster. The chart default is `resources: {}`, so the scheduler could see
+        # none of it and the pod was first in line for eviction under node pressure.
+        # Request sits at the measured peak; the limit is well clear of it so series
+        # growth does not turn into an OOMKill.
+        resources:
+          requests:
+            memory: 3584Mi
+          limits:
+            memory: 5Gi
         # Without this, alert notifications carry Prometheus' in-cluster
         # generatorURL (http://kube-prometheus-stack-prometheus.monitoring:9090/...),
         # which is unreachable from a browser.
@@ -66,30 +228,30 @@ spec:
             static_configs:
               - targets:
                   - 192.168.1.176:9100
-          - job_name: ingress-availability
-            metrics_path: /probe
-            params:
-              module: [http_2xx]
-            static_configs:
-              - targets:
-                  - https://ha.kube.stevearnett.com/
-                  - https://grafana.kube.stevearnett.com/
-                  - https://prometheus.kube.stevearnett.com/
-                  - https://meshmonitor.kube.stevearnett.com/
-                labels:
-                  service: ingress
-            relabel_configs:
-              - source_labels: [__address__]
-                target_label: __param_target
-              - source_labels: [__param_target]
-                target_label: instance
-              - target_label: __address__
-                replacement: blackbox-exporter-prometheus-blackbox-exporter.monitoring.svc:9115
+          # The hand-maintained `ingress-availability` job that used to live here
+          # listed four of the twenty-eight ingress hosts and left the other
+          # twenty-four silently unprobed. It is replaced by per-host Probe CRs
+          # reconciled from the live IngressRoute/Ingress objects by the
+          # ingress-blackbox-reconciler CronJob (blackbox-probe-reconciler.yaml).
+          # The Probes set jobName: ingress-availability, so the IngressDown rule
+          # in ingress-availability-rules.yaml keeps working unchanged - it now
+          # evaluates 27 hosts instead of 4. Do not re-add a static target list
+          # here: that would double-probe the listed hosts and put a second,
+          # hand-maintained source of truth back.
           - job_name: openrouter-exporter
             scrape_interval: 60s
             static_configs:
               - targets:
                   - openrouter-exporter.monitoring.svc.cluster.local:9101
+          # beast's comfy/llama priority state. The host serves JSON on :8126, which
+          # Prometheus cannot scrape directly, so beast-status-exporter converts it to text
+          # in-cluster. :8126 is ALLOW Anywhere in beast's UFW, so unlike the 9100/9835 jobs
+          # this needs no host change - and nothing scrapes the box directly.
+          - job_name: beast-status
+            scrape_interval: 15s
+            static_configs:
+              - targets:
+                  - beast-status-exporter.monitoring.svc.cluster.local:9102
         additionalAlertRelabelConfigs:
           - source_labels: [alertname]
             regex: NodeDiskIOSaturation
@@ -128,6 +290,24 @@ spec:
     grafana:
       enabled: true
       replicas: 1
+      # Grafana peaked at 584Mi and its two sidecars add ~150Mi more, all with no
+      # requests declared.
+      resources:
+        requests:
+          memory: 512Mi
+        limits:
+          memory: 1Gi
+      # Grafana's own state lived on an emptyDir: its database (users, API keys, annotations and
+      # the admin credential it stores on first boot) plus anything created in the UI. Without
+      # this, only ConfigMap-provisioned dashboards and datasources survive a pod restart, and
+      # the stored admin credential silently drifts from the secret. Longhorn PVC so the state
+      # outlives the pod and the node.
+      persistence:
+        enabled: true
+        storageClassName: longhorn
+        accessModes:
+          - ReadWriteOnce
+        size: 10Gi
       admin:
         existingSecret: grafana-admin-secret
         userKey: admin-user
@@ -145,3 +325,26 @@ spec:
       enabled: true
       alertmanagerSpec:
         configSecret: alertmanager-config
+        # 28Mi peak against a 200Mi request and no declared limit: this one was
+        # over-reserved rather than under.
+        resources:
+          requests:
+            memory: 64Mi
+          limits:
+            memory: 192Mi
+
+    # Subchart values. These are distinct from the `kubeStateMetrics`, `nodeExporter`
+    # and `prometheus` blocks above, which only control what gets scraped - setting
+    # resources there has no effect on the workloads themselves.
+    prometheus-node-exporter:
+      resources:
+        requests:
+          memory: 32Mi
+        limits:
+          memory: 64Mi
+    prometheusOperator:
+      resources:
+        requests:
+          memory: 64Mi
+        limits:
+          memory: 192Mi

@@ -1,0 +1,40 @@
+# Inbound access to the Hermes gateway's webhook listener (port 8644).
+#
+# Intra-net only. Nothing is published to the internet: this policy is the entire
+# allowlist, and the counterpart egress policies stay default-deny. Every POST is
+# HMAC-signed (WEBHOOK_SECRET), so reaching the port is not enough to trigger a run.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: hermes-agent-allow-webhook
+  namespace: ai-services
+spec:
+  podSelector:
+    matchLabels:
+      app: hermes-agent
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    # A detector CronJob living beside the agent, and anything else in this namespace.
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: ai-services
+    # Alertmanager (a sender that cannot sign HMAC itself would need a bridge here,
+    # which is why the namespace is allowed rather than a single pod).
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: monitoring
+    # Self-hosted CI runners, so a workflow can report a scan result directly.
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: github-runners
+    # LAN devices (NAS scripts, workstation tooling). The service is a ClusterIP, so
+    # this rule only becomes reachable once something publishes the port - a NodePort
+    # or an Ingress - at which point the allowance is already here rather than
+    # discovered the hard way as a silent timeout.
+    - ipBlock:
+        cidr: 192.168.1.0/24
+    ports:
+    - protocol: TCP
+      port: 8644

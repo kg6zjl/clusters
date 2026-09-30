@@ -1,0 +1,108 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: unpoller
+  namespace: unifi
+  labels:
+    app: unpoller
+    alert-on-down: "true"
+  annotations:
+    # ESO-owned Secret. Without this a rotation leaves the pod holding the old
+    # password and the controller quietly starts returning 401/403.
+    secret.reloader.stakater.com/reload: "unifi-ro-creds"
+spec:
+  replicas: 1
+  revisionHistoryLimit: 3
+  selector:
+    matchLabels:
+      app: unpoller
+  template:
+    metadata:
+      labels:
+        app: unpoller
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        runAsGroup: 65534
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+      - name: unpoller
+        image: ghcr.io/unpoller/unpoller:v5.2.10
+        env:
+        # UniFi OS proxies the Network app on 443; appending :8443 breaks login.
+        - name: UP_UNIFI_DEFAULT_URL
+          value: "https://192.168.1.1"
+        - name: UP_UNIFI_DEFAULT_USER
+          valueFrom:
+            secretKeyRef:
+              name: unifi-ro-creds
+              key: username
+        - name: UP_UNIFI_DEFAULT_PASS
+          valueFrom:
+            secretKeyRef:
+              name: unifi-ro-creds
+              key: password
+        # Console serves a self-signed cert (CN=unifi.local) on its LAN address.
+        - name: UP_UNIFI_DEFAULT_VERIFY_SSL
+          value: "false"
+        - name: UP_UNIFI_DEFAULT_SAVE_SITES
+          value: "true"
+        # DPI adds ~150 series per client; not wanted for tunnel/device alerting.
+        - name: UP_UNIFI_DEFAULT_SAVE_DPI
+          value: "false"
+        # The baked up.conf enables InfluxDB, so without this it also spams a
+        # nonexistent InfluxDB at 127.0.0.1:8086.
+        - name: UP_INFLUXDB_DISABLE
+          value: "true"
+        - name: UP_PROMETHEUS_DISABLE
+          value: "false"
+        - name: UP_PROMETHEUS_HTTP_LISTEN
+          value: "0.0.0.0:9130"
+        # Series are unpoller_* - the baked up.conf sets namespace = "unpoller", so the
+        # docs' unifipoller_* default never applies. Set UP_PROMETHEUS_NAMESPACE=unifipoller
+        # if you want the upstream dashboards to work unmodified.
+        - name: UP_POLLER_DEBUG
+          value: "false"
+        ports:
+        - name: metrics
+          containerPort: 9130
+        resources:
+          requests:
+            cpu: 10m
+            memory: 64Mi
+          limits:
+            cpu: 200m
+            memory: 256Mi
+        # 9130 serves only /metrics, /scrape and / -> 200 "unpoller"; there is no
+        # /health route in v5.2.x. Probes are process-level on purpose: a controller
+        # outage must show up as the controller-up gauge, not restart-loop the pod.
+        livenessProbe:
+          httpGet:
+            path: /
+            port: metrics
+          initialDelaySeconds: 15
+          periodSeconds: 30
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /
+            port: metrics
+          initialDelaySeconds: 10
+          periodSeconds: 30
+          timeoutSeconds: 5
+          failureThreshold: 3
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+        volumeMounts:
+        - name: tmp
+          mountPath: /tmp
+      volumes:
+      - name: tmp
+        emptyDir: {}

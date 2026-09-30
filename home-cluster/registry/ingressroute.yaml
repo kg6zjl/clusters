@@ -1,0 +1,22 @@
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: registry
+  namespace: registry
+  annotations:
+    # zot requires bearer auth for every request, so the root answers 404 and /v2/
+    # answers 401 - which the default http_2xx module read as the registry being
+    # down, firing IngressDown critical. This module asserts the host answered at
+    # all rather than asserting a 200, so a real Traefik/TLS/backend failure still
+    # trips it.
+    blackbox.stevearnett.com/module: http_auth_gated
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - match: Host(`registry.kube.stevearnett.com`)
+      kind: Rule
+      services:
+        - name: zot
+          port: 5000
+  # No tls block: the wildcard cert is the cluster's default TLSStore, in the traefik namespace.

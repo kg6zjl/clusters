@@ -10,26 +10,35 @@ resources:
   - headlamp-kustomization.yaml
   - mqtt-kustomization.yaml
   - meshtastic-kustomization.yaml
-  - meshtastic-bot-kustomization.yaml
   - cloudflared-kustomization.yaml
   - local-services-kustomization.yaml
-  - oauth2-proxy-kustomization.yaml
   - vpn-kustomization.yaml
   - home-assistant-kustomization.yaml
   - renovate-kustomization.yaml
   - ai-services-kustomization.yaml
+  - unifi-kustomization.yaml
   - media-kustomization.yaml
   - monitoring-kustomization.yaml
   - external-secrets-kustomization.yaml
   - onepassword-connect-kustomization.yaml
-  - clustersecret-kustomization.yaml
   - metallb-system-kustomization.yaml
   - metallb-system-pools-kustomization.yaml
   - github-runners-kustomization.yaml
+  - registry-kustomization.yaml
   - kube-system-kustomization.yaml
   - arc-kustomization.yaml
-  - auth-kustomization.yaml
   - adsb-kustomization.yaml
   - nodered-kustomization.yaml
   - security-scanning-kustomization.yaml
+  - spegel-helmrepository.yaml
+  - spegel-kustomization.yaml
   - longhorn-system-kustomization.yaml
+  - flux-operator-kustomization.yaml
+  - flux-instance-kustomization.yaml
+  - flux-notifications-kustomization.yaml
+  - crossplane-helmrepository.yaml
+  - crossplane-kustomization.yaml
+  - crossplane-provider-kustomization.yaml
+  - crossplane-config-kustomization.yaml
+  - kyverno-kustomization.yaml
+  - kyverno-policies-kustomization.yaml

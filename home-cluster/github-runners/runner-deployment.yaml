@@ -8,41 +8,81 @@ spec:
   template:
     spec:
       priorityClassName: system-cluster-critical
+      serviceAccountName: github-runner
+      # No apiserver token is mounted: a runner pod has no business calling the API, and the only
+      # credential it carries is the registry-scoped projected token below (audience "zot").
+      automountServiceAccountToken: false
+      # The registry is not anonymous (zot bearer auth), so a kubelet pull needs a credential. The
+      # `registry-pull` Secret is minted in-cluster by registry/pull-rotator.yaml and rotated daily;
+      # nothing in git holds it. This reference was held back until an image actually lived in the
+      # registry, so kubelet would not log a lookup it does not need on every pod start; the
+      # canary pull is what made it necessary and the summerwind tag is what no longer needs it.
+      imagePullSecrets:
+        - name: registry-pull
       repository: kg6zjl/clusters
       labels:
         - self-hosted
         - kubernetes
-      image: summerwind/actions-runner:v2.337.0-ubuntu-24.04
+      # The in-house image, built FROM ghcr.io/actions/actions-runner. The previous attempt at this
+      # failed because the base image sets no ENTRYPOINT -- ARC sets RUNNER_* and expects the image
+      # to turn them into config.sh + run.sh, so with only the base's `Cmd: ["/bin/bash"]` the pods
+      # started bash, hit EOF and exited 0. None ever registered. See #802.
+      #
+      # Built by build-runner-image.yaml from 0d74718 in run 36646234928, which passed. It was then
+      # promoted only after a canary pod from it appeared in GitHub's runner list (agentId 22323,
+      # online, "Listening for Jobs") and ran a real job, which asserted the agent is alive, that no
+      # RUNNER_* leaks into the job, that kubectl/kustomize/yamllint resolve, that the node-local
+      # toolcache is mounted with trufflehog in it, and that docker works. Those assertions are kept,
+      # now pointed at this pool, in .github/workflows/runner-selftest.yaml, which has since passed
+      # here on its own. The image config was also read back out of the registry before promotion:
+      # Entrypoint ['/usr/bin/entrypoint.sh'], which is the fix.
+      #
+      # A later build of 585f1a4 (run 36648463343) produced sha256:a275717b..., and is deliberately
+      # NOT pinned. Its only difference is one log line (the agentId fix in #810), and the digest
+      # that is running has now carried real repo CI. Re-pin it when the next image change gives
+      # something substantive to promote; the self-test gates that.
+      #
+      # Pinned by digest so the runners cannot drift under us, and so a rollback is a one-line
+      # revert to summerwind/actions-runner:v2.337.0-ubuntu-24.04.
+      image: registry.kube.stevearnett.com/github-runners/runner@sha256:0e2e2f2818f5a58b62117ca59df0eef57e7909810b4c20817675dbf06d86db78
+      # init: only makes the node-local cache writable by the non-root runner. It must stay free of
+      # network I/O -- it runs on every pod, and a pod that cannot finish init cannot register.
+      # The cache itself (trufflehog, used by the Secret Scan job) is warmed per node by the
+      # runner-toolcache-warmer DaemonSet, whose lifetime does not end with the job.
       initContainers:
-        - name: install-tools
+        - name: toolcache-perms
           image: alpine:3.24
-          command:
-            - sh
-            - -c
-            - |
-              apk add --no-cache curl bash python3 py3-pip
-              mkdir -p /opt/tools/bin /usr/local/bin
-              curl -sL https://dl.k8s.io/release/$(curl -sL https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl -o /usr/local/bin/kubectl
-              chmod +x /usr/local/bin/kubectl
-              curl -sL https://get.helmfile.dev | sh
-              mv helmfile /opt/tools/bin/
-              pip3 install yamllint || true
+          command: ["sh", "-c", "chmod 1777 /opt/hostedtoolcache"]
           volumeMounts:
-            - name: tools
-              mountPath: /opt/tools/bin
-            - name: usr-local
-              mountPath: /usr/local/bin
-          securityContext:
-            allowPrivilegeEscalation: false
-            capabilities:
-              drop: ["ALL"]
+            - name: toolcache
+              mountPath: /opt/hostedtoolcache
       containers:
         - name: runner
+          # Available to every job step, so a failed workflow can post its own notification.
+          # The URL comes from 1Password via ESO, never from a GitHub secret.
+          env:
+            - name: CI_DISCORD_WEBHOOK
+              valueFrom:
+                secretKeyRef:
+                  name: ci-notify-discord
+                  key: CI_DISCORD_WEBHOOK
           volumeMounts:
-            - name: tools
-              mountPath: /opt/tools/bin
+            - name: toolcache
+              mountPath: /opt/hostedtoolcache
+            # Read by the workflow's `docker login` against the registry. kubelet re-requests this
+            # token well before it expires, so the 1h lifetime is a ceiling, not a hard deadline.
+            - name: registry-token
+              mountPath: /var/run/secrets/registry.zot
+              readOnly: true
       volumes:
-        - name: tools
-          emptyDir: {}
-        - name: usr-local
-          emptyDir: {}
+        - name: toolcache
+          hostPath:
+            path: /var/lib/arc-toolcache
+            type: DirectoryOrCreate
+        - name: registry-token
+          projected:
+            sources:
+              - serviceAccountToken:
+                  audience: zot
+                  expirationSeconds: 3600
+                  path: token

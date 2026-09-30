@@ -11,10 +11,11 @@
 # Flux, and with the longhorn class's Delete reclaim policy the volume and its
 # data go with it.
 #
-# 2Gi rather than 1Gi: hostpath claims never enforced their request, so real usage
-# is unknown until the copy job reports it, and a claim that is too small fails the
-# copy with ENOSPC while the app is down. Longhorn is thin-provisioned, so the
-# larger request is headroom rather than consumed disk.
+# 10Gi. The original 2Gi was sized before anything was known about real usage, and the
+# first copy attempt filled it to 2,142,208,000 of 2,147,483,648 bytes - 99.75% - which is
+# the likeliest reason that migration stopped. Hostpath claims never enforced their
+# request, so the source was over its declared 1Gi. Longhorn is thin-provisioned, so this
+# is headroom rather than consumed disk.
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
@@ -25,5 +26,5 @@ spec:
     - ReadWriteOnce
   resources:
     requests:
-      storage: 2Gi
+      storage: 10Gi
   storageClassName: longhorn

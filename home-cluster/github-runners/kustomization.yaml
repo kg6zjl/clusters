@@ -3,11 +3,19 @@ kind: Kustomization
 generatorOptions:
   disableNameSuffixHash: true
 resources:
-  - helmrelease.yaml
+  # namespace.yaml was previously absent here: the namespace was created implicitly by
+  # `install.createNamespace` on the (now removed) HelmRelease below. The controller that
+  # serves the runner-pod admission webhook lives in arc-systems, so nothing creates this
+  # namespace implicitly any more and it has to be declared.
+  - namespace.yaml
   - rbac.yaml
   - runner-deployment.yaml
   - runner-autoscaler.yaml
+  - toolcache-warmer.yaml
   - external-secrets-store.yaml
   - external-secrets.yaml
-  - controller-manager-external-secret.yaml
+  # Consumer-side half of the registry pull credential: the rotator Job in the `registry` namespace
+  # writes the `registry-pull` Secret here, so the grant has to exist here. See the file for why it
+  # cannot live in home-cluster/registry/.
+  - registry-pull-secret-rbac.yaml
   - network-policy.yaml

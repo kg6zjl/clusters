@@ -26,13 +26,11 @@ Document generated automatically. Machine-readable data available in YAML blocks
 | [prometheus.kube.stevearnett.com](https://prometheus.kube.stevearnett.com) | monitoring | kube-prometheus-stack-prometheus | 9090 | none |
 | [grafana.kube.stevearnett.com](https://grafana.kube.stevearnett.com) | monitoring | kube-prometheus-stack-grafana | 80 | none |
 | [alerts.kube.stevearnett.com](https://alerts.kube.stevearnett.com) | monitoring | kube-prometheus-stack-alertmanager | 9093 | none |
-| [headlamp.kube.stevearnett.com](https://headlamp.kube.stevearnett.com) | headlamp | headlamp | 4466 | oauth2-proxy* |
+| [headlamp.kube.stevearnett.com](https://headlamp.kube.stevearnett.com) | headlamp | headlamp | 4466 | none |
 | [qb.kube.stevearnett.com](https://qb.kube.stevearnett.com) | vpn | gluetun | 8080 | none |
 | [speedtest.kube.stevearnett.com](https://speedtest.kube.stevearnett.com) | speedtest | speedtest-tracker | 80 | none |
 | [netalertx.kube.stevearnett.com](https://netalertx.kube.stevearnett.com) | netalertx | netalertx | 20211 | none |
 | [meshmonitor.kube.stevearnett.com](https://meshmonitor.kube.stevearnett.com) | meshtastic | meshmonitor | 3001 | none |
-
-* oauth2-proxy runs as sidecar, not middleware
 
 ### Passthrough Services (Non-Kubernetes)
 
@@ -60,7 +58,6 @@ graph TB
     subgraph Internet
         CF[Cloudflare]
         LE[Let's Encrypt]
-        GOOGLE[Google OAuth]
         OPENVPN[ExpressVPN]
         OPENROUTER[OpenRouter]
         GITHUB[GitHub<br/>Actions]
@@ -68,7 +65,6 @@ graph TB
 
     subgraph Critical["Critical Infrastructure"]
         TRAEFIK[Traefik<br/>:80 :443 :4404]
-        OAUTH[oauth2-proxy<br/>auth.kube.stevearnett.com]
         ESO[External Secrets<br/>1Password]
         GHRUNNER[GitHub Runner<br/>github-runners ns]
     end
@@ -85,6 +81,7 @@ graph TB
         PROM[Prometheus]
         GRAFANA[Grafana]
         LOKI[Loki]
+        ALLOY[Alloy<br/>DaemonSet]
         ALERTS[Alertmanager]
     end
 
@@ -116,7 +113,6 @@ graph TB
         QBIT[qBittorrent]
     end
 
-    TRAEFIK --> OAUTH
     GHRUNNER -->|sync| TRAEFIK
     GHRUNNER -->|sync| ESO
     GHRUNNER -.->|manage| Monitoring
@@ -157,6 +153,9 @@ graph TB
     PROM --> GRAFANA
     PROM --> LOKI
     PROM --> ALERTS
+
+    ALLOY --> LOKI
+    GRAFANA --> LOKI
 ```
 
 ### Media Stack Dependencies
@@ -461,7 +460,7 @@ namespaces:
   - name: cert-manager
     purpose: TLS certificates
   - name: monitoring
-    purpose: Observability
+    purpose: Observability (Prometheus, Grafana, Alertmanager, Loki, Alloy)
   - name: media
     purpose: Media management
   - name: vpn
@@ -505,11 +504,11 @@ namespaces:
 │  ║  │ • reloader  │  │            │  │                     │ ║  │
 │  ║  │ • ext-dns   │  └─────────────┘  └─────────────────────┘ ║  │
 │  ║  └─────────────┘                                           ║  │
-│  ║  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────┐ ║  │
-│  ║  │   traefik   │  │    auth     │  │   github-runners    │ ║  │
-│  ║  │ Ingress     │◄─┤ • oauth2-prx│  │ • Runner Deploy (2) │ ║  │
-│  ║  │ :80 :443    │  │             │  │ • ESO-synced secrets│ ║  │
-│  ║  └─────────────┘  └─────────────┘  └─────────────────────┘ ║  │
+│  ║  ┌─────────────┐  ┌─────────────────────┐                  ║  │
+│  ║  │   traefik   │  │   github-runners    │                  ║  │
+│  ║  │ Ingress     │  │ • Runner Deploy (2) │                  ║  │
+│  ║  │ :80 :443    │  │ • ESO-synced secrets│                  ║  │
+│  ║  └─────────────┘  └─────────────────────┘                  ║  │
 │  ╚═════════════════════════════════════════════════════════════╝  │
 │                                                                 │
 │  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────────┐  │
@@ -564,7 +563,6 @@ namespaces:
 |---------|----------|---------|---------|
 | DNS | Cloudflare | external-dns | Dynamic DNS updates |
 | TLS | Let's Encrypt | cert-manager | Certificate issuance |
-| Auth | Google | oauth2-proxy | User authentication |
 | AI | OpenRouter | open-webui | LLM gateway |
 | VPN | ExpressVPN | gluetun | Download privacy |
 | Secrets | 1Password | ESO | Secret storage |

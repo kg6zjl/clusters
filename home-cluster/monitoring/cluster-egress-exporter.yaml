@@ -1,0 +1,116 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cluster-egress-exporter
+  namespace: monitoring
+  labels:
+    app: cluster-egress-exporter
+    alert-on-down: "true"
+  annotations:
+    configmap.reloader.stakater.com/reload: "cluster-egress-exporter-script"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: cluster-egress-exporter
+  template:
+    metadata:
+      labels:
+        app: cluster-egress-exporter
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        runAsGroup: 65534
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+      - name: exporter
+        image: python:3.13-slim
+        command:
+        - python
+        - /app/exporter.py
+        env:
+        - name: PORT
+          value: "9104"
+        # The DDNS name the NAS keeps pointing at the home WAN address; resolving it keeps
+        # the home address out of git, where a literal would go stale on the next ISP lease.
+        - name: HOME_HOST
+          value: "home.stevearnett.com"
+        - name: PYTHONDONTWRITEBYTECODE
+          value: "1"
+        resources:
+          requests:
+            cpu: 10m
+            memory: 32Mi
+          limits:
+            cpu: 100m
+            memory: 128Mi
+        ports:
+        - name: metrics
+          containerPort: 9104
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: metrics
+          initialDelaySeconds: 10
+          periodSeconds: 60
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: metrics
+          initialDelaySeconds: 5
+          periodSeconds: 30
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+        volumeMounts:
+        - name: script
+          mountPath: /app
+          readOnly: true
+      volumes:
+      - name: script
+        configMap:
+          name: cluster-egress-exporter-script
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: cluster-egress-exporter
+  namespace: monitoring
+  labels:
+    app: cluster-egress-exporter
+spec:
+  selector:
+    app: cluster-egress-exporter
+  ports:
+  - name: metrics
+    port: 9104
+    targetPort: metrics
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: cluster-egress-exporter
+  namespace: monitoring
+  labels:
+    app: cluster-egress-exporter
+    release: kube-prometheus-stack
+spec:
+  selector:
+    matchLabels:
+      app: cluster-egress-exporter
+  namespaceSelector:
+    matchNames:
+    - monitoring
+  endpoints:
+  - port: metrics
+    # Each scrape is one trace fetch plus one DNS lookup, so the cadence is the sampling
+    # rate of the whole check. The rules read it with last_over_time, so they stay correct
+    # and non-flapping at any interval up to ~30m.
+    interval: 30m
+    scrapeTimeout: 20s
+    path: /metrics

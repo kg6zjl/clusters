@@ -10,6 +10,15 @@ data:
 
     Polls the OpenRouter API and exposes the result in Prometheus text format.
     Standard library only, so it runs on a stock python image with no pip install.
+
+    Two credentials, deliberately kept separate:
+      OPENROUTER_API_KEY        - the inference key. Serves /key: per-key usage and spend limit.
+      OPENROUTER_MANAGEMENT_KEY - a management key. Serves /credits: the account balance, ONLY.
+
+    The management key can create and revoke API keys, so it is never used for anything else here.
+    It does not replace the inference key and is never sent to any other endpoint: sending it to
+    /key would make that endpoint report the management key's own limits instead of the inference
+    key's, silently corrupting the per-key metrics.
     """
 
     import json
@@ -23,6 +32,7 @@ data:
 
     API_BASE = os.environ.get("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1").rstrip("/")
     API_KEY = os.environ.get("OPENROUTER_API_KEY", "")
+    MANAGEMENT_KEY = os.environ.get("OPENROUTER_MANAGEMENT_KEY", "")
     PORT = int(os.environ.get("PORT", "9101"))
     INTERVAL = float(os.environ.get("SCRAPE_INTERVAL_SECONDS", "60"))
     TIMEOUT = float(os.environ.get("HTTP_TIMEOUT_SECONDS", "15"))
@@ -56,17 +66,20 @@ data:
     _values = {}
     _errors = 0
     _last_success = 0.0
-    _credits_disabled = not POLL_CREDITS
+    # Account credits need BOTH the flag and a management key. There is deliberately no fallback to
+    # the inference key: /key must keep reporting the inference key, and /credits is never called
+    # with it - a management key is required there, and the wrong key would mean the wrong data.
+    _credits_disabled = not (POLL_CREDITS and MANAGEMENT_KEY)
 
 
     def log(msg):
         print(f"[openrouter-exporter] {msg}", flush=True)
 
 
-    def api_get(path):
+    def api_get(path, key=None):
         req = urllib.request.Request(
             API_BASE + path,
-            headers={"Authorization": f"Bearer {API_KEY}", "Accept": "application/json"},
+            headers={"Authorization": f"Bearer {key if key is not None else API_KEY}", "Accept": "application/json"},
         )
         with urllib.request.urlopen(req, timeout=TIMEOUT) as resp:
             return json.loads(resp.read().decode())
@@ -112,7 +125,7 @@ data:
 
         if not _credits_disabled:
             try:
-                credits = api_get("/credits")["data"]
+                credits = api_get("/credits", key=MANAGEMENT_KEY)["data"]
                 total = as_float(credits.get("total_credits"))
                 used = as_float(credits.get("total_usage"))
                 if total is not None:
@@ -182,6 +195,10 @@ data:
     def main():
         if not API_KEY:
             log("OPENROUTER_API_KEY is empty - every poll will fail with 401")
+        if _credits_disabled:
+            log("/credits polling is OFF (needs OPENROUTER_POLL_CREDITS=true and OPENROUTER_MANAGEMENT_KEY)")
+        else:
+            log("account credits polling is ON, authenticated with the management key")
         log(f"polling {API_BASE} every {INTERVAL:.0f}s, serving /metrics on :{PORT}")
         threading.Thread(target=poll_loop, daemon=True).start()
         ThreadingHTTPServer(("", PORT), Handler).serve_forever()

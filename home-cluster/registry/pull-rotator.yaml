@@ -1,0 +1,242 @@
+# Keeps the registry's imagePullSecret fresh, so kubelet can pull private images with no credential
+# a human ever holds or copies between systems.
+#
+# kubelet is a node process and has no Pod ServiceAccount to project, so intra-cluster OIDC cannot be
+# handed to it directly. A credential has to exist somewhere on disk -- the question is only who puts
+# it there. Here it is this Job: it mints a token for the registry-pull ServiceAccount from the
+# in-cluster TokenRequest API, and writes it as a dockerconfigjson Secret. The token is verified by
+# zot against the cluster's own OIDC issuer, so the registry never shares a secret with anyone either.
+#
+# Rotation runs daily and rewrites the Secret every time, rather than once at the end of the token's
+# life: the daily rewrite is what bounds how stale the delivered credential can be, and it turns an
+# apiserver lifetime cap into a failed run instead of pulls that break weeks later.
+#
+# The lifetime is a week, not a year, because a bound ServiceAccount token cannot be revoked on its
+# own -- there is no per-token revocation, only deleting the ServiceAccount (which breaks every
+# consumer at once) or rotating the cluster's signing key. Its lifetime *is* the exposure window if a
+# copy leaks, and a year of non-revocable access is the wrong shape for a credential whose only job is
+# to authorise a pull. The runner's push token is 1h on the same reasoning; kubelet cannot re-request
+# a token, which is why this one is days rather than an hour.
+#
+# Not yet wired to a consumer, deliberately: no pod pulls an image from this registry yet (the runner
+# image still comes from Docker Hub), so naming the Secret in a pod spec today would only make kubelet
+# log FailedToRetrieveImagePullSecret at every pod start. The consumer reference belongs in the change
+# that first builds an image into this registry.
+#
+# Two traps this Job has already hit, both of which present as "the apiserver is unreachable": the
+# cluster CA has no keyUsage extension and Python 3.13's TLS defaults reject that (see tls_context()),
+# and API errors print as bare tracebacks unless the status body is surfaced (see __main__).
+#
+# The Secret is deliberately absent from git. Flux owns any field it applies and would reset the token
+# on every reconcile; a runtime-minted credential is not a manifest. Consumers just reference it:
+#
+#   spec.template.spec.imagePullSecrets:
+#     - name: registry-pull
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: registry-pull-rotator
+  namespace: registry
+data:
+  rotate.py: |
+    #!/usr/bin/env python3
+    """Mints and installs the registry imagePullSecret. Prints no credential material."""
+    import base64
+    import json
+    import os
+    import ssl
+    import sys
+    import urllib.error
+    import urllib.request
+    from datetime import datetime, timedelta, timezone
+
+    SA_DIR = "/var/run/secrets/kubernetes.io/serviceaccount"
+    API = "https://kubernetes.default.svc"
+    PULL_SA = os.environ.get("PULL_SA", "registry-pull")
+    NAMESPACES = [ns.strip() for ns in os.environ.get("CONSUMER_NAMESPACES", "").split(",") if ns.strip()]
+    REGISTRY_HOST = os.environ["REGISTRY_HOST"]
+    SECRET_NAME = os.environ.get("SECRET_NAME", "registry-pull")
+    TOKEN_SECONDS = int(os.environ.get("TOKEN_SECONDS", "604800"))
+    # Below this, the token would expire before the next daily run could replace it.
+    MIN_VALID_HOURS = int(os.environ.get("MIN_VALID_HOURS", "36"))
+    # Everything here is stripped from error text before it is printed. The one path where a minted
+    # token could reach a log is an apiserver error body echoing back the request it rejected, and the
+    # request that carries the token is the one that writes the Secret.
+    REDACT = set()
+
+
+    def read(path):
+        with open(path) as handle:
+            return handle.read().strip()
+
+
+    SA_TOKEN = read(f"{SA_DIR}/token")
+    NS = read(f"{SA_DIR}/namespace")
+
+
+    def tls_context():
+        """Trust the cluster CA, minus OpenSSL's X509 strict mode.
+
+        Python 3.13 enables VERIFY_X509_STRICT by default, and strict mode refuses a CA that carries no
+        keyUsage extension -- which this cluster's CA is ("No extensions in certificate", measured).
+        Python 3.12 accepted it, every other client here (kubelet, kubectl, Go) accepts it, and the
+        first run of this Job died on exactly that check. Chain and hostname are still verified, and
+        the only trust anchor is the cluster CA mounted into this pod, so no other issuer can be
+        accepted here. Revisit if the cluster CA is ever regenerated with a keyUsage extension.
+        """
+        context = ssl.create_default_context(cafile=f"{SA_DIR}/ca.crt")
+        context.verify_flags &= ~getattr(ssl, "VERIFY_X509_STRICT", 0)
+        return context
+
+
+    CTX = tls_context()
+
+
+    def api(method, path, body=None):
+        payload = json.dumps(body).encode() if body is not None else None
+        request = urllib.request.Request(
+            API + path,
+            data=payload,
+            method=method,
+            headers={
+                "Authorization": f"Bearer {SA_TOKEN}",
+                "Content-Type": "application/json",
+                "Accept": "application/json",
+            },
+        )
+        with urllib.request.urlopen(request, context=CTX, timeout=30) as response:
+            return json.loads(response.read() or b"{}")
+
+
+    def mint():
+        # The core path, not the authentication.k8s.io one: serviceaccounts/token is served by API group
+        # v1 (confirmed against live discovery -- authentication.k8s.io/v1 lists only tokenreviews), so
+        # /apis/authentication.k8s.io/v1/.../token is a 404 on an otherwise authorized request.
+        result = api(
+            "POST",
+            f"/api/v1/namespaces/{NS}/serviceaccounts/{PULL_SA}/token",
+            {
+                "apiVersion": "authentication.k8s.io/v1",
+                "kind": "TokenRequest",
+                "spec": {"audiences": ["zot"], "expirationSeconds": TOKEN_SECONDS},
+            },
+        )
+        status = result["status"]
+        expires = status["expirationTimestamp"]
+        remaining = datetime.fromisoformat(expires.replace("Z", "+00:00")) - datetime.now(timezone.utc)
+        if remaining < timedelta(hours=MIN_VALID_HOURS):
+            sys.exit(
+                f"FATAL: apiserver issued a token expiring {expires}, {remaining} from now, below the "
+                f"{MIN_VALID_HOURS}h floor -- image pulls would break before the next run could replace it"
+            )
+        return status["token"], expires, remaining
+
+
+    def write_secret(namespace, jwt, username):
+        entry = {"username": username, "password": jwt, "auth": base64.b64encode(f"{username}:{jwt}".encode()).decode()}
+        body = {
+            "apiVersion": "v1",
+            "kind": "Secret",
+            "metadata": {"name": SECRET_NAME, "namespace": namespace},
+            "type": "kubernetes.io/dockerconfigjson",
+            "stringData": {".dockerconfigjson": json.dumps({"auths": {REGISTRY_HOST: entry}})},
+        }
+        try:
+            api("POST", f"/api/v1/namespaces/{namespace}/secrets", body)
+            return "created"
+        except urllib.error.HTTPError as error:
+            if error.code != 409:
+                raise
+        api("PUT", f"/api/v1/namespaces/{namespace}/secrets/{SECRET_NAME}", body)
+        return "updated"
+
+
+    def main():
+        if not NAMESPACES:
+            sys.exit("FATAL: CONSUMER_NAMESPACES is empty -- refusing to mint a token nothing consumes")
+        jwt, expires, remaining = mint()
+        REDACT.add(jwt)
+        # Colon-free on purpose. Go's http.Request.BasicAuth() splits the Basic value at the first
+        # colon, so "system:serviceaccount:<ns>:<sa>" as the username leaves zot holding
+        # "serviceaccount:<ns>:<sa>:<JWT>" as the password and the JWT parse fails at that colon.
+        # zot reads the identity from the token's `sub` claim, so the username only has to be
+        # colon-free for a pull to work at all.
+        username = PULL_SA
+        for namespace in NAMESPACES:
+            action = write_secret(namespace, jwt, username)
+            print(
+                f"{action} {namespace}/{SECRET_NAME} as {username}, expires {expires} "
+                f"({int(remaining.total_seconds() // 3600)}h)",
+                flush=True,
+            )
+
+
+    if __name__ == "__main__":
+        try:
+            main()
+        except urllib.error.HTTPError as error:
+            body = error.read().decode(errors="replace").strip()
+            for secret in REDACT:
+                body = body.replace(secret, "<redacted>")
+            sys.exit(f"FATAL: HTTP {error.code} from {error.url}: {body[:400]}")
+        except urllib.error.URLError as error:
+            sys.exit(f"FATAL: cannot reach the apiserver: {error.reason}")
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: registry-pull-rotator
+  namespace: registry
+spec:
+  schedule: "17 4 * * *"
+  # A run still going at the next slot is skipped by Forbid anyway. If the controller itself was down,
+  # skip the missed slot rather than fire it late: the next slot is a day away and the token lives a
+  # week, so a late run buys nothing and only muddies the record of when this actually ran.
+  startingDeadlineSeconds: 3600
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 2
+  failedJobsHistoryLimit: 2
+  jobTemplate:
+    spec:
+      # One retry, not two: the failures that matter here are deterministic (a 403, a wrong path) and the
+      # FATAL line is the evidence, but a DNS or apiserver blip on a once-a-day job is worth one more go.
+      backoffLimit: 1
+      # Keep a failed pod's log readable for an hour. Earlier failures were garbage-collected before
+      # anyone could read them and had to be recovered from Loki.
+      ttlSecondsAfterFinished: 3600
+      template:
+        spec:
+          restartPolicy: OnFailure
+          serviceAccountName: registry-pull-rotator
+          containers:
+            - name: rotate
+              # Pinned patch tag, not the floating 3.13-alpine series, so Renovate can bump it.
+              image: python:3.13.13-alpine
+              command: ["python3", "/scripts/rotate.py"]
+              env:
+                - name: REGISTRY_HOST
+                  value: registry.kube.stevearnett.com
+                - name: CONSUMER_NAMESPACES
+                  value: github-runners
+              resources:
+                requests:
+                  cpu: 10m
+                  memory: 32Mi
+                limits:
+                  memory: 128Mi
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                runAsNonRoot: true
+                runAsUser: 65534
+                capabilities:
+                  drop: ["ALL"]
+              volumeMounts:
+                - name: scripts
+                  mountPath: /scripts
+                  readOnly: true
+          volumes:
+            - name: scripts
+              configMap:
+                name: registry-pull-rotator
+                defaultMode: 0444

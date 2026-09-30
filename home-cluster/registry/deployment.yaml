@@ -1,0 +1,83 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: zot
+  namespace: registry
+  labels:
+    app.kubernetes.io/name: zot
+  annotations:
+    # Without this, a merged change to zot-config never reaches the running pod: zot reads its config
+    # once at start, and nothing else rolls it. The bearer realm fix sat merged-but-inert until the
+    # pod was restarted, which is the same class of bug as a manifest with no Flux applier.
+    configmap.reloader.stakater.com/reload: "zot-config"
+spec:
+  replicas: 1
+  # Single ReadWriteOnce volume; a rolling update would need two pods on it at once.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: zot
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: zot
+    spec:
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: zot
+          image: ghcr.io/project-zot/zot-linux-amd64:v2.1.21
+          args: ["serve", "/etc/zot/config.json"]
+          ports:
+            - name: http
+              containerPort: 5000
+          # Never probe /v2/ here: with a bearer/OIDC authorizer configured, zot answers 401 to an
+          # unauthenticated GET /v2/ (it is the auth challenge, not a fault). An httpGet probe would
+          # read that as failure, keep the pod out of the Service endpoints forever, and liveness
+          # would then kill it on a loop -- which is exactly what happened when this shipped.
+          readinessProbe:
+            tcpSocket:
+              port: http
+            initialDelaySeconds: 3
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: config
+              mountPath: /etc/zot
+              readOnly: true
+            - name: data
+              mountPath: /var/lib/registry
+            # A directory mount, deliberately: /etc/zot is already the config ConfigMap's mount, and
+            # a subPath file mount inside another volume mount fails at container init with
+            # `error mounting ... volume-subpaths/k8s-ca/zot/N ...: not a directory` (exit 128).
+            - name: k8s-ca
+              mountPath: /etc/zot-ca
+              readOnly: true
+      volumes:
+        - name: config
+          configMap:
+            name: zot-config
+        - name: data
+          persistentVolumeClaim:
+            claimName: zot-data
+        # The issuer is https://kubernetes.default.svc, whose TLS cert is signed by the cluster CA.
+        - name: k8s-ca
+          configMap:
+            name: kube-root-ca.crt

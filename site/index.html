@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>An AI agent as a cluster citizen</title>
+<meta name="description" content="How to give an AI agent real operational reach inside a Kubernetes cluster without giving it the cluster: read-only RBAC, no secrets in reach, default-deny networking, disposable state, and a pull request as the only write path.">
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<nav class="topnav">
+  <ul>
+    <li><a href="index.html" aria-current="page">The model</a></li>
+    <li><a href="limits.html">Permissions</a></li>
+    <li><a href="network.html">Network</a></li>
+    <li><a href="state.html">State &amp; storage</a></li>
+    <li><a href="skills.html">Skills</a></li>
+    <li><a href="workflow.html">The loop</a></li>
+    <li><a href="secrets.html">Secrets</a></li>
+    <li><a href="paging.html">Paging</a></li>
+    <li><a href="runners.html">Runners</a></li>
+    <li><a href="interesting.html">Interesting bits</a></li>
+    <li><a href="proud.html">Proud of</a></li>
+    <li><a href="checklist.html">Build your own</a></li>
+  </ul>
+</nav>
+
+<header class="page-head">
+  <p class="eyebrow">Operating notes</p>
+  <h1>An AI agent as a cluster citizen</h1>
+  <p class="lede">
+    This is how an AI agent runs <em>inside</em> a Kubernetes cluster. It has enough reach to diagnose and fix real problems. It has no authority to change anything without review. Everything here comes from a working setup: a home cluster run from git, where the agent holds a read-only cluster role, cannot read a single secret value, and changes the world only by opening pull requests.
+  </p>
+  <p class="small">
+    Written for someone building the same thing. No addresses, hostnames, domains or credentials —
+    mechanism, not topology.
+  </p>
+</header>
+
+<main>
+
+<section aria-labelledby="idea">
+  <h2 id="idea">The one idea everything else follows from</h2>
+  <p>
+    An agent that can only read the cluster is safe but useless. An agent with a kubeconfig that can
+    write is useful and terrifying: one plausible mistake is unrecoverable, and "the model was
+    confused" is not a rollback plan.
+  </p>
+  <p>
+    The way out is to separate <strong>reach</strong> from <strong>authority</strong>. The agent gets
+    maximum reach for reading — every workload, every log, every revision, every metric — and zero
+    authority to mutate. Its only write path is a <strong>pull request</strong>, which is reviewed,
+    CI-checked, and merged by a human before a controller applies it. The cluster is still the
+    agent's to fix; it just has to write down the fix and get it reviewed first.
+  </p>
+  <div class="note">
+    <span class="label">Why this holds even when the agent is wrong</span>
+    <p>
+      Git is the source of truth and a controller reconciles the cluster to match it. The agent
+      cannot even hold a durable change: anything applied outside the repository is reverted on the
+      next reconcile. So a bad idea from the agent costs a rejected PR, not an outage.
+    </p>
+  </div>
+</section>
+
+<section aria-labelledby="boundaries">
+  <h2 id="boundaries">The four boundaries</h2>
+  <div class="cards">
+    <div class="card">
+      <h3><a href="limits.html">Read-only, and no secrets</a></h3>
+      <p>
+        A cluster role with <code>get</code>, <code>list</code>, <code>watch</code> and nothing else,
+        no <code>create/update/patch/delete</code> anywhere, and — deliberately — no access to
+        <code>secrets</code>, <code>pods/exec</code> or token minting. It can see that a secret
+        exists in a reference; it can never see a value.
+      </p>
+    </div>
+    <div class="card">
+      <h3><a href="network.html">Default deny, then ask</a></h3>
+      <p>
+        Every namespace is default-deny for ingress and egress. The agent's namespace gets an
+        explicit, reviewed list: DNS, the API server, its own dependencies. A pod that cannot reach
+        something is a policy question first, and the policy is in git like everything else.
+      </p>
+    </div>
+    <div class="card">
+      <h3><a href="state.html">Disposable state</a></h3>
+      <p>
+        The pod is designed to be killed. Config and skills are re-seeded from git on every start,
+        work happens in a fresh worktree per task, and nothing durable lives only in the container.
+        A destroyed pod is a restart, not a loss.
+      </p>
+    </div>
+    <div class="card">
+      <h3><a href="workflow.html">The pull request is the API</a></h3>
+      <p>
+        Branch, commit, PR, required checks, human merge, reconcile. The agent can open and merge
+        <em>its own</em> skills repository but not the cluster one. Which of those two it may merge
+        is a decision worth making explicitly.
+      </p>
+    </div>
+  </div>
+</section>
+
+<section aria-labelledby="reach">
+  <h2 id="reach">What the agent can and cannot do</h2>
+  <table>
+    <thead><tr><th>It can</th><th>It cannot</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>Read any workload, pod, log, event, PVC, NetworkPolicy, Flux object or CRD status</td>
+        <td><code>apply</code>, <code>patch</code>, <code>delete</code>, <code>edit</code> — or run
+          <code>helm</code> at all</td>
+      </tr>
+      <tr>
+        <td>Query the metrics store directly and read the alerting pipeline's own logs</td>
+        <td>Read a Secret value, exec into a container, port-forward, or mint a service account token</td>
+      </tr>
+      <tr>
+        <td>Push a branch and open a PR, including a one-off Job that prints what it needs</td>
+        <td>Merge to the cluster repository, or change a repository setting</td>
+      </tr>
+      <tr>
+        <td>Reproduce a failure by running the same request from a pod it controls</td>
+        <td>Reach the cluster API through any path that is not an explicitly allowed egress rule</td>
+      </tr>
+    </tbody>
+  </table>
+  <p class="small">
+    That third row on the right is the important one: when the agent needs something it has no
+    permission to read, the answer is a reviewed Job in the repository that reads it and logs a
+    sanitized result — not a wider role.
+  </p>
+</section>
+
+<section aria-labelledby="weak">
+  <h2 id="weak">Where this setup is still weak</h2>
+  <p>
+    Worth saying plainly, because a design document that only lists strengths is marketing. In the
+    reference setup, two things are weaker than the model above implies:
+  </p>
+  <ul>
+    <li>
+      <strong>The CI runners are not least-privilege.</strong> Their service account is bound to a
+      role with <code>*</code> on <code>*</code>, and their namespace allows unrestricted egress.
+      That is the largest hole in the design, and it exists because builds needed it — which is a
+      reason, not a justification. The fix is a per-workflow role and an egress allow-list; the
+      constraint is that CI jobs which legitimately reconcile anything need real permissions, so
+      the work is deciding which pipeline actually needs what.
+    </li>
+    <li>
+      <strong>The agent holds a credential that can push branches.</strong> It has to, or the pull
+      request path does not exist. That token is scoped to a single repository and cannot create
+      repositories, change settings, or merge the cluster repo — and the guidance is that a
+      credential is used for its stated purpose and nothing else. A key that happens to be powerful
+      enough to do something is not permission to do it.
+    </li>
+  </ul>
+</section>
+
+<section aria-labelledby="webhooks">
+  <h2 id="webhooks">Letting the cluster trigger the agent</h2>
+  <p>
+    The agent can also be started by the cluster instead of by a person. A detector runs
+    every five minutes, reads what Alertmanager is currently firing, and posts the alerts it
+    has not announced before to a webhook route on the agent, HMAC-signed. The agent wakes up
+    knowing what broke, examines the resources and logs involved, and answers in the
+    notification channel. It holds the same read-only access as any other session, so the
+    worst an unattended run can do is investigate and talk — and if the alert needs a
+    manifest change, it opens a pull request and stops. Merging stays with the human who was
+    asleep.
+  </p>
+  <p>
+    That answers the questions this page used to say had to come first, and the answers are
+    the trust model, so they are worth stating plainly.
+  </p>
+  <ul>
+    <li>
+      <strong>Who may trigger it.</strong> Not "anything that can reach the port". The
+      listener is a cluster-only address, a network policy narrows callers to the namespaces
+      with business sending, and every request must carry an HMAC signature nobody can
+      produce without the key. The key is not in the repository; it is rendered from the
+      vault into the sender's environment at run time.
+    </li>
+    <li>
+      <strong>What an unattended run may do.</strong> Diagnose, and propose. Read-only
+      cluster access, no secret access, and — the part that matters — a pull request, never a
+      merge. The prompt says so, and the credential cannot merge the cluster repository in
+      any case.
+    </li>
+    <li>
+      <strong>How much it can start.</strong> An alert is announced once, not once per poll:
+      the filter is the alert's own start time, and the request carries an idempotency key so
+      an overlapping poll is dropped rather than waking the agent twice. One poll starts at
+      most one run, which caps it at twelve wakes an hour by construction, with a per-route
+      rate limit as a backstop for a sender that loops.
+    </li>
+    <li>
+      <strong>What happens when the trigger breaks.</strong> Its freshness is alerted on like
+      any other scheduled job here, and that alert travels the ordinary path — Alertmanager
+      to the notification channel. The agent noticing a problem, and the cluster noticing that
+      the agent is no longer being woken, are deliberately two separate mechanisms, so
+      neither failure can hide the other.
+    </li>
+  </ul>
+  <p class="small">
+    Deliberately a pull rather than a push. Alertmanager cannot sign an inbound webhook, so
+    something in-cluster has to read the alerts and sign them itself, and polling is what
+    makes the deduplication stateless — there is no memory to lose in a pod that is recreated
+    every five minutes. The price is latency: the agent wakes within one poll interval, not
+    within seconds.
+  </p>
+</section>
+
+<section aria-labelledby="next">
+  <h2 id="next">Read on</h2>
+  <p>
+    <a href="limits.html">Permissions</a> — the actual role, the deliberate omissions, and why each
+    odd-looking grant exists. <a href="network.html">Network</a> — default deny, and the mistake
+    everyone makes with the API server. <a href="state.html">State &amp; storage</a> — what is
+    ephemeral, what is not, and how the pod rebuilds itself. <a href="skills.html">Skills</a> — how
+    the agent's own knowledge is versioned. <a href="workflow.html">The loop</a> — the mechanics of
+    getting a change merged. <a href="checklist.html">Build your own</a> — the short version.
+  </p>
+  <p class="small">
+    Corrections welcome: this is a description of a running system, not a product, and the parts
+    that broke are the parts worth reading.
+  </p>
+</section>
+
+</main>
+
+<footer>
+  <div class="wrap">
+    <p>Operating notes from a GitOps home cluster. Source lives in the cluster repository's <code>site/</code> directory.</p>
+  </div>
+</footer>
+</body>
+</html>

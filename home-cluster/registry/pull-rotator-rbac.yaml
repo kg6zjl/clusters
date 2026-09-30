@@ -1,0 +1,49 @@
+# Permissions for the token rotator, and nothing else.
+#
+# One grant, narrower than it looks: minting is limited to the registry-pull ServiceAccount by name, so
+# this can never become a general "hand me any token in the namespace" role.
+#
+# The other half of the story -- permission to write the imagePullSecret into a consumer namespace --
+# cannot live in this file. This directory's kustomization.yaml sets `namespace: registry`, and
+# kustomize's namespace transformer rewrites every object rendered here, so a Role written for
+# github-runners silently lands in registry instead. That is how the rotator's fourth run ended:
+#
+#   cannot create resource "secrets" in API group "" in the namespace "github-runners"
+#
+# Consumer-side grants belong in the consumer's own component: see
+# github-runners/registry-pull-secret-rbac.yaml.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: registry-pull-rotator
+  namespace: registry
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: registry-pull-token
+  namespace: registry
+rules:
+  # Core API group, not authentication.k8s.io: the subresource is serviceaccounts/token on the core
+  # serviceaccounts resource. authentication.k8s.io/v1 is the TokenRequest *body* version, which is a
+  # different thing entirely, and putting the rule there is silently useless -- the authorizer reports
+  # `cannot create resource "serviceaccounts/token" in API group ""`. Upstream agrees: Flux's own
+  # source-controller ClusterRole grants this the same way (apiGroups: [""]).
+  - apiGroups: [""]
+    resources: ["serviceaccounts/token"]
+    verbs: ["create"]
+    resourceNames: ["registry-pull"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: registry-pull-token
+  namespace: registry
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: registry-pull-token
+subjects:
+  - kind: ServiceAccount
+    name: registry-pull-rotator
+    namespace: registry
