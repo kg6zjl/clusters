@@ -3,6 +3,11 @@ kind: IngressRoute
 metadata:
   name: traefik-dashboard
   namespace: traefik
+  annotations:
+    # traefik-proxy will not generate an endpoint without an explicit target
+    # (IngressRoutes expose no LB status), so this host needs both annotations.
+    external-dns.alpha.kubernetes.io/hostname: traefik.kube.stevearnett.com
+    external-dns.alpha.kubernetes.io/target: kube.stevearnett.com
 spec:
   entryPoints:
     - websecure

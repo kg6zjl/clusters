@@ -3,9 +3,6 @@ kind: IngressRoute
 metadata:
   name: radarr
   namespace: media
-  annotations:
-    external-dns.alpha.kubernetes.io/hostname: radarr.kube.stevearnett.com
-    external-dns.alpha.kubernetes.io/target: kube.stevearnett.com
 spec:
   entryPoints:
     - websecure

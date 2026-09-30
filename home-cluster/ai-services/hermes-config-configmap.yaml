@@ -116,6 +116,13 @@ data:
           # route, which is far more agent runs than a looping or rogue sender should be able
           # to buy. Exceeding this answers 429 instead of starting work.
           rate_limit: 6
+          # Every route's prompt OPENS with a trigger banner naming the class and the sender, so a
+          # wake is self-identifying: the run, the session log and Discord all say which path fired
+          # it, without anyone correlating timestamps afterwards. Two classes:
+          #   ALERT    - fired by the cluster's alerting stack (Alertmanager -> alert-detector)
+          #   INTERNAL - any other in-cluster sender posting directly (detector, CI, LAN tooling)
+          # A new sender gets its own route: the class belongs to the sender, not the payload, and
+          # reusing a route destroys the distinction these banners exist to keep.
           routes:
             credential-leak:
               # Woken by a leak report rather than a generic alert: the ask is a
@@ -123,6 +130,9 @@ data:
               deliver: discord
               skills: [credential-rotation, monitoring-alerting]
               prompt: |
+                [TRIGGER: INTERNAL WEBHOOK - route=credential-leak, sender=a secret-scanning
+                detector. Not an Alertmanager alert; nothing is wired to this route yet.]
+
                 A credential leak was reported to Hermes. This is not a routine alert: the
                 user wants a suggested resolution, recorded so it stays pending instead of
                 being lost in a notification.
@@ -154,6 +164,9 @@ data:
               deliver: discord
               skills: [systematic-debugging, cluster-gitops, monitoring-alerting]
               prompt: |
+                [TRIGGER: ALERT WEBHOOK - route=cluster-alert, sender=the alert-detector CronJob
+                reading Alertmanager. The cluster's own alerting path, not an internal post.]
+
                 The cluster woke you: one or more alerts are firing, and nobody is in this
                 conversation except you. Payload:
 
@@ -176,6 +189,30 @@ data:
                    not explain the alert, say so plainly rather than inventing a cause.
                 5. Keep the reply short: what is firing, what you found, what you did, and
                    the PR link if you opened one.
+            # In-cluster tooling rather than the alerting stack. Nothing posts here yet; it exists
+            # so a sender has a route whose banner already reads INTERNAL instead of borrowing the
+            # alert route and making every wake look like an Alertmanager page.
+            internal:
+              deliver: discord
+              skills: [cluster-gitops]
+              prompt: |
+                [TRIGGER: INTERNAL WEBHOOK - route=internal, sender=an in-cluster process. This
+                is NOT an Alertmanager alert.]
+
+                An in-cluster process woke you; nobody is in this conversation except you.
+                Payload:
+
+                {__raw__}
+
+                Rules for an unattended run:
+                1. Read the payload first and work out what the sender wants. If it is only a
+                   notification, say so and stop; do not invent work.
+                2. Read-only kubectl only, and read home-cluster/AGENTS.md before acting.
+                3. A fix goes through a pull request on kg6zjl/clusters - never merge it, never
+                   push to main. Work in a fresh worktree under /opt/data/worktrees branched off
+                   origin/main, and fetch first.
+                4. Never print, echo or commit a secret value.
+                5. Keep the reply short: who woke you, what the payload wanted, what you did.
     display:
       platforms:
         discord:

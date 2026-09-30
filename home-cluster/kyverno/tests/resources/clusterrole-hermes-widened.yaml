@@ -1,0 +1,25 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: hermes-agent
+rules:
+  - apiGroups:
+      - ""
+    resources:
+      - pods
+      - pods/log
+      - services
+    verbs:
+      - get
+      - list
+      - watch
+  # The violation: a verb outside get/list/watch on the agent's own role.
+  - apiGroups:
+      - ""
+    resources:
+      - pods
+    verbs:
+      - get
+      - list
+      - watch
+      - delete

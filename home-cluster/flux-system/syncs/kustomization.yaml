@@ -12,7 +12,6 @@ resources:
   - meshtastic-kustomization.yaml
   - cloudflared-kustomization.yaml
   - local-services-kustomization.yaml
-  - oauth2-proxy-kustomization.yaml
   - vpn-kustomization.yaml
   - home-assistant-kustomization.yaml
   - renovate-kustomization.yaml
@@ -28,7 +27,6 @@ resources:
   - registry-kustomization.yaml
   - kube-system-kustomization.yaml
   - arc-kustomization.yaml
-  - auth-kustomization.yaml
   - adsb-kustomization.yaml
   - nodered-kustomization.yaml
   - security-scanning-kustomization.yaml
@@ -42,3 +40,5 @@ resources:
   - crossplane-kustomization.yaml
   - crossplane-provider-kustomization.yaml
   - crossplane-config-kustomization.yaml
+  - kyverno-kustomization.yaml
+  - kyverno-policies-kustomization.yaml

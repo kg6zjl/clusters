@@ -40,6 +40,15 @@ spec:
     domainFilters:
       - stevearnett.com
     txtOwnerId: home-cluster
+    # The chart default is upsert-only, which never deletes: retire an Ingress and
+    # its record sits in the zone forever - which is how auth./dashboard. outlived
+    # the routes they pointed at. Deletion safety comes from the txt registry above,
+    # not from the policy: external-dns only removes records carrying a matching
+    # ownership TXT, and it still refuses to touch a hand-made one (it skips
+    # nas.stevearnett.com with "owner id does not match ... required: home-cluster").
+    # Declared explicitly because the current chart made policy a required value, so
+    # the next chart bump fails the release until it is set here.
+    policy: sync
     logLevel: debug
     env:
       - name: CF_API_TOKEN
@@ -47,11 +56,19 @@ spec:
           secretKeyRef:
             name: cloudflare-api-creds-root
             key: CLOUDFLARE_API_TOKEN
+    # Declared here, not via extraArgs: the chart generates the source RBAC only for
+    # what is listed under sources, and traefik-proxy needs get/list/watch on
+    # traefik.io IngressRoutes. With policy: sync and the source missing, external-dns
+    # could not see the 23 of 28 hosts declared on IngressRoutes and reaped their
+    # records. service is the chart default and is listed to keep it.
+    sources:
+      - service
+      - ingress
+      - crd
+      - traefik-proxy
     extraArgs:
-      - --source=crd
       - --crd-source-apiversion=externaldns.k8s.io/v1alpha1
       - --crd-source-kind=DNSEndpoint
-      - --source=ingress
     rbac:
       additionalPermissions:
         - apiGroups:

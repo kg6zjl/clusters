@@ -130,11 +130,51 @@ jobs:
             exit 1
           fi
 
+  kyverno:
+    name: Kyverno policy tests
+    runs-on: ${{ vars.CI_RUNNER || 'self-hosted' }}  # CI_RUNNER repo variable overrides this (ubuntu-latest = break-glass)
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install the pinned Kyverno CLI
+        # `kyverno test` runs entirely offline - no cluster, no API server - so the
+        # only thing this job needs is the binary. Pinned to the CLI whose version
+        # matches the chart's appVersion (v1.19.1) so the policy schema validated in
+        # CI is the one the cluster's controllers will apply. Checksum-verified
+        # against the release's checksums.txt, the same shape as the trufflehog step.
+        run: |
+          set -euo pipefail
+          V="1.19.1"
+          KY="/opt/hostedtoolcache/tools/kyverno"
+          if [ ! -x "$KY" ]; then
+            mkdir -p "$RUNNER_TEMP/kyverno-cli"
+            cd "$RUNNER_TEMP/kyverno-cli"
+            curl -sSfLO "https://github.com/kyverno/kyverno/releases/download/v${V}/kyverno-cli_v${V}_linux_x86_64.tar.gz"
+            curl -sSfLO "https://github.com/kyverno/kyverno/releases/download/v${V}/checksums.txt"
+            sha256sum -c --ignore-missing checksums.txt
+            tar -xzf "kyverno-cli_v${V}_linux_x86_64.tar.gz" kyverno
+            KY="$RUNNER_TEMP/kyverno-cli/kyverno"
+          fi
+          "$KY" version
+          echo "KYVERNO_CLI=$KY" >> "$GITHUB_ENV"
+
+      - name: Run the Hermes-agent policies against the fixtures
+        # --require-tests turns "the test files were not found" into a failure:
+        # without it a mistyped path exits 0 and the gate is green while testing
+        # nothing. The second run shares the folder and asserts the negative - a
+        # different writer (Flux) is not blocked by the agent-scoped rules.
+        run: |
+          set -euo pipefail
+          "$KYVERNO_CLI" test home-cluster/kyverno/tests --require-tests
+          "$KYVERNO_CLI" test home-cluster/kyverno/tests -f kyverno-test-nonagent.yaml --require-tests
+
   notify:
     name: Notify failure
     # Only fires when something failed, and only on PRs - the case that currently arrives as
     # GitHub email. Posts to the same Discord channel Alertmanager and Flux already use.
-    needs: [lint, validate, secrets]
+    needs: [lint, validate, secrets, kyverno]
     if: ${{ always() && failure() }}
     runs-on: ${{ vars.CI_RUNNER || 'self-hosted' }}  # CI_RUNNER repo variable overrides this (ubuntu-latest = break-glass)
     timeout-minutes: 5
@@ -153,6 +193,7 @@ jobs:
           [ "${{ needs.lint.result }}" = "failure" ] && FAILED="$FAILED lint"
           [ "${{ needs.validate.result }}" = "failure" ] && FAILED="$FAILED validate"
           [ "${{ needs.secrets.result }}" = "failure" ] && FAILED="$FAILED secret-scan"
+          [ "${{ needs.kyverno.result }}" = "failure" ] && FAILED="$FAILED kyverno"
           [ -n "$FAILED" ] || FAILED=" unknown"
           printf '{"content": "**CI failed** `%s`: failed%s\\n%s"}' \
             "$BRANCH" "$FAILED" \
