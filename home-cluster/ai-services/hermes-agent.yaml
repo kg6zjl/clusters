@@ -35,7 +35,7 @@ spec:
       # CPU only — GPU stays on beast
       initContainers:
       - name: install-tools
-        image: python:3.13-slim
+        image: python:3.14-slim
         env:
         # Keeps apt off the dialog frontend it cannot drive without a tty, which
         # otherwise fills the init log with debconf "unable to initialize" noise.
@@ -332,7 +332,7 @@ spec:
       # token that expires within the hour, not a key that can mint new ones.
       # See github-app-identity.md.
       - name: github-token-minter
-        image: python:3.13.13-alpine
+        image: python:3.14.7-alpine
         command: ["python3", "-B", "/app/mint.py"]
         env:
         - name: PYTHONDONTWRITEBYTECODE
