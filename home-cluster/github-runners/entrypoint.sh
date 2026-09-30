@@ -120,7 +120,10 @@ if [[ ! -f .runner ]]; then
   log "FATAL: could not configure runner after 10 attempts"
   exit 2
 fi
-log "runner configured (agentId $(python3 -c 'import json;print(json.load(open(".runner"))["agentId"])' 2>/dev/null || echo '?'))"
+# agentId is the only handle on the exact runner in GitHub's API (the list endpoint cannot filter by
+# it), so log it -- it is what lets a later step confirm *this* pod is the one that registered.
+agent_id=$(python3 -c 'import json;print(json.load(open(".runner"))["agentId"])' 2>/dev/null || echo '?')
+log "runner configured (agentId ${agent_id})"
 
 # Do not let ARC's registration env leak into the job environment. run.sh re-reads these, and a live
 # RUNNER_TOKEN in every job step is both wrong and a credential leak. summerwind unsets the same set.
