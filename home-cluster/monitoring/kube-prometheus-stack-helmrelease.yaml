@@ -256,6 +256,15 @@ spec:
           - source_labels: [alertname]
             regex: NodeDiskIOSaturation
             action: drop
+          # beast is powered off on demand and comes and goes, so both of its exporter targets
+          # (job=beast on :9100 node_exporter, job=beast-gpu on :9835 nvidia) are unreachable by
+          # design - and the chart's TargetDown ("100% of a job's targets are down") fires on every
+          # power-off. Scoped to the beast jobs on purpose: TargetDown is the only alert that
+          # catches a genuinely dead target for every other job, so dropping it by alertname alone
+          # would delete that coverage cluster-wide to silence one host.
+          - source_labels: [alertname, job]
+            regex: TargetDown;beast.*
+            action: drop
         additionalRules:
           - name: ingress-availability
             rules:

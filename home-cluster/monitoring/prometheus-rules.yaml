@@ -466,3 +466,36 @@ spec:
       annotations:
         summary: "trivy-operator is up but exporting no scan results"
         description: "The operator is scrapeable but publishes no trivy_image_vulnerabilities, so every rule above and the dashboard itself are blind. Note the limit: this sees the reports all going away, not one workload quietly being skipped - nothing exports a per-report timestamp. Check the operator's log for watch/list errors on the report CRDs and that its ServiceAccount's list/watch on trivy-operator's own CRDs still exists."
+  # Declarative alert suppression. An Alertmanager silence is a runtime object: anyone who can
+  # reach the Alertmanager API can create one un-reviewed, it leaves no trace in git, and it
+  # disappears on expiry whether or not anyone looked. The declarative equivalent is an inhibit
+  # rule, and an inhibit rule needs a source alert - so each suppressed class gets one
+  # always-firing sentinel here, which monitoring/alertmanager-external-secret.yaml inhibits the
+  # real alert against.
+  #
+  # Why an inhibit rather than a route to the null receiver: the real alert keeps firing and
+  # stays visible in Prometheus and (as "inhibited") in the Alertmanager UI, so a suppressed
+  # class can still be re-checked; it just stops notifying and stops waking the agent, which
+  # reads alerts with inhibited=false. A dropped route would hide the class entirely and the
+  # re-check would be forgotten.
+  #
+  # Two properties are load-bearing and both are in the YAML below rather than in prose:
+  # the sentinel carries the labels the inhibit rule matches on (so the class is identified by
+  # what it is, not by an id), and severity is "none" (which the existing route tree sends to
+  # the "null" receiver, so the sentinel never notifies anything itself).
+  #
+  # To suppress another class, add one entry here with that class's identity labels and one
+  # inhibit rule in the Alertmanager config. To un-suppress, delete the entry. Neither has an
+  # expiry: Alertmanager has no time-boxed inhibit and Alerting rules fire on the presence of a
+  # series, not its value, so an expression cannot make itself stop firing at a date - the
+  # re-check date goes in the annotation for whoever reads it.
+  - name: suppressions
+    rules:
+    - alert: SuppressedTrivyCritical
+      expr: vector(1)
+      labels:
+        severity: none
+        image_repository: prometheus/blackbox-exporter
+      annotations:
+        summary: "TrivyCriticalVulnerability is suppressed for prometheus/blackbox-exporter"
+        description: "No pinnable tag closes CVE-2026-33186 or CVE-2025-68121: v0.28.0 is the newest release and the fix exists only in unreleased master builds, so the image bump this alert asks for does not exist yet. Takes over from Alertmanager silence f1037d21-10af-4e63-ac6b-a547d32bc308, which expires 2026-10-14 and suppressed blackbox-exporter only. Re-check a newer release after that date and delete this entry with its inhibit rule; every other Trivy Critical still pages."
