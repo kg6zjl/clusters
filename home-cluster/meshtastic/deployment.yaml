@@ -13,6 +13,9 @@ spec:
   # and both consumers now read the Longhorn claim. The hostpath claim stays as the
   # rollback until the app has run a full cycle.
   replicas: 1
+  # Single ReadWriteOnce volume; a rolling update would need two pods on it at once.
+  strategy:
+    type: Recreate
   revisionHistoryLimit: 5
   selector:
     matchLabels:
