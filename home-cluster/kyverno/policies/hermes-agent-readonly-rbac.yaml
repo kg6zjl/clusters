@@ -1,0 +1,123 @@
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: hermes-agent-readonly-rbac
+  annotations:
+    policies.kyverno.io/title: Pin the Hermes agent ServiceAccount read-only
+    policies.kyverno.io/category: RBAC
+    policies.kyverno.io/severity: high
+    policies.kyverno.io/subject: ClusterRole,Role,ClusterRoleBinding,RoleBinding
+    policies.kyverno.io/description: >-
+      system:serviceaccount:ai-services:hermes-agent operates this cluster only
+      through Git pull requests and holds get/list/watch today (ClusterRole
+      hermes-agent, bound by ClusterRoleBinding hermes-agent). This policy keeps
+      that true: its eponymous ClusterRole may not gain any verb outside
+      get/list/watch, and the ServiceAccount may only be bound to one of the
+      read-only ClusterRoles hermes-agent or view.
+spec:
+  # Background scans can evaluate objects already stored in the cluster, so the
+  # existing ClusterRole hermes-agent and ClusterRoleBinding hermes-agent are
+  # re-checked on every scan, not only when someone writes them.
+  background: true
+  # ROLLOUT STATE: Audit. Violations are reported in a ClusterPolicyReport, not
+  # blocked. The flip to Enforce (validate.failureAction: Enforce on all three
+  # rules AND webhookConfiguration.failurePolicy: Fail) is the deliberate
+  # follow-up once the live ClusterPolicyReport shows the expected zero
+  # violations; see the PR body for the exact check and commands.
+  #
+  # failurePolicy at Enforce time is Fail on purpose: this rule set matches only
+  # RBAC objects (Role/ClusterRole/RoleBinding/ClusterRoleBinding), so a Kyverno
+  # outage fails closed on privilege changes without blocking ordinary workload
+  # admission, Secret creation or Flux's applies of anything else. That narrow
+  # blast radius is what makes Fail defensible here.
+  webhookConfiguration:
+    # Ignore while in Audit: an Audit policy that Fails closed would let a Kyverno
+    # outage block RBAC admission for no security benefit, because Audit does not
+    # block anything anyway. This becomes Fail together with the Enforce flip.
+    failurePolicy: Ignore
+  rules:
+    - name: agent-clusterrole-readonly
+      match:
+        any:
+          - resources:
+              kinds:
+                - ClusterRole
+      preconditions:
+        all:
+          - key: "{{ request.object.metadata.name }}"
+            operator: AnyIn
+            value:
+              - hermes-agent*
+      validate:
+        failureAction: Audit
+        message: >-
+          ClusterRole '{{ request.object.metadata.name }}' is part of the read-only
+          identity for system:serviceaccount:ai-services:hermes-agent and may only
+          grant get/list/watch; it asks for a verb outside that set.
+        deny:
+          conditions:
+            any:
+              - key: "{{ request.object.rules[].verbs[] }}"
+                operator: AnyNotIn
+                value:
+                  - get
+                  - list
+                  - watch
+    - name: agent-role-readonly
+      match:
+        any:
+          - resources:
+              kinds:
+                - Role
+      preconditions:
+        all:
+          - key: "{{ request.object.metadata.name }}"
+            operator: AnyIn
+            value:
+              - hermes-agent*
+      validate:
+        failureAction: Audit
+        message: >-
+          Role '{{ request.object.metadata.name }}' shares the read-only identity
+          naming convention for system:serviceaccount:ai-services:hermes-agent and
+          may only grant get/list/watch.
+        deny:
+          conditions:
+            any:
+              - key: "{{ request.object.rules[].verbs[] }}"
+                operator: AnyNotIn
+                value:
+                  - get
+                  - list
+                  - watch
+    - name: agent-binding-readonly
+      match:
+        any:
+          - resources:
+              kinds:
+                - ClusterRoleBinding
+                - RoleBinding
+      preconditions:
+        all:
+          - key: "{{ request.object.subjects[?name=='hermes-agent'].namespace }}"
+            operator: AnyIn
+            value:
+              - ai-services
+      validate:
+        failureAction: Audit
+        message: >-
+          system:serviceaccount:ai-services:hermes-agent may only be bound to the
+          read-only ClusterRoles 'hermes-agent' or 'view'. This binding grants it
+          '{{ request.object.roleRef.name }}' ({{ request.object.roleRef.kind }}),
+          which is neither.
+        deny:
+          conditions:
+            any:
+              - key: "{{ request.object.roleRef.kind }}"
+                operator: NotEquals
+                value: ClusterRole
+              - key: "{{ request.object.roleRef.name }}"
+                operator: AnyNotIn
+                value:
+                  - hermes-agent
+                  - view
