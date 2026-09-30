@@ -210,6 +210,10 @@ data:
     import sys
     import urllib.request
 
+    # Same directory, and mint.py guards its entry point, so importing it is safe. Reused for
+    # the JWT and key parsing rather than duplicating the signing code.
+    import mint
+
     TOKEN_PATH = os.environ.get("TOKEN_PATH", "/etc/hermes/github-token")
     CREDS_DIR = os.environ.get("APP_CREDS_DIR", "/app-creds")
     API = os.environ.get("GITHUB_API", "https://api.github.com")
@@ -256,10 +260,19 @@ data:
         repos = [r["full_name"] for r in call("/installation/repositories", token).get("repositories", [])]
         print("installation covers", len(repos), "repo(s):", ", ".join(repos) or "(none)")
 
-        # Name the permissions the installation actually grants, so a gap is reported by the API
-        # rather than inferred from push=False alone.
-        granted = call("/installation", token).get("permissions", {})
-        print("installation permissions:", json.dumps(granted, sort_keys=True))
+        # /installation is not an endpoint; the installation is an App-level resource. Read both
+        # sides of the grant with an App JWT: what the App is configured with, and what the
+        # installation actually hands out. A difference means the installation has not accepted
+        # a permission change, which pushes nothing into the token.
+        app_id = mint.read_cred("app-id")
+        key_n, key_d = mint.parse_private_key(mint.read_cred("private-key"))
+        kbytes = (key_n.bit_length() + 7) // 8
+        jwt = mint.app_jwt(app_id, key_n, key_d, kbytes)
+        print("app permissions (configured):",
+              json.dumps(call("/app", jwt).get("permissions", {}), sort_keys=True))
+        installation = call("/app/installations/" + mint.read_cred("installation-id"), jwt)
+        print("installation permissions (effective):",
+              json.dumps(installation.get("permissions", {}), sort_keys=True))
 
         problems = []
         for wanted in EXPECTED:
@@ -267,7 +280,7 @@ data:
                 problems.append(f"{wanted}: not in the installation")
                 continue
             permissions = call("/repos/" + wanted, token).get("permissions", {})
-            print(f"{wanted}: push={permissions.get('push')} admin={permissions.get('admin')}")
+            print(f"{wanted}: push={permissions.get('push')} pull={permissions.get('pull')} admin={permissions.get('admin')}")
             if not permissions.get("push"):
                 problems.append(f"{wanted}: not writable with this token")
             if permissions.get("admin"):
