@@ -33,6 +33,7 @@ data:
     import hashlib
     import json
     import os
+    import re
     import sys
     import time
     import urllib.error
@@ -79,18 +80,21 @@ data:
 
 
     def parse_private_key(pem_text):
-        # A key copied from a password-manager text field can arrive with its newlines escaped,
-        # turning the whole PEM into one line -- which the header filter below then discards
-        # entirely, leaving an empty body. Normalise first: a real PEM never contains a literal
-        # backslash-n.
+        # A key copied out of a password-manager text field can arrive with its newlines escaped
+        # or stripped outright, i.e. the whole PEM on one line. Line-based armour stripping fails
+        # on that: a single line starting with "-----" gets discarded whole, leaving an empty body
+        # (observed: 1678 bytes, 1 line, header at the start). Strip the markers wherever they sit
+        # and keep every base64 character instead.
         pem_text = pem_text.replace("\\n", "\n")
-        lines = [l.strip() for l in pem_text.strip().splitlines()]
-        body = "".join(l for l in lines if l and not l.startswith("-----"))
+        raw_lines = [l.strip() for l in pem_text.strip().splitlines()]
+        armour = re.sub(r"-----(BEGIN|END)[^-]+-----", "", pem_text)
+        body = "".join(armour.split())
         if not body:
             raise ValueError(
                 "private-key value has no base64 body "
-                f"(bytes={len(pem_text)}, lines={len(lines)}, first_line={lines[0][:40] if lines else '<empty>'}): "
-                "the 1Password property is blank, or holds the key flattened onto one escaped line"
+                f"(bytes={len(pem_text)}, lines={len(raw_lines)}, "
+                f"first_line={raw_lines[0][:40] if raw_lines else '<empty>'}): the 1Password "
+                "property is blank, or does not hold a PEM key"
             )
         der = base64.b64decode(body)
         if "BEGIN PRIVATE KEY" in pem_text:  # PKCS#8: unwrap to the inner PKCS#1
