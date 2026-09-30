@@ -1,0 +1,233 @@
+---
+# Teach the MicroK8s kube-apiserver to trust Dex as an OIDC issuer.
+#
+# WHY THIS EXISTS
+# ---------------
+# Headlamp is the only admin UI for this cluster and is reachable from anywhere, but it
+# authenticates as its own ServiceAccount, which is bound to cluster-admin. A reverse proxy
+# in front of Headlamp cannot fix that: the proxy would authenticate the *browser* while
+# Headlamp still presented the *same* cluster-admin ServiceAccount token to the apiserver, so
+# every user would collapse into one identity with nothing attributable in the audit log.
+#
+# The only real fix is for the apiserver itself to accept a user identity token, so Kubernetes
+# RBAC decides what that person may do and the audit log names them. This playbook adds the
+# OIDC flags; headlamp/ then sends real OIDC tokens and per-user ClusterRoleBindings decide.
+#
+# ADDITIVE, NOT A SWITCH
+# ----------------------
+# Adding an OIDC provider does not disable any other authenticator. ServiceAccount tokens,
+# client certificates and the admin token file all keep working exactly as before. If Dex is
+# unreachable or misconfigured, the worst outcome is that OIDC logins fail and everyone else
+# carries on. That property is what makes this safe to apply first and verify later.
+#
+# CHECK ONLY by default -- nothing on the host is written unless you pass `-e fix=true`.
+# Either way it prints the OIDC flags currently present, the exact rewrite it would perform,
+# and refuses to touch a file that does not look like a MicroK8s args file.
+#
+# PREREQUISITE: merge and verify the Dex deployment (sso namespace) BEFORE running this. The
+# apiserver does not contact the issuer at startup, so a missing Dex cannot crash the control
+# plane, but OIDC logins will simply fail until Dex is live.
+#
+# USAGE
+#   ansible-playbook -i inventory/hosts.yml oidc-apiserver.yaml
+#   ansible-playbook -i inventory/hosts.yml oidc-apiserver.yaml -e fix=true
+#   # roll back a host:
+#   ansible-playbook -i inventory/hosts.yml oidc-apiserver.yaml -e fix=true \
+#     -e oidc_remove=true
+- name: Configure kube-apiserver to trust Dex as an OIDC issuer
+  hosts: all
+  gather_facts: false
+  become: true
+
+  vars:
+    apiserver_args: /var/snap/microk8s/current/args/kube-apiserver
+    snap_bin: /snap/bin
+    microk8s_apiserver_healthz: https://127.0.0.1:16443/healthz
+
+    oidc_issuer_url: https://sso.kube.stevearnett.com/dex
+    oidc_client_id: kubernetes
+    # Dex returns the connector's email in the `email` claim. Headlamp's per-user
+    # ClusterRoleBinding subject matches that address verbatim, so the username must be the
+    # raw address with no prefix -- otherwise RBAC subjects would need an "oidc:" prefix too
+    # and the binding would never match.
+    oidc_username_claim: email
+    # No --oidc-ca-file: sso.kube.stevearnett.com is served by Traefik with the cert-manager
+    # Let's Encrypt wildcard cert, which chains to a publicly trusted root. Adding a caFile
+    # would pin us to a cert we would have to rotate by hand.
+    #
+    # Deliberately NO --oidc-groups-claim: Dex does not populate a groups claim from the Google
+    # connector, so requesting one would only ever yield an empty group list and would imply an
+    # authorization model that does not actually exist. Authorization is per-user RBAC.
+    oidc_flags:
+      - "--oidc-issuer-url={{ oidc_issuer_url }}"
+      - "--oidc-client-id={{ oidc_client_id }}"
+      - "--oidc-username-claim={{ oidc_username_claim }}"
+      - "--oidc-username-prefix="
+
+    microk8s_daemon_units:
+      - snap.microk8s.daemon-apiserver-kicker
+      - snap.microk8s.daemon-apiserver
+      - snap.microk8s.daemon-kubelite
+
+  tasks:
+    - name: Read kube-apiserver args
+      ansible.builtin.slurp:
+        src: "{{ apiserver_args }}"
+      register: apiserver_args_raw
+      failed_when: false
+
+    - name: Assert the args file exists (control-plane host)
+      ansible.builtin.assert:
+        that: apiserver_args_raw.content is defined
+        fail_msg: >-
+          {{ apiserver_args }} does not exist on {{ inventory_hostname }}, so this host does
+          not run the MicroK8s control plane in the expected layout. Nothing to do here.
+
+    # Fail loudly rather than guess. This playbook rewrites the whole file, so it must be
+    # certain it is the real args file and not something unexpected.
+    - name: Assert the args file looks like a MicroK8s args file
+      vars:
+        args_lines: "{{ (apiserver_args_raw.content | b64decode).splitlines() }}"
+        flag_lines: "{{ args_lines | select('match', '^--[a-z0-9-]+=') | list }}"
+      ansible.builtin.assert:
+        that:
+          - args_lines | length > 5
+          - flag_lines | length > 5
+        fail_msg: >-
+          {{ apiserver_args }} does not look like a MicroK8s args file
+          ({{ args_lines | length }} lines, {{ flag_lines | length }} of them --flags).
+          Refusing to rewrite it. Inspect the file by hand first.
+
+    - name: Preserve the current OIDC flags on this host
+      vars:
+        args_lines: "{{ (apiserver_args_raw.content | b64decode).splitlines() }}"
+      ansible.builtin.set_fact:
+        oidc_lines_now: "{{ args_lines | select('match', '^--oidc-') | list }}"
+
+    - name: Show the current OIDC flags
+      ansible.builtin.debug:
+        msg:
+          - "{{ apiserver_args }} on {{ inventory_hostname }}"
+          - "current --oidc-* flags: {{ oidc_lines_now | list if oidc_lines_now | length else 'NONE' }}"
+          - "target issuer: {{ oidc_issuer_url }}"
+
+    # Rewriting the file in one pass is deliberate: it removes stale --oidc-* flags that we no
+    # longer want (rather than leaving orphaned auth config behind) while preserving every
+    # unrelated MicroK8s flag byte-for-byte. backup: true gives a per-host rollback file.
+    # Split across two tasks on purpose: key order inside a single set_fact is not something to
+    # rely on when one key references another.
+    - name: Compute the args lines to preserve
+      ansible.builtin.set_fact:
+        args_lines: "{{ (apiserver_args_raw.content | b64decode).splitlines() }}"
+        args_preserved: >-
+          {{ ((apiserver_args_raw.content | b64decode).splitlines()
+              | reject('match', '^--oidc-')
+              | reject('match', '^\s*$')
+              | list) }}
+
+    - name: Compute the OIDC block to append
+      ansible.builtin.set_fact:
+        args_desired: >-
+          {{ [] if (oidc_remove | default(false) | bool)
+             else (args_lines + oidc_flags) }}
+
+    - name: Report the exact rewrite
+      ansible.builtin.debug:
+        msg:
+          - "fix requested: {{ fix | default(false) }}"
+          - "removing all --oidc-* flags: {{ oidc_remove | default(false) }}"
+          - "would add: {{ [] if (oidc_remove | default(false) | bool) else oidc_flags }}"
+          - "would preserve {{ (args_preserved | length) }} unrelated lines untouched"
+
+    - name: Locate the microk8s daemon unit that owns the apiserver
+      ansible.builtin.command:
+        cmd: systemctl list-unit-files --no-legend --no-pager 'snap.microk8s.daemon-*'
+      changed_when: false
+      register: mk_units
+      failed_when: false
+
+    - name: Pick the unit that owns the apiserver
+      ansible.builtin.set_fact:
+        microk8s_apiserver_unit: >-
+          {{ microk8s_daemon_units | select('in', mk_units.stdout) | list | first | default('') }}
+
+    - name: Assert a daemon unit exists before any write or restart
+      ansible.builtin.assert:
+        that: microk8s_apiserver_unit | length > 0
+        fail_msg: >-
+          No unit from {{ microk8s_daemon_units }} exists on this host, so this playbook cannot
+          restart the apiserver. Run `systemctl list-units 'snap.microk8s.*'` by hand and
+          do not merge this until you know which unit to restart.
+
+    # Both the apply and the rollback pass through here; -e oidc_remove=true simply computes an
+    # args file with no --oidc-* lines, which is a pure restore of the pre-OIDC state.
+    - name: Apply the OIDC args
+      ansible.builtin.copy:
+        dest: "{{ apiserver_args }}"
+        content: "{{ (args_preserved + args_desired) | join('\n') + '\n' }}"
+        owner: root
+        group: root
+        mode: "0600"
+        backup: true
+      when: fix | default(false) | bool
+      notify: Restart the microk8s daemon that owns the apiserver
+
+    - name: Apply the restart before verifying
+      ansible.builtin.meta: flush_handlers
+      when: fix | default(false) | bool
+
+    - name: Wait for the local apiserver to answer again
+      ansible.builtin.uri:
+        url: "{{ microk8s_apiserver_healthz }}"
+        validate_certs: false
+        status_code: 200
+      register: apiserver_healthz
+      until: apiserver_healthz.status == 200
+      retries: 36
+      delay: 5
+      when: fix | default(false) | bool
+      changed_when: false
+
+    - name: Read the args file back
+      ansible.builtin.slurp:
+        src: "{{ apiserver_args }}"
+      register: apiserver_args_after
+      when: fix | default(false) | bool
+
+    - name: Confirm the OIDC flags landed
+      vars:
+        oidc_lines_after: >-
+          {{ (apiserver_args_after.content | b64decode).splitlines()
+             | select('match', '^--oidc-') | list }}
+      ansible.builtin.assert:
+        that: oidc_lines_after | list | sort == (oidc_flags if not (oidc_remove | default(false) | bool) else []) | sort
+        fail_msg: >-
+          The apiserver restarted but its OIDC flags are not what this playbook intended
+          (found: {{ oidc_lines_after | list | sort }}). Roll back using the backup file next
+          to {{ apiserver_args }} and investigate.
+      when: fix | default(false) | bool
+
+    - name: Confirm every node is still reachable after the restart
+      ansible.builtin.command:
+        argv:
+          - microk8s
+          - kubectl
+          - get
+          - nodes
+          - -o
+          - jsonpath={.items[*].status.conditions[?(@.type=="Ready")].status}
+      environment:
+        PATH: "{{ snap_bin }}:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+      changed_when: false
+      register: nodes_after
+      failed_when: false
+
+    - name: Report node readiness (all items should read True)
+      ansible.builtin.debug:
+        msg: "node Ready conditions: {{ nodes_after.stdout | default('unknown') }}"
+
+  handlers:
+    - name: Restart the microk8s daemon that owns the apiserver
+      ansible.builtin.systemd_service:
+        name: "{{ microk8s_apiserver_unit }}"
+        state: restarted
