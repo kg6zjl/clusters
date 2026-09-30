@@ -716,6 +716,11 @@ spec:
         memory: 1024Mi
     falcosidekick:
       enabled: true
+      # The chart default (2.32.0) posts Falco events with no `alertname` label, so every event
+      # groups under alertname="" and the ntfy/Discord titles and deep links render empty.
+      # 2.33.0 sets alertname from the rule name.
+      image:
+        tag: "2.33.0"
       replicaCount: 1
       resources:
         requests:
