@@ -73,12 +73,25 @@ data:
         while pos < len(seq):
             tag, val, pos = read_tlv(seq, pos)
             items.append((tag, val))
+        if len(items) < 4:
+            raise ValueError(f"private key is not an RSA PRIVATE KEY structure ({len(items)} DER fields)")
         return int.from_bytes(items[1][1], "big"), int.from_bytes(items[3][1], "big")
 
 
     def parse_private_key(pem_text):
-        body = "".join(l.strip() for l in pem_text.strip().splitlines()
-                       if l.strip() and not l.startswith("-----"))
+        # A key copied from a password-manager text field can arrive with its newlines escaped,
+        # turning the whole PEM into one line -- which the header filter below then discards
+        # entirely, leaving an empty body. Normalise first: a real PEM never contains a literal
+        # backslash-n.
+        pem_text = pem_text.replace("\\n", "\n")
+        lines = [l.strip() for l in pem_text.strip().splitlines()]
+        body = "".join(l for l in lines if l and not l.startswith("-----"))
+        if not body:
+            raise ValueError(
+                "private-key value has no base64 body "
+                f"(bytes={len(pem_text)}, lines={len(lines)}, first_line={lines[0][:40] if lines else '<empty>'}): "
+                "the 1Password property is blank, or holds the key flattened onto one escaped line"
+            )
         der = base64.b64decode(body)
         if "BEGIN PRIVATE KEY" in pem_text:  # PKCS#8: unwrap to the inner PKCS#1
             _, seq, _ = read_tlv(der, 0)
@@ -194,6 +207,7 @@ data:
     import urllib.request
 
     TOKEN_PATH = os.environ.get("TOKEN_PATH", "/etc/hermes/github-token")
+    CREDS_DIR = os.environ.get("APP_CREDS_DIR", "/app-creds")
     API = os.environ.get("GITHUB_API", "https://api.github.com")
     EXPECTED = ("kg6zjl/clusters", "kg6zjl/skills")
 
@@ -213,6 +227,21 @@ data:
 
 
     def main():
+        if "--inventory" in sys.argv:
+            # Shape check that reports no secret material: the two ids are identifiers, and the
+            # key is described by size and line count only. Runs before minting so a bad stored
+            # value is named in the log instead of surfacing later as an opaque parse error.
+            for name in ("app-id", "installation-id", "private-key"):
+                path = os.path.join(CREDS_DIR, name)
+                try:
+                    with open(path) as handle:
+                        text = handle.read()
+                except OSError as error:
+                    print(f"{name}: unreadable ({type(error).__name__}: {error})")
+                    continue
+                lines = text.strip().splitlines()
+                print(f"{name}: bytes={len(text)} lines={len(lines)} first={(lines[0][:40] if lines else '<empty>')}")
+            return 0
         with open(TOKEN_PATH) as handle:
             token = handle.read().strip()
         print("installation token shape (ghs_ prefix):", token.startswith("ghs_"))

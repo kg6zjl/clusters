@@ -44,6 +44,7 @@ spec:
             - -c
             - |
               set -eu
+              python3 -B /app/verify.py --inventory
               python3 -B /app/mint.py --once
               python3 -B /app/verify.py
             env:
