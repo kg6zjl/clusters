@@ -1,0 +1,13 @@
+# The Traefik dashboard is served by an IngressRoute, which external-dns cannot read
+# (its sources are service, ingress and crd), so this record is declared here.
+apiVersion: externaldns.k8s.io/v1alpha1
+kind: DNSEndpoint
+metadata:
+  name: traefik-dashboard
+  namespace: traefik
+spec:
+  endpoints:
+  - dnsName: traefik.kube.stevearnett.com
+    recordType: CNAME
+    targets:
+    - kube.stevearnett.com

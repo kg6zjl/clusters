@@ -5,6 +5,7 @@ resources:
   - ingressroute-grafana.yaml
   - ingressroute-prometheus.yaml
   - ingressroute-alertmanager.yaml
+  - dnsendpoint-traefik-hosts.yaml
   - prometheus-rules.yaml
   - node-disk-io-rules.yaml
   - ingress-availability-rules.yaml
