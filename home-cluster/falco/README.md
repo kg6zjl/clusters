@@ -68,6 +68,13 @@ only for a privileged container that is *new*, which is the signal worth having.
 deliberately not listed even though two init containers use it privileged: "privileged busybox"
 is exactly a shape an attacker would use.
 
+Second deviation, same shape: `user_known_contact_k8s_api_server_activities` (upstream:
+`never_true`) now excludes Headlamp, on `proc.name = headlamp-server` or the image repository
+`ghcr.io/headlamp-k8s/headlamp`. It is the admin UI and its apiserver connections are expected.
+The process name is in the condition because the container plugin resolves nothing on MicroK8s -
+every event carries `container.image.repository=null` and `k8s.ns.name=null` - so an image-only
+match is inert. Every other container connecting to the apiserver still fires.
+
 CRITICAL (2) - reserved for indicators that are essentially never legitimate:
 
 | rule | why critical |

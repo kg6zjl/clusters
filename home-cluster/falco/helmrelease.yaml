@@ -186,8 +186,13 @@ spec:
           condition: (fd.sip.name="kubernetes.default.svc.cluster.local")
 
         # from rules/main (macro)
+        # Only Headlamp is excluded. It is the admin UI, it holds an apiserver credential by
+        # design, and every one of its connections is expected. Matched on proc.name as well
+        # as the image repository because the container plugin resolves no container metadata
+        # on MicroK8s - measured: container.image.repository and k8s.ns.name are null on every
+        # event - so an image-only match would never fire.
         - macro: user_known_contact_k8s_api_server_activities
-          condition: (never_true)
+          condition: (proc.name = headlamp-server or container.image.repository = ghcr.io/headlamp-k8s/headlamp)
 
         # from rules/main (list)
         - list: grep_binaries
