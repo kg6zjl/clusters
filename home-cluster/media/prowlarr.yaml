@@ -47,6 +47,25 @@ metadata:
   namespace: media
 spec:
   replicas: 1
+  # Step 1 of a two-commit migration to Recreate.
+  # The config claim is ReadWriteOnce and this is a single replica, so a RollingUpdate rollout
+  # starts the new pod while the old pod still holds the volume on its node: the attach controller
+  # refuses it (Multi-Attach), the new pod sits in ContainerCreating until progressDeadlineSeconds
+  # marks the Deployment Failed, and Flux rolls the release back. Recreate frees the volume first.
+  # Same defect class as jellyfin's chart-driven rollout (media/jellyfin-helmrelease.yaml).
+  #
+  # Recreate cannot be set in the same apply that removes rollingUpdate. strategy.rollingUpdate is
+  # defaulted by the API server at create time, so no field manager ever owned it, and server-side
+  # apply can only delete fields it owns -- asking it to drop an unowned field leaves the defaulted
+  # object in place and the apply is rejected: "spec.strategy.rollingUpdate: Forbidden: may not be
+  # specified when strategy 'type' is 'Recreate'". Stating the values that are already live makes
+  # kustomize-controller the owner without changing anything in the cluster, which is what lets the
+  # follow-up commit set type: Recreate with rollingUpdate: null.
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 25%
+      maxUnavailable: 25%
   revisionHistoryLimit: 5
   selector:
     matchLabels:
@@ -78,6 +97,17 @@ spec:
       containers:
       - name: prowlarr
         image: linuxserver/prowlarr:version-2.6.5.5623
+        # Measured over 14d: peak RSS 168 MiB. The limit is roughly 3x that peak so
+        # a release search is absorbed instead of OOM-killed, while the request
+        # stays under the peak so the scheduler does not reserve the headroom.
+        # the headroom.
+        resources:
+          requests:
+            cpu: 50m
+            memory: 256Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
         env:
         - name: PUID
           value: "0"

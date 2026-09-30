@@ -19,6 +19,21 @@ data:
     produces at most one agent run, and an alert is announced once: the filter is the alert's
     own start time, so there is no state to keep in a pod that is recreated every five
     minutes.
+
+    "Announced once" is keyed on the pair (fingerprint, start time), so what wakes the agent is
+    a new alert, not a fresh reading of an old one. A change that matters is a change to the
+    label set: Alertmanager fingerprints an alert from its labels alone, so a label change - a
+    new instance joining the group, a severity escalation from warning to critical - is stored
+    as a new alert with a new start time and does wake the agent. A change to annotations only
+    - the summary or description being re-rendered as the value moves - keeps the fingerprint
+    and the start time, so it does not wake; re-waking on text churn would cost an agent run on
+    every poll and tell the agent nothing it was not already told.
+
+    An alert is dropped before the post if its name is in ALERT_EXCLUDE_ALERTNAMES or if it
+    carries every label pair in ALERT_EXCLUDE_LABELS. The second exists because a name cannot
+    express "this alertname, but only for this image": drop one image_repository, one
+    namespace, without muting the whole class. Either way the rule and the metric stay - the
+    alert still fires and still routes to ntfy and Discord - it just never wakes the agent.
     """
     import hashlib
     import hmac
@@ -38,6 +53,38 @@ data:
     MAX_ALERTS = int(os.environ.get("MAX_ALERTS", "20"))
     TIMEOUT_SECONDS = int(os.environ.get("HTTP_TIMEOUT_SECONDS", "20"))
     UI_URL = os.environ.get("ALERTMANAGER_UI_URL", "").rstrip("/")
+    # Alertnames that must never wake the agent. The rules still fire and still page wherever
+    # else they route; only this path is deaf to them, so a class of alert the operator has
+    # decided not to act on cannot cost an agent run and an approval prompt.
+    EXCLUDE_ALERTNAMES = {s.strip() for s in os.environ.get("ALERT_EXCLUDE_ALERTNAMES", "").split(",") if s.strip()}
+
+
+    def parse_label_exclusions(value):
+        """'name=value,name=value' -> tuple of pairs. Every pair must be present on an alert
+        for the alert to be dropped, so a group of pairs excludes by label subset, not by name."""
+        pairs = []
+        for item in value.split(","):
+            item = item.strip()
+            if not item:
+                continue
+            name, sep, val = item.partition("=")
+            if not sep or not name.strip():
+                raise ValueError("%r is not name=value" % item)
+            pairs.append((name.strip(), val.strip()))
+        return tuple(pairs)
+
+
+    # Label pairs that must never wake the agent. A typo here silently re-enables a wake the
+    # operator meant to suppress, so a malformed pair is refused loudly at startup instead.
+    try:
+        EXCLUDE_LABELS = parse_label_exclusions(os.environ.get("ALERT_EXCLUDE_LABELS", ""))
+    except ValueError as exc:
+        print("ALERT_EXCLUDE_LABELS is malformed: %s" % exc, file=sys.stderr)
+        sys.exit(2)
+
+
+    def excluded_by_labels(labels):
+        return bool(EXCLUDE_LABELS) and all(labels.get(name) == val for name, val in EXCLUDE_LABELS)
 
 
     def request(url, data=None, headers=None):
@@ -71,15 +118,23 @@ data:
             raise RuntimeError("Alertmanager returned %s" % status)
         cutoff = datetime.now(timezone.utc) - timedelta(seconds=LOOKBACK_SECONDS)
         fresh = []
+        excluded = []
         for alert in alerts:
             labels = alert.get("labels") or {}
+            alertname = labels.get("alertname", "unknown")
+            if alertname in EXCLUDE_ALERTNAMES or excluded_by_labels(labels):
+                excluded.append(alertname)
+                continue
             if SEVERITIES and labels.get("severity") not in SEVERITIES:
                 continue
+            # Selection is on the alert's own start time, which Alertmanager resets when the
+            # label set changes because the fingerprint it dedupes on is a hash of the labels
+            # alone. So this wakes on a new or a relabelled alert (new instance, severity
+            # escalation) and stays quiet when only the annotations are re-rendered.
             started = started_at(alert.get("startsAt"))
             if started is None or started < cutoff:
                 continue
             annotations = alert.get("annotations") or {}
-            alertname = labels.get("alertname", "unknown")
             fresh.append({
                 "alertname": alertname,
                 "severity": labels.get("severity", "unknown"),
@@ -97,6 +152,9 @@ data:
         # that just started is the one worth a wake - and a large standing group can no
         # longer starve a new one out of the cap.
         fresh.sort(key=lambda a: a["starts_at"], reverse=True)
+        if excluded:
+            print("excluded %s alert(s): %s" % (
+                len(excluded), ", ".join(sorted(set(excluded)))))
         return fresh
 
 

@@ -10,6 +10,13 @@
 #
 # Severity filter is "critical" only. Widen ALERT_SEVERITIES to include warnings when the
 # agent's investigation is worth more than the extra runs it will start.
+#
+# ALERT_EXCLUDE_ALERTNAMES is the other half of the filter: a name listed there never wakes
+# the agent whatever its severity. The OpenRouter balance/spend class is in it by the user's
+# decision (2026-09-30) - this is a home lab and the remaining balance is noise, not a thing
+# to act on. ALERT_EXCLUDE_LABELS is the same filter by label subset, so a class that is
+# unfixable for one target can be dropped without dropping the whole alertname. The rules,
+# the metric and the ntfy/Discord routes are untouched; only this path is deaf to them.
 apiVersion: batch/v1
 kind: CronJob
 metadata:
@@ -18,6 +25,10 @@ metadata:
   labels:
     app: alert-detector
 spec:
+  # Suspended 2026-09-30 by user decision: alert-driven wakes were the dominant API cost
+  # against a 50 USD monthly budget (11.51 USD in 24h measured). Set to false to re-enable.
+  # The rules, the metric and the ntfy/Discord routes are untouched - only this path is off.
+  suspend: true
   schedule: "*/5 * * * *"
   concurrencyPolicy: Forbid
   startingDeadlineSeconds: 120
@@ -55,6 +66,18 @@ spec:
               value: "https://alerts.kube.stevearnett.com"
             - name: ALERT_SEVERITIES
               value: "critical"
+            # The OpenRouter balance/spend class, by alertname. Comma-separated, exact match;
+            # see the note at the top of this file. Keep in step with the openrouter group in
+            # monitoring/prometheus-rules.yaml when an alert there is added or renamed.
+            - name: ALERT_EXCLUDE_ALERTNAMES
+              value: "OpenRouterCreditLow,OpenRouterCreditExhausted,OpenRouterAccountBalanceLow,OpenRouterAccountBalanceCritical,OpenRouterBalanceDepletionImminent,OpenRouterBurnRateHigh,OpenRouterDailySpendHigh"
+            # Label-aware exclusion, for a class that is unfixable for one target rather
+            # than for all of them: comma-separated name=value pairs, every one of which
+            # must be present on the alert for it to be dropped. E.g.
+            # "alertname=TrivyCriticalVulnerability,image_repository=coredns/coredns" leaves
+            # every other Trivy alert waking the agent. Empty = no label-based exclusion.
+            - name: ALERT_EXCLUDE_LABELS
+              value: ""
             # Longer than the 5m schedule on purpose: an alert is then covered even if one
             # run is delayed, and the duplicate it may produce is dropped by the adapter's
             # idempotency key rather than starting a second run.
