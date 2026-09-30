@@ -16,6 +16,10 @@ something it should not". This directory adds the runtime half: one Falco Daemon
   layers of `falcosecurity/falco:0.45.0`), so nothing is downloaded at pod start and this namespace
   never talks to ghcr.io.
 
+The `falco` namespace deliberately carries no `pod-security.kubernetes.io/enforce` label. Falco needs
+a privileged container and hostPath mounts, and both violate the `baseline` level that namespaces
+like `security-scanning` set - labelling this one `baseline` would block the security control itself.
+
 ## Alert path (reused, not rebuilt)
 
 ```
