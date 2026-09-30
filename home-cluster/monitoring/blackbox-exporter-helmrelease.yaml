@@ -48,6 +48,25 @@ spec:
             follow_redirects: true
             tls_config:
               insecure_skip_verify: true
+        # For a host that front-ends oauth2-proxy: every unauthenticated request
+        # comes back 302 to the identity provider, and http_2xx follows it all the
+        # way to accounts.google.com. That makes the host's probe_success depend on
+        # Google answering inside the 5s module timeout, which it does not always
+        # do: on 2026-09-30 dashboard.kube.stevearnett.com reported probe_success=0
+        # for three consecutive minutes (firing IngressDown) while oauth2-proxy was
+        # logging 302 in 0.000s for that same prober, and two of those probes had
+        # already recorded the final 200 after two redirects before hitting the
+        # deadline. This module stops at the redirect, so what it asserts is what
+        # the probe is for - DNS resolved, Traefik routed, TLS terminated, the
+        # backend answered. A 5xx, a refused connection or a bad certificate still
+        # fails it. Selected per ingress with:
+        #   blackbox.stevearnett.com/module: http_2xx_or_redirect
+        http_2xx_or_redirect:
+          prober: http
+          timeout: 5s
+          http:
+            follow_redirects: false
+            valid_status_codes: [200, 302]
         # For a backend that gates every request behind auth: zot answers 401 on
         # /v2/ and 404 on /, and http_2xx reads both as the host being down. This
         # asserts what is actually worth knowing about such a host - DNS resolved,

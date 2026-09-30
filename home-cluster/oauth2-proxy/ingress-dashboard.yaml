@@ -8,6 +8,10 @@ metadata:
   annotations:
     external-dns.alpha.kubernetes.io/hostname: dashboard.kube.stevearnett.com
     external-dns.alpha.kubernetes.io/target: kube.stevearnett.com
+    # oauth2-proxy answers 302 to the identity provider at `/`, so the default
+    # http_2xx probe follows the redirect to accounts.google.com and reads this
+    # host as down whenever Google answers slowly. Stop at the redirect instead.
+    blackbox.stevearnett.com/module: http_2xx_or_redirect
 spec:
   ingressClassName: traefik
   tls:
