@@ -389,6 +389,12 @@ spec:
   # Grafana. severity is the routing decision here - critical reaches ntfy and wakes the agent
   # (alert-detector forwards only severity="critical"), warning stops at the Discord channel.
   #
+  # The *finding* rule is warning, not critical, by owner decision (2026-09-30): 44 running
+  # workloads carry a fixable Critical, which makes it a standing backlog rather than an event,
+  # and a permanently-firing alert cannot page usefully. It still reaches the Discord channel
+  # via the parent route, grouped by alertname. The *coverage* rules below stay critical - a
+  # scanner that stopped producing reports is an incident with a fix; a CVE list is work.
+  #
   # The metric names the scanned object (namespace, resource_kind, resource_name,
   # container_name, image_repository, image_tag), so the finding rules key on a workload that
   # is running rather than on every report that exists. Measured on this Prometheus
@@ -417,7 +423,7 @@ spec:
         )
       for: 15m
       labels:
-        severity: critical
+        severity: warning
       annotations:
         summary: "{{ $value }} fixable Critical CVE(s) in {{ $labels.image_repository }}:{{ $labels.image_tag }} running as {{ $labels.resource_kind }} {{ $labels.namespace }}/{{ $labels.resource_name }}"
         description: "Container {{ $labels.container_name }} of {{ $labels.resource_kind }} {{ $labels.namespace }}/{{ $labels.resource_name }} runs an image with {{ $value }} Critical vulnerability(ies), each with a fix available - scans run with ignoreUnfixed, so every count here is actionable. The CVE list is on the report: kubectl get vulnerabilityreports -n {{ $labels.namespace }} -l trivy-operator.resource.name={{ $labels.resource_name }} -o yaml. The fix is an image bump in the workload's manifest (PR, not a kubectl edit); the re-scan happens on its own once it rolls out."
@@ -437,7 +443,7 @@ spec:
         severity: warning
       annotations:
         summary: "{{ $value }} fixable High CVE(s) in running workloads in {{ $labels.namespace }}"
-        description: "Running images in {{ $labels.namespace }} carry {{ $value }} High vulnerabilities with a fix available. Per-workload detail: kubectl get vulnerabilityreports -n {{ $labels.namespace }} -o yaml. Housekeeping rather than an incident - TrivyCriticalVulnerability is what pages."
+        description: "Running images in {{ $labels.namespace }} carry {{ $value }} High vulnerabilities with a fix available. Per-workload detail: kubectl get vulnerabilityreports -n {{ $labels.namespace }} -o yaml. Housekeeping rather than an incident - no vulnerability roll-up pages here."
     # A failed scan writes no report, so it does not read as a finding, it reads as nothing at
     # all - which is the failure mode worth paging on, and precisely the coverage fiction this
     # cluster keeps having to fix. Six jobs sat Failed with reason=DeadlineExceeded when this
@@ -511,4 +517,4 @@ spec:
         image_repository: prometheus/blackbox-exporter
       annotations:
         summary: "TrivyCriticalVulnerability is suppressed for prometheus/blackbox-exporter"
-        description: "No pinnable tag closes CVE-2026-33186 or CVE-2025-68121: v0.28.0 is the newest release and the fix exists only in unreleased master builds, so the image bump this alert asks for does not exist yet. Takes over from Alertmanager silence f1037d21-10af-4e63-ac6b-a547d32bc308, which expires 2026-10-14 and suppressed blackbox-exporter only. Re-check a newer release after that date and delete this entry with its inhibit rule; every other Trivy Critical still pages."
+        description: "No pinnable tag closes CVE-2026-33186 or CVE-2025-68121: v0.28.0 is the newest release and the fix exists only in unreleased master builds, so the image bump this alert asks for does not exist yet. Takes over from Alertmanager silence f1037d21-10af-4e63-ac6b-a547d32bc308, which expires 2026-10-14 and suppressed blackbox-exporter only. Re-check a newer release after that date and delete this entry with its inhibit rule. Note the finding rule itself is warning as of 2026-09-30, so this sentinel's remaining effect is keeping this one unavoidable CVE out of the Discord group rather than preventing a page."
