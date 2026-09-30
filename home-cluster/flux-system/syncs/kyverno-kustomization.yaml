@@ -1,0 +1,20 @@
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: kyverno
+  namespace: flux-system
+spec:
+  interval: 1m0s
+  path: ./home-cluster/kyverno
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: clusters
+  targetNamespace: kyverno
+  # wait gates this Kustomization on the HelmRelease's Ready condition, which is
+  # what makes the policies layer's dependsOn below meaningful: without wait, the
+  # Kustomization reports Ready the moment the HelmRelease object is written,
+  # long before the CRDs exist.
+  wait: true
+  # The HelmRelease's own install timeout is 10m; leave room for the image pulls.
+  timeout: 15m

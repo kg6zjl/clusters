@@ -1,0 +1,110 @@
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: hermes-agent-request-guard
+  annotations:
+    policies.kyverno.io/title: Block privileged API calls made as the Hermes agent
+    policies.kyverno.io/category: RBAC
+    policies.kyverno.io/severity: high
+    policies.kyverno.io/subject: Pod,Secret,ServiceAccount
+    policies.kyverno.io/description: >-
+      Denies API requests made as system:serviceaccount:ai-services:hermes-agent
+      to the privileged operations that turn read access into code execution or
+      credential theft: pods/exec, serviceaccounts/token, and writes to Secrets.
+      Its RBAC already withholds all of these; this is defence in depth that also
+      holds if the Hermes RBAC PRs are ever widened by mistake.
+spec:
+  # request.userInfo only exists on a live admission request; a background scan
+  # has no user, so this policy is admission-only.
+  background: false
+  # failurePolicy: Ignore, and it must stay Ignore.
+  #
+  # These webhook rules match every request of the wrapped kinds cluster-wide: an
+  # admission webhook rule cannot be scoped to a username, so Kyverno's generated
+  # ValidatingWebhookConfiguration sees all Secret writes, all pod exec and all
+  # token requests. Setting Fail here would make a Kyverno outage block *every*
+  # Secret creation cluster-wide - ESO syncing credentials, cert-manager writing
+  # TLS material - and every kubectl exec used to debug. That is an
+  # unacceptably wide blast radius for a defence-in-depth check.
+  #
+  # The security consequence is explicit: if Kyverno is down, this policy does
+  # not run. Nothing is lost that the read-only RBAC and
+  # hermes-agent-readonly-rbac (which does Fail closed) do not already cover.
+  webhookConfiguration:
+    failurePolicy: Ignore
+  rules:
+    - name: deny-agent-pod-exec
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod/exec
+              operations:
+                - CONNECT
+      preconditions:
+        all:
+          - key: "{{ request.userInfo.username }}"
+            operator: Equals
+            value: system:serviceaccount:ai-services:hermes-agent
+      validate:
+        failureAction: Audit
+        message: >-
+          system:serviceaccount:ai-services:hermes-agent may not exec into pods;
+          exec is a path to the credentials of the workload it lands in.
+        deny:
+          conditions:
+            all:
+              - key: "{{ request.operation }}"
+                operator: Equals
+                value: CONNECT
+    - name: deny-agent-serviceaccount-token
+      match:
+        any:
+          - resources:
+              kinds:
+                - ServiceAccount/token
+              operations:
+                - CREATE
+      preconditions:
+        all:
+          - key: "{{ request.userInfo.username }}"
+            operator: Equals
+            value: system:serviceaccount:ai-services:hermes-agent
+      validate:
+        failureAction: Audit
+        message: >-
+          system:serviceaccount:ai-services:hermes-agent may not mint service
+          account tokens; a token is a bearer credential for another identity.
+        deny:
+          conditions:
+            all:
+              - key: "{{ request.operation }}"
+                operator: Equals
+                value: CREATE
+    - name: deny-agent-secret-write
+      match:
+        any:
+          - resources:
+              kinds:
+                - Secret
+              operations:
+                - CREATE
+                - UPDATE
+      preconditions:
+        all:
+          - key: "{{ request.userInfo.username }}"
+            operator: Equals
+            value: system:serviceaccount:ai-services:hermes-agent
+      validate:
+        failureAction: Audit
+        message: >-
+          system:serviceaccount:ai-services:hermes-agent may not create or modify
+          Secrets; its design keeps every credential value out of its hands.
+        deny:
+          conditions:
+            any:
+              - key: "{{ request.operation }}"
+                operator: AnyIn
+                value:
+                  - CREATE
+                  - UPDATE

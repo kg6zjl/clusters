@@ -40,3 +40,5 @@ resources:
   - crossplane-kustomization.yaml
   - crossplane-provider-kustomization.yaml
   - crossplane-config-kustomization.yaml
+  - kyverno-kustomization.yaml
+  - kyverno-policies-kustomization.yaml

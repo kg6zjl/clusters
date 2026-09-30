@@ -1,0 +1,6 @@
+apiVersion: cli.kyverno.io/v1alpha1
+kind: UserInfo
+metadata:
+  name: flux-kustomize-controller
+userInfo:
+  username: system:serviceaccount:flux-system:kustomize-controller

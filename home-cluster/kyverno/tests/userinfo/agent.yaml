@@ -1,0 +1,6 @@
+apiVersion: cli.kyverno.io/v1alpha1
+kind: UserInfo
+metadata:
+  name: hermes-agent
+userInfo:
+  username: system:serviceaccount:ai-services:hermes-agent
