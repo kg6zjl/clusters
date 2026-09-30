@@ -44,7 +44,7 @@ Annotations go on the `IngressRoute` or `Ingress` object that declares the host.
 | Annotation | Values | Default | Meaning |
 | --- | --- | --- | --- |
 | `blackbox.stevearnett.com/probe` | `"true"` / `"false"` | `"true"` | Set `"false"` to exclude the host. Use this for a host that is expected to be unreachable. |
-| `blackbox.stevearnett.com/module` | a module in the blackbox exporter config | `http_2xx` | Override the probe module. `http_2xx_insecure` is provided for a target whose certificate the exporter does not trust, and `http_2xx_or_redirect` for a host that front-ends oauth2-proxy. |
+| `blackbox.stevearnett.com/module` | a module in the blackbox exporter config | `http_2xx` | Override the probe module. `http_2xx_insecure` is provided for a target whose certificate the exporter does not trust, and `http_2xx_or_redirect` for a host that front-ends an identity provider. |
 | `blackbox.stevearnett.com/target` | a URL | `https://<host>/` | Probe a specific URL (scheme, port or path) instead of the host root. |
 
 To exclude a host, annotate it with the reason in a comment next to the
@@ -60,26 +60,27 @@ Defaults are safe: probe-by-default means a new ingress cannot be silently
 unmonitored, TLS verification stays on, and the module follows redirects (many
 hosts here return a 30x, usually from Grafana or Traefik, before the 200).
 
-### Hosts behind oauth2-proxy
+### Hosts behind an identity provider
 
-`auth.kube.stevearnett.com` and `dashboard.kube.stevearnett.com` front oauth2-proxy,
-which answers every unauthenticated request with a 302 to Google before rendering
-anything. Under the default `http_2xx` module the probe follows that redirect, so
-its success depends on `accounts.google.com` answering inside the module timeout -
-a condition that fails at random and reports a host that is serving in under a
-millisecond as down:
+Superseded 2026-09-30: `auth.kube.stevearnett.com` and `dashboard.kube.stevearnett.com`
+were this cluster's only two hosts fronting oauth2-proxy, and both were removed with
+the rest of the `auth` namespace (nothing referenced the forwardAuth middleware). What
+they demonstrated is worth keeping:
 
-- `dashboard` read `probe_success=0` for three consecutive minutes on 2026-09-30
-  (which fired `IngressDown`) while oauth2-proxy logged `302 … 0.000` for that same
-  prober, and two of the three probes had already recorded a final 200 after two
-  redirects before hitting the 5s deadline.
-- The same class of failure hit `auth` and eight other hosts over the previous two
-  hours; `dashboard` is only the one that crossed the 2m `for`.
-
-Both hosts are annotated `http_2xx_or_redirect`, which stops at the redirect: for
-these two, a 302 from the backend is the proof that DNS resolved, Traefik routed,
-TLS terminated and the backend answered. Neither probe ever reached the app behind
-the proxy anyway - the redirect goes to Google, not to the service.
+- oauth2-proxy answered every unauthenticated request with a 302 to Google before
+  rendering anything, and the default `http_2xx` module follows that redirect - so the
+  probe's success depended on `accounts.google.com` answering inside the module
+  timeout, a condition that fails at random and reports a host that is serving in under
+  a millisecond as down: on 2026-09-30 `dashboard` read `probe_success=0` for three
+  consecutive minutes (which fired `IngressDown`) while oauth2-proxy logged
+  `302 … 0.000` for that same prober, and two of the three probes had already recorded
+  a final 200 after two redirects before hitting the 5s deadline. The same class hit
+  `auth` and eight other hosts over the previous two hours.
+- The remedy stays in the config, unused but provisioned: annotate such a host
+  `blackbox.stevearnett.com/module: http_2xx_or_redirect`, which stops at the redirect.
+  A 302 from the backend then proves DNS resolved, Traefik routed, TLS terminated and
+  the backend answered - and the probe never reached the app behind the proxy anyway,
+  because the redirect goes to the identity provider.
 
 ### Hosts declared twice
 

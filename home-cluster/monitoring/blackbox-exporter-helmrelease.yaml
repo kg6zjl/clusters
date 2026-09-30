@@ -30,8 +30,8 @@ spec:
     config:
       modules:
         # Transport failure or a non-2xx final status fails the probe. Redirects
-        # are followed, which matters here: oauth2-proxy and Grafana hand back
-        # 30x before the 200, so without this most hosts would read as down.
+        # are followed, which matters here: Grafana hands back a 30x before the 200,
+        # so without this it would read as down.
         http_2xx:
           prober: http
           http:
@@ -48,19 +48,18 @@ spec:
             follow_redirects: true
             tls_config:
               insecure_skip_verify: true
-        # For a host that front-ends oauth2-proxy: every unauthenticated request
-        # comes back 302 to the identity provider, and http_2xx follows it all the
-        # way to accounts.google.com. That makes the host's probe_success depend on
-        # Google answering inside the 5s module timeout, which it does not always
-        # do: on 2026-09-30 dashboard.kube.stevearnett.com reported probe_success=0
-        # for three consecutive minutes (firing IngressDown) while oauth2-proxy was
-        # logging 302 in 0.000s for that same prober, and two of those probes had
-        # already recorded the final 200 after two redirects before hitting the
-        # deadline. This module stops at the redirect, so what it asserts is what
-        # the probe is for - DNS resolved, Traefik routed, TLS terminated, the
-        # backend answered. A 5xx, a refused connection or a bad certificate still
-        # fails it. Selected per ingress with:
+        # For a host that front-ends an SSO proxy: every unauthenticated request comes
+        # back 302 to the identity provider, and http_2xx follows it all the way to
+        # that provider's login page - so the host's probe_success ends up measuring
+        # whether an external site answers inside the 5s module timeout. This module
+        # stops at the redirect and asserts what the probe is for: DNS resolved,
+        # Traefik routed, TLS terminated, the backend answered. A 5xx, a refused
+        # connection or a bad certificate still fails it. Selected per ingress with:
         #   blackbox.stevearnett.com/module: http_2xx_or_redirect
+        # Nothing selects it today: its only two consumers, auth.kube.stevearnett.com
+        # and dashboard.kube.stevearnett.com, were removed on 2026-09-30 with the rest
+        # of the auth namespace. Kept provisioned, like http_2xx_insecure above, for
+        # the next host that sits behind an identity provider.
         http_2xx_or_redirect:
           prober: http
           timeout: 5s

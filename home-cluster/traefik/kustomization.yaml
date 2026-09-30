@@ -8,7 +8,6 @@ resources:
   - namespace.yaml
   - dnsendpoint.yaml
   - ingress-dashboard.yaml
-  - middleware-oauth.yaml
   - helmrelease.yaml
   - certificate.yaml
   - tlsstore.yaml

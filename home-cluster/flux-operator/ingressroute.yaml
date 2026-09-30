@@ -3,12 +3,12 @@
 #
 # No `middlewares:` block, matching every other dashboard route in this repo
 # (grafana, prometheus, alertmanager, headlamp are all unexposed to a middleware
-# too). The oauth2-proxy middleware exists in namespace traefik but is referenced
-# by no route, and a forwardAuth login flow needs /oauth2/* reachable on this same
-# host -- pointing the middleware at this IngressRoute without that plumbing would
-# 401 or 404 the login rather than protect anything. See the PR body: the UI is
-# unauthenticated by default and read-only (it cannot read Secrets or ConfigMaps).
-# Putting it behind SSO is a deliberate follow-up, not something to bolt on here.
+# too). The traefik/oauth2-proxy forwardAuth middleware was deleted on 2026-09-30
+# with the auth namespace it pointed at, and no route ever referenced it. Putting
+# this UI behind SSO is therefore a deliberate follow-up that needs the whole login
+# flow (/oauth2/* reachable on this same host), not something to bolt on here. See
+# the PR body: the UI is unauthenticated by default and read-only (it cannot read
+# Secrets or ConfigMaps).
 #
 # No `tls:` block, matching every other IngressRoute in this repo. TLS comes from
 # the Traefik TLSStore default (home-cluster/traefik/tlsstore.yaml ->
