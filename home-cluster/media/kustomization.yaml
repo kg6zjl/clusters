@@ -17,6 +17,7 @@ resources:
   - flaresolverr.yaml
   - lidarr.yaml
   - ingressroute-jellyfin.yaml
+  - dnsendpoint.yaml
   - ingressroute-lidarr.yaml
   - ingressroute-seerr.yaml
   - ingressroute-prowlarr.yaml

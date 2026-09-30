@@ -6,4 +6,5 @@ resources:
   - deployment.yaml
   - service.yaml
   - ingressroute.yaml
+  - dnsendpoint.yaml
   - external-secrets.yaml
