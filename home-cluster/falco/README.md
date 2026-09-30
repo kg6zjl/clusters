@@ -49,9 +49,20 @@ single hop that reaches the agent.
 `/etc/falco/rules.d`) and `falco.rules_files` is set to exactly that directory, so the upstream
 default ruleset shipped in the image at `/etc/falco/falco_rules.yaml` is never loaded.
 
-Rule text and its macros/lists are copied verbatim from `falcosecurity/rules` (`main`); only
-`priority` is changed, and one extra tag `curated_home_cluster` is added so these are greppable.
-Script that produced it: extract rule + transitive macro/list closure, emit macros/lists then rules.
+Rule text and its macros/lists are copied verbatim from `falcosecurity/rules` (`main`); `priority` is
+overridden and one macro is overridden where marked, plus one extra tag `curated_home_cluster` so
+these are greppable. Script that produced it: extract rule + transitive macro/list closure, emit
+macros/lists then rules.
+
+One deliberate deviation from upstream text: `user_privileged_containers` (upstream: `never_true`)
+now lists the image repositories that legitimately run privileged in this cluster - read from the
+running pods, not guessed: longhorn (manager/engine/instance-manager/csi-registrar), calico
+(node/cni), the smb CSI driver, the runner's `docker:dind` sidecar, gluetun, jellyfin,
+home-assistant (plus matter-server) and the adsb ultrafeeder. Without it, `Launch Privileged
+Container` fires on every restart of ~15 pods that were already privileged; with it, the rule fires
+only for a privileged container that is *new*, which is the signal worth having. `busybox` is
+deliberately not listed even though two init containers use it privileged: "privileged busybox"
+is exactly a shape an attacker would use.
 
 CRITICAL (2) - reserved for indicators that are essentially never legitimate:
 

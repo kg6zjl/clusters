@@ -39,9 +39,9 @@ spec:
       falco-curated.yaml: |
         # Curated Falco rules: a starter set, not the upstream default ruleset.
         # Rules and their macros/lists are copied verbatim from falcosecurity/rules (main branch).
-        # Only the priority field is changed where noted, to map onto this cluster's alert routing
-        # (see home-cluster/falco/README.md). Upstream text is unmodified so the conditions stay
-        # reviewable against upstream.
+        # Only the priority field is changed, and one macro is overridden where marked, to fit this
+        # cluster's alert routing and its known workloads (see home-cluster/falco/README.md).
+        # Everything else is unmodified so the conditions stay reviewable against upstream.
         - required_plugin_versions:
             - name: container
               version: 0.4.0
@@ -334,8 +334,30 @@ spec:
             startswith quay.io/sysdig/)
 
         # from rules/incubating (macro)
+        # LOCALLY OVERRIDDEN. Upstream default is (never_true), which makes `Launch Privileged
+        # Container` fire on every privileged container in the cluster. These are the image
+        # repositories that legitimately run privileged here (read from the running pods on
+        # 2026-09-30: longhorn, calico, the smb CSI driver, the runner's docker:dind sidecar,
+        # gluetun, jellyfin, home-assistant, adsb). Anything privileged that is *not* on this
+        # list is new and is what the rule is for. Both the short and the docker.io-prefixed
+        # form of each repository are listed because the reported form depends on how the image
+        # was pulled.
         - macro: user_privileged_containers
-          condition: (never_true)
+          condition: >
+            (container.image.repository in (
+              longhornio/longhorn-manager, docker.io/longhornio/longhorn-manager,
+              longhornio/longhorn-engine, docker.io/longhornio/longhorn-engine,
+              longhornio/longhorn-instance-manager, docker.io/longhornio/longhorn-instance-manager,
+              longhornio/csi-node-driver-registrar, docker.io/longhornio/csi-node-driver-registrar,
+              calico/node, docker.io/calico/node,
+              calico/cni, docker.io/calico/cni,
+              registry.k8s.io/sig-storage/smbplugin,
+              docker, docker.io/library/docker,
+              qmcgaw/gluetun, docker.io/qmcgaw/gluetun,
+              jellyfin/jellyfin, docker.io/jellyfin/jellyfin,
+              homeassistant/home-assistant, docker.io/homeassistant/home-assistant,
+              ghcr.io/home-assistant-libs/python-matter-server,
+              ghcr.io/sdr-enthusiasts/docker-adsb-ultrafeeder))
 
         # from rules/incubating (macro)
         - macro: user_known_metadata_access
