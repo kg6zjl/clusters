@@ -123,6 +123,38 @@ rules:
     resources: ["roles", "rolebindings", "clusterroles", "clusterrolebindings"]
     verbs: ["get", "list", "watch"]
 
+  # Kyverno policy engine (read-only). Without this every list in every Kyverno group
+  # returns Forbidden, which makes three different things indistinguishable: "no policy
+  # violated this resource", "a policy violated it and I cannot see the report", and "the
+  # policy that would have caught it is not even installed". That gap produced a wrong
+  # claim that no policy in the cluster matches a dashboard's cluster-admin binding.
+  #
+  # There are four groups and they are not interchangeable: kyverno.io carries the
+  # ClusterPolicy/Policy/PolicyException objects, policies.kyverno.io the newer
+  # ValidatingPolicy/MutatingPolicy/GeneratingPolicy family, reports.kyverno.io the
+  # EphemeralReports that current Kyverno writes its policy results into, and
+  # wgpolicyk8s.io the older PolicyReport objects those replaced. Granting a subset
+  # silently loses whichever half is not granted.
+  - apiGroups: ["kyverno.io"]
+    resources:
+      - clusterpolicies
+      - policies
+      - policyexceptions
+      - cleanuppolicies
+      - clustercleanuppolicies
+      - updaterequests
+      - globalcontextentries
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["policies.kyverno.io"]
+    resources: ["*"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["reports.kyverno.io"]
+    resources: ["*"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["wgpolicyk8s.io"]
+    resources: ["*"]
+    verbs: ["get", "list", "watch"]
+
   # Monitoring / observability CRDs (read-only)
   # `prometheuses` is the one that matters for diagnosis: the Prometheus CR is the only
   # place serviceMonitorSelector / serviceMonitorNamespaceSelector /
