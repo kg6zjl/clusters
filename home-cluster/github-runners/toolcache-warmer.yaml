@@ -37,6 +37,8 @@ spec:
               # Fail loudly rather than warming a tarball named for an empty version.
               : "${TRUFFLEHOG_VERSION:?TRUFFLEHOG_VERSION must be set}"
               : "${KYVERNO_VERSION:?KYVERNO_VERSION must be set}"
+              : "${PROMETHEUS_VERSION:?PROMETHEUS_VERSION must be set}"
+              : "${ALERTMANAGER_VERSION:?ALERTMANAGER_VERSION must be set}"
 
               CACHE=/opt/hostedtoolcache/tools
               mkdir -p "$CACHE"
@@ -44,15 +46,22 @@ spec:
               # alpine ships no curl, and busybox wget cannot retry or bound a stalled transfer.
               command -v curl >/dev/null || apk add --no-cache curl
 
-              # warm <binary> <version> <base-url> <checksums-file> <tarball>
+              # warm <binary> <version> <base-url> <checksums-file> <tarball> [<member-path>]
               #
               # The per-tool version stamp is what makes a version bump re-warm: without it a
               # cached binary from an older pin would look "warm" forever, and the CI job that
               # consumes it would silently test against a CLI that no longer matches the pin.
               # Each tool gets its own stamp, named after its binary, because they can be at
               # different versions at the same time.
+              #
+              # <member-path> is for releases that nest their binaries one directory deep
+              # (prometheus and alertmanager both do): name the member and strip that one
+              # directory. A top-level member, which is the default, must not be stripped or
+              # tar refuses the resulting empty name.
               warm() {
-                BIN="$1"; VER="$2"; URL="$3"; SUMS="$4"; TARBALL="$5"
+                BIN="$1"; VER="$2"; URL="$3"; SUMS="$4"; TARBALL="$5"; MEMBER="${6:-$1}"
+                STRIP=0
+                case "$MEMBER" in */*) STRIP=1 ;; esac
                 cd "$CACHE"
                 if [ -x "$BIN" ] && [ "$(cat ".${BIN}.version" 2>/dev/null)" = "$VER" ]; then
                   return 0
@@ -67,7 +76,7 @@ spec:
                    && curl -sSfL --retry 3 --retry-delay 10 --max-time 120 -o checksums.txt "${URL}/${SUMS}" \
                    && grep -F "${TARBALL}" checksums.txt > expected.txt \
                    && sha256sum -c expected.txt \
-                   && tar -xzf "${TARBALL}" "${BIN}" \
+                   && tar -xzf "${TARBALL}" --strip-components="$STRIP" "${MEMBER}" \
                    && chmod 0755 "${BIN}"; then
                   cd "$CACHE"
                   mv -f ".warm-${BIN}/${BIN}" "${BIN}"
@@ -102,6 +111,21 @@ spec:
                   "checksums.txt" \
                   "kyverno-cli_v${KYVERNO_VERSION}_linux_x86_64.tar.gz" || OK=false
 
+                # The two binaries the alerting checks in ci.yaml need. Prometheus is the big one:
+                # 107MB compressed and measured at ~6 minutes on this link, which is why it is
+                # warmed here rather than paid per job. Both nest the binary one directory deep.
+                warm promtool "$PROMETHEUS_VERSION" \
+                  "https://github.com/prometheus/prometheus/releases/download/v${PROMETHEUS_VERSION}" \
+                  "sha256sums.txt" \
+                  "prometheus-${PROMETHEUS_VERSION}.linux-amd64.tar.gz" \
+                  "prometheus-${PROMETHEUS_VERSION}.linux-amd64/promtool" || OK=false
+
+                warm amtool "$ALERTMANAGER_VERSION" \
+                  "https://github.com/prometheus/alertmanager/releases/download/v${ALERTMANAGER_VERSION}" \
+                  "sha256sums.txt" \
+                  "alertmanager-${ALERTMANAGER_VERSION}.linux-amd64.tar.gz" \
+                  "alertmanager-${ALERTMANAGER_VERSION}.linux-amd64/amtool" || OK=false
+
                 if [ "$OK" = true ]; then
                   sleep 3600
                 else
@@ -116,6 +140,12 @@ spec:
             # renovate: datasource=github-releases depName=kyverno/kyverno
             - name: KYVERNO_VERSION
               value: "1.19.1"
+            # renovate: datasource=github-releases depName=prometheus/prometheus
+            - name: PROMETHEUS_VERSION
+              value: "3.14.0"
+            # renovate: datasource=github-releases depName=prometheus/alertmanager
+            - name: ALERTMANAGER_VERSION
+              value: "0.34.1"
           resources:
             requests:
               cpu: 10m

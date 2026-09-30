@@ -12,7 +12,7 @@ The declarative mechanism is an Alertmanager inhibit rule with a sentinel alert 
 because an inhibit rule only fires while a source alert is firing and there is nothing else in
 this config that says "this class is expected". Two edits, one PR:
 
-1. `prometheus-rules.yaml`, group `suppressions`: add an entry with `expr: vector(1)`, the labels
+1. `suppression-sentinels.yaml` (group `suppressions`), add an entry with `expr: vector(1)`, the labels
    that identify the class, and the reason plus the re-check date in the description. `severity:
    none` is required - the existing route tree sends it to the `null` receiver, so the sentinel
    itself notifies nothing.

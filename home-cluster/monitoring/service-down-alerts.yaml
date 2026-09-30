@@ -1,0 +1,46 @@
+# Split out of prometheus-rules.yaml on 2026-09-30, one file per rule group, so that
+# review and ownership follow the group that changed. It buys reviewability and nothing
+# else: Prometheus reloads its rule set as a whole - LoadGroups aggregates errors across
+# every file and refuses the entire reload if any one rule is bad - so a file boundary is
+# not blast-radius isolation. The CI `promtool check rules` step is what makes a bad rule
+# fail the PR instead of the reload.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: service-down-alerts
+  namespace: monitoring
+  labels:
+    prometheus: kube-prometheus-stack-prometheus
+    app: kube-prometheus-stack-prometheus
+spec:
+  groups:
+  - name: service-down
+    rules:
+    # Availability for the two services that are prod. Selects on namespace and name,
+    # which are always present on this metric, so it works today and depends on nothing.
+    # A replica count of 0 catches a scaled-to-zero deployment as well as a crash - and
+    # being scaled to 0 is exactly how meshmonitor went unnoticed for 20 minutes on
+    # 2026-09-26, which is why this exists.
+    - alert: ProdServiceDown
+      expr: |
+        kube_deployment_status_replicas_available{namespace="home-assistant",deployment="home-assistant"} == 0
+        or kube_deployment_status_replicas_available{namespace="meshtastic",deployment="meshmonitor"} == 0
+      for: 3m
+      labels:
+        severity: critical
+      annotations:
+        summary: "PROD service {{ $labels.deployment }} in {{ $labels.namespace }} is down"
+        description: "Deployment {{ $labels.deployment }} ({{ $labels.namespace }}) has had no available replicas for 3 minutes. Both are prod: home-assistant runs the house, meshmonitor runs the HotPotato Base meshtastic bots."
+    # There is deliberately no generic label-driven rule here. One was written - select
+    # `label_alert_on_down="true"` and alert at 0 replicas - and it could never fire:
+    # kube-state-metrics exposes only allowlisted resource labels, so the label never
+    # arrives and the selector matches nothing. Verified against the live Prometheus:
+    # kube_deployment_status_replicas_available has 62 series, and the
+    # label_alert_on_down selector returns none. A rule that cannot fire reads as
+    # coverage and is not, so it is deleted rather than left dormant.
+    #
+    # To bring it back, expose the label first: the allowlist goes under
+    # `kube-state-metrics:` in kube-prometheus-stack-helmrelease.yaml (`kubeStateMetrics:`
+    # at that level is only the component toggle and is ignored), the label then arrives
+    # prefixed as label_alert_on_down, and the upgrade loop that used to block that change
+    # is fixed. Prod is covered by ProdServiceDown above meanwhile.
