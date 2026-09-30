@@ -14,17 +14,13 @@ spec:
   # rollback until the app has run a full cycle.
   replicas: 1
   # Single ReadWriteOnce volume; a rolling update would need two pods on it at once.
-  # maxSurge 0 / maxUnavailable 1 is delete-before-replace. This is also the landing
-  # spot for the step 1 -> step 2 migration to type: Recreate: spec.strategy.rollingUpdate
-  # is a defaulted field this controller never applied, so server-side apply will not
-  # remove it, and "type: Recreate" + a live rollingUpdate block is rejected by
-  # validation. Applying the block explicitly here makes Flux own it, so dropping it in
-  # step 2 is then a legal removal.
+  # Note for future edits: switching an existing object from RollingUpdate to Recreate
+  # cannot be done in one apply. spec.strategy.rollingUpdate is a defaulted field that
+  # kustomize-controller never applied, so server-side apply will not remove it, and
+  # "type: Recreate" plus a live rollingUpdate block is rejected by validation. The
+  # migration landed via #884 (maxSurge 0 / maxUnavailable 1) and this commit.
   strategy:
-    type: RollingUpdate
-    rollingUpdate:
-      maxSurge: 0
-      maxUnavailable: 1
+    type: Recreate
   revisionHistoryLimit: 5
   selector:
     matchLabels:
@@ -35,6 +31,11 @@ spec:
         app: meshmonitor
       annotations:
         configmap.reloader.stakater.com/reload: "meshmonitor-scripts"
+        # Forces a fresh pod rather than reviving 74f8b6cfd, which sat in Init:0/1 for
+        # 133m across the Longhorn engine migration to thinkcentre02 and kept failing
+        # its kubelet mount with exit status 32. Storage side is healthy (engine and
+        # both replicas running); a new pod gets a fresh NodeStageVolume.
+        meshmonitor.stevearnett.com/rwo-recreate-rollout: "2026-09-30"
     spec:
       initContainers:
       - name: install-scripts
