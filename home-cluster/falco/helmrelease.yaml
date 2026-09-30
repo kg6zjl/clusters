@@ -718,7 +718,6 @@ spec:
         memory: 1024Mi
     falcosidekick:
       enabled: true
-      replicaCount: 1
       # 2.32.0 (the chart default) does not set the `alertname` label on the Alertmanager
       # payload, so every Falco alert grouped under alertname="" - empty Discord/ntfy titles,
       # the severity inhibit rule matching every Falco alert against every other, and
@@ -726,6 +725,7 @@ spec:
       # the tag is pinned rather than left to the chart so the version is explicit.
       image:
         tag: "2.35.0"
+      replicaCount: 1
       resources:
         requests:
           cpu: 10m
