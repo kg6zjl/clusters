@@ -8,8 +8,13 @@ metadata:
 spec:
   replicas: 1
   # Single ReadWriteOnce volume; a rolling update would need two pods on it at once.
+  # Step 1 of the migration to type: Recreate; see meshtastic/deployment.yaml for why
+  # the transition cannot be done in a single apply.
   strategy:
-    type: Recreate
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 0
+      maxUnavailable: 1
   revisionHistoryLimit: 3
   selector:
     matchLabels:
