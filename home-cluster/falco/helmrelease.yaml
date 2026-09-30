@@ -187,17 +187,28 @@ spec:
 
         # from rules/main (macro) -- LOCALLY OVERRIDDEN with this cluster's measured API
         # clients. `k8s_containers` cannot cover them: it excludes namespace kube-system and a
-        # list of upstream image repositories, and these are ordinary workloads. Measured
-        # 2026-09-30 over 25 minutes on all three nodes: 612 of 620 events were this one rule
-        # and 612/612 were legitimate - headlamp 225, the agent's own kubectl in ai-services
-        # 224, k8s-sidecar in monitoring 80, kyverno 51, zot 20, the ingress-blackbox
-        # reconciler Jobs 6. Matched on the image repository, not the process name, because a
-        # shell inside one of these pods keeps the image; `kubectl` as a name is exactly what
-        # the rule is for. An unlisted container talking to the API server still fires.
-        # The ingress-blackbox reconciler is matched on its namespace and pod name instead:
-        # its image is docker.io/library/python, and allow-listing that would exempt every
-        # python container in the cluster. It writes Probe CRs from reconcile.py and has a
-        # deliberate Role/ClusterRole and egress policy for it.
+        # list of upstream image repositories, and these are ordinary workloads. This is an
+        # allow-list, not the rule: an unlisted container talking to the API server still fires.
+        # Clients are matched on the image repository, not the process name, because a shell
+        # inside one of those pods keeps the image; `kubectl` as a name is exactly what the
+        # rule is for.
+        #
+        # Swept 2026-09-30 over the whole window Loki holds for this namespace (07:48Z-14:46Z -
+        # falco was created 07:47Z, so there is not yet 24h of data): 1453 events, every one of
+        # them this rule. Before #838 added the CRI socket the container plugin enriched
+        # nothing, so every client fired with k8s.pod.name and container.image.repository null
+        # and no allow-list could have matched - headlamp 302, the agent's own kubectl 405,
+        # grafana's k8s-sidecar 228, kyverno 208, zot 56 and the ingress-blackbox reconciler
+        # 253 (216 of those enriched). From 08:50Z, when enrichment started, exactly two
+        # sources still fired: the reconciler's Jobs (216) and one kyverno-migrate hook Job
+        # (1). Both are listed below; that is the whole set, not the first of a weekly drip.
+        #
+        # The ingress-blackbox reconciler is matched on its namespace and pod name instead of
+        # its image: that image is docker.io/library/python, and allow-listing it would exempt
+        # every python container in the cluster. reconcile.py lists IngressRoutes and Ingresses
+        # and writes Probe CRs, backed by a deliberate ClusterRole/Role and egress policy.
+        # reg.kyverno.io/kyverno/kyverno-cli is the kyverno chart's kyverno-migrate-resources
+        # hook Job; it is the image kyverno already ships with.
         - macro: user_known_contact_k8s_api_server_activities
           condition: >
             (container.image.repository in (
@@ -205,6 +216,7 @@ spec:
               docker.io/nousresearch/hermes-agent,
               quay.io/kiwigrid/k8s-sidecar, docker.io/kiwigrid/k8s-sidecar,
               reg.kyverno.io/kyverno/kyverno, ghcr.io/kyverno/kyverno,
+              reg.kyverno.io/kyverno/kyverno-cli, ghcr.io/kyverno/kyverno-cli,
               ghcr.io/project-zot/zot-linux-amd64, ghcr.io/project-zot/zot))
             or (k8s.ns.name = "monitoring" and k8s.pod.name startswith "ingress-blackbox-reconciler-")
 
