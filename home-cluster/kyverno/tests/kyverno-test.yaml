@@ -1,0 +1,80 @@
+apiVersion: cli.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: hermes-agent-readonly
+policies:
+  - ../policies/hermes-agent-readonly-rbac.yaml
+  - ../policies/hermes-agent-request-guard.yaml
+resources:
+  - resources/clusterrole-hermes-readonly.yaml
+  - resources/clusterrole-hermes-widened.yaml
+  - resources/role-hermes-readonly.yaml
+  - resources/role-hermes-widened.yaml
+  - resources/clusterrolebinding-hermes.yaml
+  - resources/clusterrolebinding-cluster-admin.yaml
+  - resources/clusterrolebinding-edit.yaml
+  - resources/rolebinding-hermes.yaml
+  - resources/secret.yaml
+userinfo: userinfo/agent.yaml
+results:
+  # The agent's own role may not gain a verb outside get/list/watch.
+  - policy: hermes-agent-readonly-rbac
+    rule: agent-clusterrole-readonly
+    resources:
+      - hermes-agent
+    kind: ClusterRole
+    result: fail
+  # A read-only role under the same naming convention passes.
+  - policy: hermes-agent-readonly-rbac
+    rule: agent-clusterrole-readonly
+    resources:
+      - hermes-agent-readonly-alt
+    kind: ClusterRole
+    result: pass
+  - policy: hermes-agent-readonly-rbac
+    rule: agent-role-readonly
+    resources:
+      - hermes-agent
+    kind: Role
+    result: pass
+  - policy: hermes-agent-readonly-rbac
+    rule: agent-role-readonly
+    resources:
+      - hermes-agent-widened
+    kind: Role
+    result: fail
+  # The single legitimate binding: SA -> ClusterRole/hermes-agent.
+  - policy: hermes-agent-readonly-rbac
+    rule: agent-binding-readonly
+    resources:
+      - hermes-agent
+    kind: ClusterRoleBinding
+    result: pass
+  # Binding the SA to cluster-admin or edit is denied by name ...
+  - policy: hermes-agent-readonly-rbac
+    rule: agent-binding-readonly
+    resources:
+      - hermes-agent-admin
+    kind: ClusterRoleBinding
+    result: fail
+  - policy: hermes-agent-readonly-rbac
+    rule: agent-binding-readonly
+    resources:
+      - hermes-agent-edit
+    kind: ClusterRoleBinding
+    result: fail
+  # ... and a namespaced binding (a RoleReference we cannot verify as read-only
+  # without fetching the Role) is denied outright.
+  - policy: hermes-agent-readonly-rbac
+    rule: agent-binding-readonly
+    resources:
+      - hermes-agent-rb
+    kind: RoleBinding
+    result: fail
+  # The agent may not write Secrets, even though its RBAC already denies it.
+  - policy: hermes-agent-request-guard
+    rule: deny-agent-secret-write
+    resources:
+      - test-secret
+    kind: Secret
+    result: fail

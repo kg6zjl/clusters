@@ -1,0 +1,108 @@
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: kyverno
+  namespace: kyverno
+  labels:
+    alert-on-down: "true"
+spec:
+  interval: 1h
+  # Kyverno's first install pulls four controller images and waits for its
+  # webhooks to answer; the 5m default Helm action timeout was already observed to
+  # abandon installs elsewhere in this repo (kube-prometheus-stack, ~11m). An
+  # abandoned install is retried forever, and this chart ships its CRDs as
+  # *templates* (the `crds` subchart renders them from templates/, not crds/), so
+  # every failed attempt's `helm uninstall` deletes the CRDs and every
+  # ClusterPolicy with them. The explicit 10m timeout is what keeps that from
+  # happening; do not lower it without measuring the install again.
+  timeout: 10m
+  chart:
+    spec:
+      chart: kyverno
+      version: 3.9.1
+      sourceRef:
+        kind: HelmRepository
+        name: kyverno
+        namespace: kyverno
+      interval: 1h
+  install:
+    remediation:
+      retries: 3
+    timeout: 10m
+  upgrade:
+    remediation:
+      retries: 3
+      remediateLastFailure: true
+    timeout: 10m
+  values:
+    # Kyverno CRDs (clusterpolicies.kyverno.io among them) come from the chart's
+    # `crds` subchart. Kept explicit so a default change upstream is visible.
+    crds:
+      install: true
+    features:
+      # MUST stay false. When true this turns the `--forceFailurePolicyIgnore`
+      # toggle on for every controller, which forces *all* policies to
+      # failurePolicy=Ignore and makes the per-policy
+      # spec.webhookConfiguration.failurePolicy field inert. The
+      # hermes-agent-readonly-rbac policy deliberately depends on that field.
+      forceFailurePolicyIgnore:
+        enabled: false
+    # The chart default for config.webhookAnnotations is the AKS-only
+    # `admissions.enforcer/disabled: "true"` annotation (Helm merges maps, so it
+    # cannot be cleared from values here). Nothing on a self-managed cluster reads
+    # it; noted so a future audit does not mistake it for enforcement being off.
+    admissionController:
+      # Two replicas, not one: hermes-agent-readonly-rbac runs with
+      # failurePolicy=Fail once enforced, and with a single replica a Kyverno pod
+      # restart would leave the webhook with zero ready endpoints and block every
+      # RBAC admission cluster-wide. Two replicas plus the chart's default
+      # preferred podAntiAffinity keep the webhook answering across a node loss.
+      replicas: 2
+      container:
+        resources:
+          requests:
+            cpu: 100m
+            memory: 192Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+      serviceMonitor:
+        enabled: true
+        labels:
+          release: kube-prometheus-stack
+    backgroundController:
+      resources:
+        requests:
+          cpu: 100m
+          memory: 128Mi
+        limits:
+          cpu: 500m
+          memory: 384Mi
+      serviceMonitor:
+        enabled: true
+        labels:
+          release: kube-prometheus-stack
+    cleanupController:
+      resources:
+        requests:
+          cpu: 50m
+          memory: 64Mi
+        limits:
+          cpu: 200m
+          memory: 256Mi
+      serviceMonitor:
+        enabled: true
+        labels:
+          release: kube-prometheus-stack
+    reportsController:
+      resources:
+        requests:
+          cpu: 100m
+          memory: 128Mi
+        limits:
+          cpu: 500m
+          memory: 384Mi
+      serviceMonitor:
+        enabled: true
+        labels:
+          release: kube-prometheus-stack
