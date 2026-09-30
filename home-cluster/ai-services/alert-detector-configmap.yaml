@@ -90,7 +90,13 @@ data:
                 "description": annotations.get("description", ""),
                 "link": link_for(alertname),
             })
-        fresh.sort(key=lambda a: (a["severity"], a["alertname"]))
+        # Newest first. Sorting by (severity, alertname) and then cutting at MAX_ALERTS is
+        # alphabetical: on 2026-09-30 the 07:55Z poll dropped two Falco criticals because
+        # their alertname was "unknown" and 44 standing Trivy criticals sorted ahead of
+        # them, so the poll woke nobody. Recency is the property that matters - an alert
+        # that just started is the one worth a wake - and a large standing group can no
+        # longer starve a new one out of the cap.
+        fresh.sort(key=lambda a: a["starts_at"], reverse=True)
         return fresh
 
 

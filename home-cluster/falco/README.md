@@ -11,10 +11,19 @@ something it should not". This directory adds the runtime half: one Falco Daemon
   eBPF probe covers all three. `kind: auto` is deliberately not used: it can fall back to kmod, and
   there is no prebuilt module for 7.0.0. The probe still needs BTF on each node - `dmesg`/pod logs on
   the first reconcile are what confirms it, not this comment.
-- `falcosidekick` 1 replica. No falcoctl init container and no artifact-follow sidecar: the
-  container plugin (`libcontainer.so`) is bundled in the falco image (verified by listing the image
-  layers of `falcosecurity/falco:0.45.0`), so nothing is downloaded at pod start and this namespace
-  never talks to ghcr.io.
+- `falcosidekick` 1 replica, image pinned to 2.35.0. The chart's default (2.32.0) does not set the
+  `alertname` label on the Alertmanager payload - 2.33.0 added it
+  (`outputs/alertmanager.go`: `Labels["alertname"] = falcopayload.Rule`) - and without it every Falco
+  alert grouped under `alertname=""`: empty Discord/ntfy titles, the severity inhibit rule matching
+  every Falco alert against every other one, and `unknown` in the alert-detector. No falcoctl init
+  container and no artifact-follow sidecar: the container plugin (`libcontainer.so`) is bundled in the
+  falco image (verified by listing the image layers of `falcosecurity/falco:0.45.0`), so nothing is
+  downloaded at pod start and this namespace never talks to ghcr.io.
+- The container plugin reads MicroK8s's CRI socket, which the chart's default socket list does not
+  contain (`collectors.containerEngine.engines.cri.sockets`). Until 2026-09-30 it enriched nothing:
+  in a 25-minute sample every one of 620 events had `k8s.ns.name`, `k8s.pod.name` and
+  `container.image.repository` set to null, which is what made `k8s_containers` unable to exclude
+  anything and left `container.privileged` unset, so `Launch Privileged Container` could not fire.
 
 The `falco` namespace deliberately carries no `pod-security.kubernetes.io/enforce` label. Falco needs
 a privileged container and hostPath mounts, and both violate the `baseline` level that namespaces
@@ -38,10 +47,24 @@ falcosidekick derives the `severity` label from the Falco event priority:
 | error / warning                           | warning   | Discord                                 |
 | notice / informational / debug            | information | dropped by `minimumpriority: warning` |
 
-`expireafter: 300` gives each event an `endsAt` - Falco events have no end, and without it every
-alert would stay active in Alertmanager forever. `dropeventdefaultpriority`/`dropeventthresholds` are
-overridden away from the upstream defaults, which turn *any* dropped-syscall event into a critical
-alert; only a five-figure drop count is critical here.
+`expireafter` is deliberately **not** set. Falcosidekick never sends `startsAt`, and Alertmanager
+v0.34.1 (`api/v2/api.go:370-377`) sets `StartsAt = EndsAt` when an alert arrives with an end but no
+start. With `expireafter: 300` every Falco alert therefore came out as
+`starts_at = ends_at = evt.time + 300s` - measured on 8 of 8 alerts, e.g. Falco
+`08:10:24.676` -> Alertmanager `startsAt`/`endsAt` `08:15:24.676` - i.e. a start stamp five minutes in
+the future and an instantaneous window. Left unset, Alertmanager stamps `startsAt = now` and
+`endsAt = now + resolve_timeout` (5m, `Timeout=true`), so an alert is fresh from receipt and still
+resolves on its own. `dropeventdefaultpriority`/`dropeventthresholds` are overridden away from the
+upstream defaults, which turn *any* dropped-syscall event into a critical alert; only a five-figure
+drop count is critical here.
+
+Each curated rule's `output:` is trimmed to the fields worth reading rather than copied from upstream.
+Falcosidekick copies that whole line into *both* the `description` and `info` annotations and flattens
+every referenced field into a label, and ntfy rejects a page over its size limit with 40041. Measured
+against real events: the upstream miner output (369 chars) produced a 3412-byte webhook body, which
+ntfy accepted; 733 chars produced 5632 bytes, which it rejected. The trimmed outputs are 103-203
+chars, so a normal event's page body is ~1.8 KB. See the known gaps for the case that still does not
+fit.
 
 falcosidekick cannot post to the Hermes webhook directly: that route is HMAC-verified and
 falcosidekick cannot sign a body. Alertmanager -> alert-detector is the only sender, so it stays the
@@ -58,15 +81,23 @@ overridden and one macro is overridden where marked, plus one extra tag `curated
 these are greppable. Script that produced it: extract rule + transitive macro/list closure, emit
 macros/lists then rules.
 
-One deliberate deviation from upstream text: `user_privileged_containers` (upstream: `never_true`)
-now lists the image repositories that legitimately run privileged in this cluster - read from the
-running pods, not guessed: longhorn (manager/engine/instance-manager/csi-registrar), calico
-(node/cni), the smb CSI driver, the runner's `docker:dind` sidecar, gluetun, jellyfin,
-home-assistant (plus matter-server) and the adsb ultrafeeder. Without it, `Launch Privileged
-Container` fires on every restart of ~15 pods that were already privileged; with it, the rule fires
-only for a privileged container that is *new*, which is the signal worth having. `busybox` is
-deliberately not listed even though two init containers use it privileged: "privileged busybox"
-is exactly a shape an attacker would use.
+Two deliberate deviations from upstream text, both marked in the file:
+
+`user_privileged_containers` (upstream: `never_true`) now lists the image repositories that
+legitimately run privileged in this cluster - read from the running pods, not guessed: longhorn
+(manager/engine/instance-manager/csi-registrar), calico (node/cni), the smb CSI driver, the runner's
+`docker:dind` sidecar, gluetun, jellyfin, home-assistant (plus matter-server) and the adsb
+ultrafeeder. Without it, `Launch Privileged Container` fires on every restart of ~15 pods that were
+already privileged; with it, the rule fires only for a privileged container that is *new*, which is
+the signal worth having. `busybox` is deliberately not listed even though two init containers use it
+privileged: "privileged busybox" is exactly a shape an attacker would use.
+
+`user_known_contact_k8s_api_server_activities` (upstream: `never_true`) lists the API clients measured
+in this cluster - headlamp, the agent's own `ai-services` pod, the grafana `k8s-sidecar`, kyverno and
+zot - matched on the image repository, not the process name, because a shell inside one of those pods
+keeps the image while `kubectl` as a name is exactly what the rule is for. This is a sensor with a
+growing allow-list, not a finished rule; see the known gaps for the measurement and the argument that
+it should be dropped outright.
 
 CRITICAL (2) - reserved for indicators that are essentially never legitimate:
 
@@ -138,6 +169,27 @@ matches on).
 
 ## Known gaps / follow-ups
 
+- **`Contact K8S API Server From Container` is still the firehose.** Measured 2026-09-30, 25 minutes
+  on all three nodes: 612 of 620 Falco events were this one rule, and 612/612 were legitimate
+  (headlamp 225, the agent's own `kubectl` 224, grafana's `k8s-sidecar` 80, kyverno 51, zot 20, the
+  ingress-blackbox reconciler Jobs 6). The allow-list above quiets those, but it only works once the
+  container plugin enriches `container.image.repository`, and the next legitimate API client will
+  need another entry. The structural point is that this cluster is default-deny, so "a container
+  reached the API server" restates the NetworkPolicy egress inventory rather than adding anything to
+  it - every client that *can* connect is one that was explicitly allowed to. On this evidence the
+  rule should probably be dropped from the curated set and the API-access question left to the
+  NetworkPolicies; that decision wants a full day of data, not the 25 minutes behind this entry.
+- **A pathological command line still cannot be paged.** Falco has no truncation operator, so a
+  critical rule whose `output:` carries `%proc.cmdline` can be pushed over ntfy's size limit by a long
+  command line - an attacker with a padded cmdline silences their own page. Projected from the same
+  measurements: a 1304-char output gives a 9268-byte body, well over the limit. Dropping
+  `command=%proc.cmdline` from the two CRITICAL rule outputs is the lever if this ever fires in
+  practice; keeping it is a deliberate trade for the evidence.
+- **The container plugin enrichment is not yet proven.** The socket path is real (spegel mounts the
+  same host path) and the plugin resolves configured sockets as `/host` + that path, but whether
+  `k8s.ns.name`/`k8s.pod.name`/`container.image.repository` actually populate - and therefore whether
+  `Launch Privileged Container` can fire - is only verifiable after the next reconcile, from a
+  `kubectl -n falco logs ds/falco | grep k8s_ns_name` on a fresh event.
 - The four upstream rules that detect a *privileged* or *hostPath* pod at admission time
   (`Launch Privileged Container` is `container_started`-based, i.e. runtime) need the k8saudit
   plugin, which needs an API-server audit webhook - a node-level change via `node-config/` (Ansible).
@@ -145,4 +197,3 @@ matches on).
 - Driver is privileged (chart default). `driver.modernEbpf.leastPrivileged: true` is the next step,
   but it changes which capabilities the probe needs and has to be verified per kernel before it is
   claimed to work.
-- After the first days: tune WARNING rules that prove noisy rather than muting the channel.

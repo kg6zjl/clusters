@@ -185,9 +185,23 @@ spec:
         - macro: k8s_api_server
           condition: (fd.sip.name="kubernetes.default.svc.cluster.local")
 
-        # from rules/main (macro)
+        # from rules/main (macro) -- LOCALLY OVERRIDDEN with this cluster's measured API
+        # clients. `k8s_containers` cannot cover them: it excludes namespace kube-system and a
+        # list of upstream image repositories, and these are ordinary workloads. Measured
+        # 2026-09-30 over 25 minutes on all three nodes: 612 of 620 events were this one rule
+        # and 612/612 were legitimate - headlamp 225, the agent's own kubectl in ai-services
+        # 224, k8s-sidecar in monitoring 80, kyverno 51, zot 20, the ingress-blackbox
+        # reconciler Jobs 6. Matched on the image repository, not the process name, because a
+        # shell inside one of these pods keeps the image; `kubectl` as a name is exactly what
+        # the rule is for. An unlisted container talking to the API server still fires.
         - macro: user_known_contact_k8s_api_server_activities
-          condition: (never_true)
+          condition: >
+            (container.image.repository in (
+              ghcr.io/headlamp-k8s/headlamp,
+              docker.io/nousresearch/hermes-agent,
+              quay.io/kiwigrid/k8s-sidecar, docker.io/kiwigrid/k8s-sidecar,
+              reg.kyverno.io/kyverno/kyverno, ghcr.io/kyverno/kyverno,
+              ghcr.io/project-zot/zot-linux-amd64, ghcr.io/project-zot/zot))
 
         # from rules/main (list)
         - list: grep_binaries
@@ -373,9 +387,7 @@ spec:
             CAP_DAC_OVERRIDE) and thread.cap_effective contains CAP_SYS_ADMIN
 
             '
-          output: Detect an attempt to exploit a container escape using release_agent file | file=%fd.name cap_effective=%thread.cap_effective
-            evt_type=%evt.type user=%user.name user_uid=%user.uid user_loginuid=%user.loginuid process=%proc.name proc_exepath=%proc.exepath
-            parent=%proc.pname command=%proc.cmdline terminal=%proc.tty
+          output: Detect an attempt to exploit a container escape using release_agent file | file=%fd.name cap_effective=%thread.cap_effective evt_type=%evt.type process=%proc.name command=%proc.cmdline parent=%proc.pname
           priority: CRITICAL
           tags:
           - maturity_stable
@@ -393,8 +405,7 @@ spec:
             '
           condition: "spawned_process and (proc.cmdline contains \"stratum+tcp\" or\n     proc.cmdline contains \"stratum2+tcp\" or\n\
             \     proc.cmdline contains \"stratum+ssl\" or\n     proc.cmdline contains \"stratum2+ssl\")\n"
-          output: Possible miner running | evt_type=%evt.type user=%user.name user_uid=%user.uid user_loginuid=%user.loginuid process=%proc.name
-            proc_exepath=%proc.exepath parent=%proc.pname command=%proc.cmdline terminal=%proc.tty exe_flags=%evt.arg.flags
+          output: Possible miner running | evt_type=%evt.type process=%proc.name command=%proc.cmdline parent=%proc.pname
           priority: CRITICAL
           tags:
           - maturity_sandbox
@@ -417,9 +428,7 @@ spec:
           condition: 'spawned_process and container and shell_procs and proc.tty != 0 and container_entrypoint and not user_expected_terminal_shell_in_container_conditions
 
             '
-          output: A shell was spawned in a container with an attached terminal | evt_type=%evt.type user=%user.name user_uid=%user.uid
-            user_loginuid=%user.loginuid process=%proc.name proc_exepath=%proc.exepath parent=%proc.pname command=%proc.cmdline terminal=%proc.tty
-            exe_flags=%evt.arg.flags
+          output: A shell was spawned in a container with an attached terminal | evt_type=%evt.type process=%proc.name command=%proc.cmdline parent=%proc.pname terminal=%proc.tty
           priority: WARNING
           tags:
           - maturity_stable
@@ -441,8 +450,7 @@ spec:
             and not redhat_image
 
             '
-          output: Privileged container started | evt_type=%evt.type user=%user.name user_uid=%user.uid user_loginuid=%user.loginuid
-            process=%proc.name proc_exepath=%proc.exepath parent=%proc.pname command=%proc.cmdline terminal=%proc.tty
+          output: Privileged container started | evt_type=%evt.type process=%proc.name command=%proc.cmdline parent=%proc.pname
           priority: WARNING
           tags:
           - maturity_incubating
@@ -467,9 +475,7 @@ spec:
             and not user_known_contact_k8s_api_server_activities
 
             '
-          output: Unexpected connection to K8s API Server from container | connection=%fd.name lport=%fd.lport rport=%fd.rport fd_type=%fd.type
-            fd_proto=%fd.l4proto evt_type=%evt.type user=%user.name user_uid=%user.uid user_loginuid=%user.loginuid process=%proc.name
-            proc_exepath=%proc.exepath parent=%proc.pname command=%proc.cmdline terminal=%proc.tty
+          output: Unexpected connection to K8s API Server from container | connection=%fd.name evt_type=%evt.type process=%proc.name command=%proc.cmdline parent=%proc.pname
           priority: WARNING
           tags:
           - maturity_stable
@@ -490,9 +496,7 @@ spec:
 
             '
           enabled: true
-          output: Outbound connection to cloud instance metadata service | connection=%fd.name lport=%fd.lport rport=%fd.rport fd_type=%fd.type
-            fd_proto=%fd.l4proto evt_type=%evt.type user=%user.name user_uid=%user.uid user_loginuid=%user.loginuid process=%proc.name
-            proc_exepath=%proc.exepath parent=%proc.pname command=%proc.cmdline terminal=%proc.tty
+          output: Outbound connection to cloud instance metadata service | connection=%fd.name evt_type=%evt.type process=%proc.name command=%proc.cmdline parent=%proc.pname
           priority: WARNING
           tags:
           - maturity_incubating
@@ -514,10 +518,7 @@ spec:
           condition: 'dup and container and evt.rawres in (0, 1, 2) and fd.type in ("ipv4", "ipv6") and not user_known_stand_streams_redirect_activities
 
             '
-          output: Redirect stdout/stdin to network connection | gparent=%proc.aname[2] ggparent=%proc.aname[3] gggparent=%proc.aname[4]
-            fd.sip=%fd.sip connection=%fd.name lport=%fd.lport rport=%fd.rport fd_type=%fd.type fd_proto=%fd.l4proto evt_type=%evt.type
-            user=%user.name user_uid=%user.uid user_loginuid=%user.loginuid process=%proc.name proc_exepath=%proc.exepath parent=%proc.pname
-            command=%proc.cmdline terminal=%proc.tty
+          output: Redirect stdout/stdin to network connection | connection=%fd.name fd_sip=%fd.sip evt_type=%evt.type process=%proc.name command=%proc.cmdline parent=%proc.pname
           priority: WARNING
           tags:
           - maturity_stable
@@ -540,9 +541,7 @@ spec:
             \               proc.cmdline contains \" -c\")) or\n     (proc.name = \"ncat\" and (proc.args contains \"--sh-exec\" or\n\
             \                              proc.args contains \"--exec\" or proc.args contains \"-e \" or\n                      \
             \        proc.args contains \"-c \" or proc.args contains \"--lua-exec\"))\n     )\n"
-          output: Netcat runs inside container that allows remote code execution | evt_type=%evt.type user=%user.name user_uid=%user.uid
-            user_loginuid=%user.loginuid process=%proc.name proc_exepath=%proc.exepath parent=%proc.pname command=%proc.cmdline terminal=%proc.tty
-            exe_flags=%evt.arg.flags
+          output: Netcat runs inside container that allows remote code execution | evt_type=%evt.type process=%proc.name command=%proc.cmdline parent=%proc.pname
           priority: WARNING
           tags:
           - maturity_stable
@@ -565,10 +564,7 @@ spec:
             \ startswith \"./\" ) or\n    (shell_procs and proc.args startswith \"-c /dev/shm\") or\n    (shell_procs and proc.args\
             \ startswith \"-i /dev/shm\") or\n    (shell_procs and proc.args startswith \"/dev/shm\") or\n    (proc.cwd startswith\
             \ \"/dev/shm/\" and proc.args startswith \"./\" ))\nand not container.image.repository in (falco_privileged_images, trusted_images)\n"
-          output: File execution detected from /dev/shm | evt_res=%evt.res file=%fd.name proc_cwd=%proc.cwd proc_pcmdline=%proc.pcmdline
-            user_loginname=%user.loginname group_gid=%group.gid group_name=%group.name evt_type=%evt.type user=%user.name user_uid=%user.uid
-            user_loginuid=%user.loginuid process=%proc.name proc_exepath=%proc.exepath parent=%proc.pname command=%proc.cmdline terminal=%proc.tty
-            exe_flags=%evt.arg.flags
+          output: File execution detected from /dev/shm | file=%fd.name proc_cwd=%proc.cwd evt_type=%evt.type process=%proc.name command=%proc.cmdline parent=%proc.pname
           priority: WARNING
           tags:
           - maturity_stable
@@ -589,9 +585,7 @@ spec:
           condition: 'spawned_process and proc.is_exe_from_memfd=true and not known_memfd_execution_processes
 
             '
-          output: Fileless execution via memfd_create | container_start_ts=%container.start_ts proc_cwd=%proc.cwd evt_res=%evt.res
-            proc_sname=%proc.sname gparent=%proc.aname[2] evt_type=%evt.type user=%user.name user_uid=%user.uid user_loginuid=%user.loginuid
-            process=%proc.name proc_exepath=%proc.exepath parent=%proc.pname command=%proc.cmdline terminal=%proc.tty exe_flags=%evt.arg.flags
+          output: Fileless execution via memfd_create | proc_cwd=%proc.cwd evt_res=%evt.res evt_type=%evt.type process=%proc.name command=%proc.cmdline parent=%proc.pname
           priority: WARNING
           tags:
           - maturity_stable
@@ -613,9 +607,7 @@ spec:
             in (allowed_container_images_loading_kernel_module)
 
             '
-          output: Linux Kernel Module injection from container | parent_exepath=%proc.pexepath gparent=%proc.aname[2] gexepath=%proc.aexepath[2]
-            module=%proc.args res=%evt.res evt_type=%evt.type user=%user.name user_uid=%user.uid user_loginuid=%user.loginuid process=%proc.name
-            proc_exepath=%proc.exepath parent=%proc.pname command=%proc.cmdline terminal=%proc.tty
+          output: Linux Kernel Module injection from container | module=%proc.args res=%evt.res evt_type=%evt.type process=%proc.name command=%proc.cmdline parent=%proc.pname
           priority: WARNING
           tags:
           - maturity_stable
@@ -638,9 +630,7 @@ spec:
             '
           condition: "(open_read or open_directory)\n and (user_ssh_directory or fd.name startswith /root/.ssh)\n and not user_known_read_ssh_information_activities\n\
             \ and not proc.name in (ssh_binaries)\n"
-          output: ssh-related file/directory read by non-ssh program | file=%fd.name pcmdline=%proc.pcmdline evt_type=%evt.type user=%user.name
-            user_uid=%user.uid user_loginuid=%user.loginuid process=%proc.name proc_exepath=%proc.exepath parent=%proc.pname command=%proc.cmdline
-            terminal=%proc.tty
+          output: ssh-related file/directory read by non-ssh program | file=%fd.name evt_type=%evt.type process=%proc.name command=%proc.cmdline parent=%proc.pname
           priority: WARNING
           tags:
           - maturity_incubating
@@ -661,9 +651,7 @@ spec:
             '
           condition: "spawned_process and ((grep_commands and private_aws_credentials) or\n     (proc.name = \"find\" and proc.args\
             \ endswith \".aws/credentials\"))\n"
-          output: Detected AWS credentials search activity | proc_pcmdline=%proc.pcmdline proc_cwd=%proc.cwd group_gid=%group.gid
-            group_name=%group.name user_loginname=%user.loginname evt_type=%evt.type user=%user.name user_uid=%user.uid user_loginuid=%user.loginuid
-            process=%proc.name proc_exepath=%proc.exepath parent=%proc.pname command=%proc.cmdline terminal=%proc.tty exe_flags=%evt.arg.flags
+          output: Detected AWS credentials search activity | proc_cwd=%proc.cwd evt_type=%evt.type process=%proc.name command=%proc.cmdline parent=%proc.pname
           priority: WARNING
           tags:
           - maturity_stable
@@ -686,8 +674,7 @@ spec:
             \ contains \"id_rsa\" or\n                              proc.args contains \"id_dsa\" or\n                           \
             \   proc.args contains \"id_ed25519\" or\n                              proc.args contains \"id_ecdsa\"\n      )\n   \
             \ ))\n"
-          output: Grep private keys or passwords activities found | evt_type=%evt.type user=%user.name user_uid=%user.uid user_loginuid=%user.loginuid
-            process=%proc.name proc_exepath=%proc.exepath parent=%proc.pname command=%proc.cmdline terminal=%proc.tty exe_flags=%evt.arg.flags
+          output: Grep private keys or passwords activities found | evt_type=%evt.type process=%proc.name command=%proc.cmdline parent=%proc.pname
           priority: WARNING
           tags:
           - maturity_stable
@@ -698,6 +685,21 @@ spec:
           - mitre_credential_access
           - T1552.001
           - curated_home_cluster
+    collectors:
+      containerEngine:
+        engines:
+          cri:
+            # MicroK8s keeps its CRI socket under the snap, not at /run/containerd, so none
+            # of the chart's default paths exist here and the plugin enriched nothing: on
+            # 2026-09-30 all 620 events in a 25-minute sample carried k8s.ns.name,
+            # k8s.pod.name and container.image.repository as null. The chart mounts the
+            # directory holding the socket at /host<dir> and the plugin resolves the socket
+            # as /host + this path (confirmed in the pod log: "enabled container runtime
+            # socket at '/host/run/podman/podman.sock'"), so the MicroK8s path is given as
+            # the host path it is. Without this, `k8s_containers` can exclude nothing and
+            # `Launch Privileged Container` cannot fire (container.privileged is unset).
+            sockets:
+            - /var/snap/microk8s/common/run/containerd.sock
     # The container plugin (libcontainer.so) is bundled in the falcosecurity/falco
     # image, so no artifact has to be downloaded at pod start: no falcoctl init
     # container, no follow sidecar, and no egress from this namespace to ghcr.io.
@@ -717,6 +719,13 @@ spec:
     falcosidekick:
       enabled: true
       replicaCount: 1
+      # 2.32.0 (the chart default) does not set the `alertname` label on the Alertmanager
+      # payload, so every Falco alert grouped under alertname="" - empty Discord/ntfy titles,
+      # the severity inhibit rule matching every Falco alert against every other, and
+      # "unknown" in the alert-detector. 2.33.0 added it (outputs/alertmanager.go line 122);
+      # the tag is pinned rather than left to the chart so the version is explicit.
+      image:
+        tag: "2.35.0"
       resources:
         requests:
           cpu: 10m
@@ -730,9 +739,14 @@ spec:
           endpoint: "/api/v2/alerts"
           # warning is the floor because every curated rule is WARNING or CRITICAL.
           minimumpriority: "warning"
-          # Falco events have no end, so without this every alert stays active forever
-          # in Alertmanager. 5 minutes matches Alertmanager's own resolve_timeout.
-          expireafter: "300"
+          # expireafter is deliberately NOT set. Falcosidekick never sends startsAt, and
+          # Alertmanager v0.34.1 api/v2/api.go:370-377 sets StartsAt = EndsAt when a payload
+          # has an end but no start. With expireafter: 300 every Falco alert therefore ended
+          # up with starts_at = ends_at = evt.time + 300s (measured: 8 of 8 alerts, e.g. Falco
+          # 08:10:24.676 -> startsAt/endsAt 08:15:24.676), i.e. a start time five minutes after
+          # the event and an instantaneous window. Left unset, Alertmanager stamps startsAt =
+          # now and endsAt = now + resolve_timeout (5m, Timeout=true), so the alert is fresh
+          # from receipt and still resolves on its own.
           # Upstream defaults turn *any* dropped-syscall event into a critical alert;
           # that would page on a busy node. Only a five-figure drop count is critical.
           dropeventdefaultpriority: "warning"
