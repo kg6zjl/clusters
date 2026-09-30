@@ -256,6 +256,11 @@ data:
         repos = [r["full_name"] for r in call("/installation/repositories", token).get("repositories", [])]
         print("installation covers", len(repos), "repo(s):", ", ".join(repos) or "(none)")
 
+        # Name the permissions the installation actually grants, so a gap is reported by the API
+        # rather than inferred from push=False alone.
+        granted = call("/installation", token).get("permissions", {})
+        print("installation permissions:", json.dumps(granted, sort_keys=True))
+
         problems = []
         for wanted in EXPECTED:
             if wanted not in repos:
