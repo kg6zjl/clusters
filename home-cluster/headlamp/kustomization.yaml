@@ -5,7 +5,6 @@ resources:
   - deployment.yaml
   - service.yaml
   - serviceaccount.yaml
-  - clusterrolebinding.yaml
   - ingressroute.yaml
   - networkpolicy.yaml
   - kubeconfig.yaml
