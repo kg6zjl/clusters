@@ -72,7 +72,7 @@ spec:
                 - CAP_NET_ADMIN
                 - CAP_NET_RAW
         - name: matter-server
-          image: ghcr.io/home-assistant-libs/python-matter-server:6.2.2
+          image: ghcr.io/home-assistant-libs/python-matter-server:6.6.1
           ports:
             - containerPort: 5580
           command: ["python", "-m", "matter_server.server", "--log-level", "debug"]
