@@ -79,13 +79,12 @@ spec:
             # a one-line change here; adding a name is cheap, a name that fires constantly is
             # not. Keep in step with the rule names in monitoring/prometheus-rules.yaml.
             #   ProdServiceDown         - app pods down; logs/events/Flux status -> rollback/PR
-            #   ProdBackupStale         - the CronJob-wedge / RWO+podAffinity triage
             #   CIRunnerPoolEmpty       - frozen CI pool; runner deployment investigation
             #   PrometheusBadConfig     - one bad expression silences a whole rule file
             #   PrometheusRuleFailures  - same class: the rule that cannot evaluate
             #   LonghornVolumeSpaceFull - name the PVC consumer, PR a persistence.size bump
             - name: ALERT_INCLUDE_ALERTNAMES
-              value: "ProdServiceDown,ProdBackupStale,CIRunnerPoolEmpty,PrometheusBadConfig,PrometheusRuleFailures,LonghornVolumeSpaceFull"
+              value: "ProdServiceDown,CIRunnerPoolEmpty,PrometheusBadConfig,PrometheusRuleFailures,LonghornVolumeSpaceFull"
             # The OpenRouter balance/spend class, by alertname. Second line of defence behind
             # the allow-list; see the note at the top of this file. Keep in step with the
             # openrouter group in monitoring/prometheus-rules.yaml when an alert there is added
@@ -119,6 +118,10 @@ spec:
               value: "5"
             - name: DEDUPE_TTL_SECONDS
               value: "604800"
+            # Spend ceiling: at most one wake per UTC day, whatever the allow-list sees. The
+            # allow-list decides what is worth a run; this decides what it costs.
+            - name: MAX_WAKES_PER_DAY
+              value: "1"
             - name: PYTHONDONTWRITEBYTECODE
               value: "1"
             - name: WEBHOOK_SECRET

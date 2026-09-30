@@ -23,8 +23,8 @@ data:
     Runs HOURLY (0 * * * *) with LOOKBACK_SECONDS longer than the schedule. The wake path is
     not the paging path: every allow-listed alert already notifies the human on Discord/ntfy
     inside its own `for:` window, so the agent is the second responder and up to ~65 minutes
-    of latency is accepted in exchange for a hard cap of <=24 runs/day. The allow-list, not
-    the schedule, is what keeps the run count low.
+    of latency is accepted in exchange for a budget MAX_WAKES_PER_DAY wakes per day. The
+    allow-list decides what is worth a run, the daily counter decides what it costs.
 
     "Announced once" is keyed on the pair (fingerprint, start time) AND on a Redis gate. The
     long lookback means the same standing alert is seen by many consecutive polls; two things
@@ -70,6 +70,10 @@ data:
     REDIS_PORT = int(os.environ.get("REDIS_PORT", "6379"))
     REDIS_TIMEOUT_SECONDS = float(os.environ.get("REDIS_TIMEOUT_SECONDS", "5"))
     DEDUPE_TTL_SECONDS = int(os.environ.get("DEDUPE_TTL_SECONDS", "604800"))
+
+    # The spend gate: at most this many wakes per UTC day, counted in Redis.
+    MAX_WAKES_PER_DAY = int(os.environ.get("MAX_WAKES_PER_DAY", "1"))
+    WAKE_COUNTER_TTL_SECONDS = int(os.environ.get("WAKE_COUNTER_TTL_SECONDS", "172800"))
 
     # An alert must be named here to wake the agent at all (empty = no include filter). This
     # is the cost lever: a small list of names an unattended read-only-plus-PR agent can turn
@@ -183,6 +187,24 @@ data:
                 raise OSError("unexpected SET reply %r" % reply)
 
 
+    def wake_key():
+        return "wakes:" + datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+
+    def claim_wake_slot():
+        """INCR is read and write in one atomic command, so the count needs no parsing of a
+        bulk reply. Over budget, the increment is undone so the key counts real wakes."""
+        reply = redis_command("INCR", wake_key())
+        if not reply.startswith(":"):
+            raise OSError("unexpected INCR reply %r" % reply)
+        redis_command("EXPIRE", wake_key(), str(WAKE_COUNTER_TTL_SECONDS))
+        return int(reply[1:])
+
+
+    def release_wake_slot():
+        redis_command("DECR", wake_key())
+
+
     def new_alerts():
         status, alerts = request(ALERTS_URL + "/api/v2/alerts?active=true&silenced=false&inhibited=false")
         if status != 200 or not isinstance(alerts, list):
@@ -283,13 +305,25 @@ data:
         if not new:
             print("%s firing alert(s) in window, 0 new after dedupe" % len(alerts))
             return 0
+        try:
+            count = claim_wake_slot()
+        except (OSError, ValueError) as exc:
+            print("wake budget unreadable: %s - refusing to post" % exc, file=sys.stderr)
+            return 1
+        if count > MAX_WAKES_PER_DAY:
+            release_wake_slot()
+            print("wake budget spent today (%s/%s) - dropping %s new alert(s)"
+                  % (count - 1, MAX_WAKES_PER_DAY, len(new)))
+            return 0
         capped = new[:MAX_ALERTS]
         try:
             status, response = sign_and_post(capped, {"truncated": len(capped) < len(new)})
         except urllib.error.HTTPError as exc:
+            release_wake_slot()
             print("webhook rejected the post: HTTP %s %s" % (exc.code, exc.read()[:200]), file=sys.stderr)
             return 1
         except urllib.error.URLError as exc:
+            release_wake_slot()
             print("could not reach %s: %s" % (WEBHOOK_URL, exc), file=sys.stderr)
             return 1
         try:
