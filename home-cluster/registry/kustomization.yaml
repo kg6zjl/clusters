@@ -8,7 +8,6 @@ resources:
   - deployment.yaml
   - service.yaml
   - ingressroute.yaml
-  - dnsendpoint.yaml
   - network-policy.yaml
   - pull-identity.yaml
   - pull-rotator-rbac.yaml
