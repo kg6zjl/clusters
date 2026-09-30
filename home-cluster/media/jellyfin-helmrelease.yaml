@@ -19,6 +19,12 @@ spec:
     remediation:
       retries: 3
   values:
+    image:
+      # Chart 3.2.0 is the newest release in the jellyfin-helm repo (Apr 2026)
+      # and its appVersion is pinned at 10.11.8, whose Debian 13.4 base carries
+      # 5 fixable Criticals. 10.11.11 is the newest 10.11.x image; drop this
+      # override once a chart release ships a newer appVersion.
+      tag: "10.11.11"
     service:
       type: ClusterIP
       port: 8096
