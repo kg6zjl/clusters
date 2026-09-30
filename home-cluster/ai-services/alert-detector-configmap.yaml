@@ -19,6 +19,10 @@ data:
     produces at most one agent run, and an alert is announced once: the filter is the alert's
     own start time, so there is no state to keep in a pod that is recreated every five
     minutes.
+
+    An alert whose name is in ALERT_EXCLUDE_ALERTNAMES is dropped before the post. The rule
+    and the metric stay - the alert still fires and still routes to ntfy and Discord - it
+    just never wakes the agent.
     """
     import hashlib
     import hmac
@@ -38,6 +42,10 @@ data:
     MAX_ALERTS = int(os.environ.get("MAX_ALERTS", "20"))
     TIMEOUT_SECONDS = int(os.environ.get("HTTP_TIMEOUT_SECONDS", "20"))
     UI_URL = os.environ.get("ALERTMANAGER_UI_URL", "").rstrip("/")
+    # Alertnames that must never wake the agent. The rules still fire and still page wherever
+    # else they route; only this path is deaf to them, so a class of alert the operator has
+    # decided not to act on cannot cost an agent run and an approval prompt.
+    EXCLUDE_ALERTNAMES = {s.strip() for s in os.environ.get("ALERT_EXCLUDE_ALERTNAMES", "").split(",") if s.strip()}
 
 
     def request(url, data=None, headers=None):
@@ -71,15 +79,19 @@ data:
             raise RuntimeError("Alertmanager returned %s" % status)
         cutoff = datetime.now(timezone.utc) - timedelta(seconds=LOOKBACK_SECONDS)
         fresh = []
+        excluded = []
         for alert in alerts:
             labels = alert.get("labels") or {}
+            alertname = labels.get("alertname", "unknown")
+            if alertname in EXCLUDE_ALERTNAMES:
+                excluded.append(alertname)
+                continue
             if SEVERITIES and labels.get("severity") not in SEVERITIES:
                 continue
             started = started_at(alert.get("startsAt"))
             if started is None or started < cutoff:
                 continue
             annotations = alert.get("annotations") or {}
-            alertname = labels.get("alertname", "unknown")
             fresh.append({
                 "alertname": alertname,
                 "severity": labels.get("severity", "unknown"),
@@ -97,6 +109,9 @@ data:
         # that just started is the one worth a wake - and a large standing group can no
         # longer starve a new one out of the cap.
         fresh.sort(key=lambda a: a["starts_at"], reverse=True)
+        if excluded:
+            print("excluded %s alert(s) by name: %s" % (
+                len(excluded), ", ".join(sorted(set(excluded)))))
         return fresh
 
 
