@@ -9,7 +9,6 @@ resources:
   - service.yaml
   - ingressroute.yaml
   - ingressroute-tcp.yaml
-  - dnsendpoint.yaml
   - external-secrets.yaml
   - backup-external-secret.yaml
   - backup-cronjob.yaml

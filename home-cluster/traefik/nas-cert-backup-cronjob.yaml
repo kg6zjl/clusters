@@ -11,7 +11,11 @@
 # Reading the secret where it lives needs no RBAC grant, no kubectl and no API
 # server at run time. Both secret volumes are optional and every input is
 # checked, so a missing secret fails the Job loudly within seconds instead of
-# hanging. The private key is never written anywhere but the NAS.
+# hanging. Success is not just "smbclient exited 0": both files are read back off
+# the NAS and compared byte for byte, so a run that cannot prove the share holds
+# the current pair fails instead of reporting success. The private key is written
+# only by smbclient, to the NAS, and to this container's own ephemeral /tmp for
+# that comparison.
 apiVersion: batch/v1
 kind: CronJob
 metadata:
@@ -55,6 +59,16 @@ spec:
                   smbclient //192.168.1.176/cert \
                     -W WORKGROUP -U "$(cat /creds/username)%$(cat /creds/password)" \
                     -c "put /tls/tls.crt cert.pem; put /tls/tls.key privkey.pem"
+                  # An upload that "succeeded" against a full or read-only share
+                  # would otherwise report success. Read both files back and
+                  # compare them with what was sent.
+                  mkdir -p /tmp/verify
+                  smbclient //192.168.1.176/cert \
+                    -W WORKGROUP -U "$(cat /creds/username)%$(cat /creds/password)" \
+                    -c "get cert.pem /tmp/verify/cert.pem; get privkey.pem /tmp/verify/privkey.pem" >/dev/null
+                  cmp -s /tls/tls.crt /tmp/verify/cert.pem || { echo "FATAL: NAS cert.pem does not match the cert that was sent" >&2; exit 1; }
+                  cmp -s /tls/tls.key /tmp/verify/privkey.pem || { echo "FATAL: NAS privkey.pem does not match the key that was sent" >&2; exit 1; }
+                  echo "verified: read back both files from the NAS and compared them byte for byte"
               volumeMounts:
                 - name: wildcard-tls
                   mountPath: /tls

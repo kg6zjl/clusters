@@ -13,17 +13,16 @@ resources:
   - open-webui-data-longhorn-pvc.yaml
   - ingressroute-openwebui.yaml
   - ingressroute-dashboard.yaml
-  - dnsendpoint.yaml
-  - dnsendpoint-dashboard.yaml
   - service-comfy.yaml
   - middleware-comfy.yaml
   - ingressroute-comfy.yaml
-  - dnsendpoint-comfy.yaml
   - external-secrets.yaml
   - hermes-rbac.yaml
   - hermes-kubeconfig.yaml
   - hermes-agent.yaml
   - hermes-external-secret.yaml
+  - hermes-github-app-external-secret.yaml
+  - hermes-github-token-minter.yaml
   - hermes-gitconfig.yaml
   - hermes-soul-configmap.yaml
   - hermes-config-configmap.yaml
@@ -36,14 +35,3 @@ configMapGenerator:
 
 generatorOptions:
   disableNameSuffixHash: true
-
-patches:
-  - target:
-      group: externaldns.k8s.io
-      version: v1alpha1
-      kind: DNSEndpoint
-      name: chat
-    patch: |-
-      - op: replace
-        path: /metadata/namespace
-        value: kube-system

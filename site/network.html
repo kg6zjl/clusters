@@ -11,6 +11,7 @@
 <nav class="topnav">
   <ul>
     <li><a href="index.html">The model</a></li>
+    <li><a href="architecture.html">Architecture</a></li>
     <li><a href="limits.html">Permissions</a></li>
     <li><a href="network.html" aria-current="page">Network</a></li>
     <li><a href="state.html">State &amp; storage</a></li>
@@ -137,18 +138,17 @@
 </section>
 
 <section aria-labelledby="gap">
-  <h2 id="gap">The gap to close in your own setup</h2>
+  <h2 id="gap">The gap this setup used to have</h2>
   <p>
-    In the reference cluster the CI runners are the exception: their namespace carries an
-    expedient allow-all egress. It was added to unblock image builds, it works, and it is a hole
-    — the same reasoning that makes default-deny worth having applies to the runners too, and they
-    are the processes that hold the widest credentials.
+    The CI runners were the exception here: a ServiceAccount bound to a cluster role of
+    <code>*</code> on <code>*</code>, inherited by every job, and a namespace with unrestricted
+    egress. It existed because a build needed API access once, and it stayed because nothing failed
+    loudly. That identity now holds no cluster RBAC at all, and the namespace has an explicit egress
+    list whose private address ranges are excluded. See <a href="runners.html">Runners</a>.
   </p>
   <p>
-    The honest migration is not "delete the rule". It is: enumerate what the builds actually reach
-    (registry, package mirrors, the API server, source control), write those as explicit rules, then
-    remove the blanket — and prove it in a PR where the required check is the build that used to
-    depend on the blanket.
+    The lesson generalises: a policy is only as good as its exceptions, and an exception nobody can
+    name is the hole. Keep the exception list short enough to read, and write the reason next to it.
   </p>
 </section>
 

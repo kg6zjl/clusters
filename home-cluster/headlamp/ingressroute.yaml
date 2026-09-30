@@ -3,6 +3,9 @@ kind: IngressRoute
 metadata:
   name: headlamp
   namespace: headlamp
+  annotations:
+    external-dns.alpha.kubernetes.io/hostname: headlamp.kube.stevearnett.com
+    external-dns.alpha.kubernetes.io/target: kube.stevearnett.com
 spec:
   entryPoints:
     - websecure

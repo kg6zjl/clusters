@@ -11,6 +11,7 @@
 <nav class="topnav">
   <ul>
     <li><a href="index.html" aria-current="page">The model</a></li>
+    <li><a href="architecture.html">Architecture</a></li>
     <li><a href="limits.html">Permissions</a></li>
     <li><a href="network.html">Network</a></li>
     <li><a href="state.html">State &amp; storage</a></li>
@@ -136,26 +137,29 @@
 <section aria-labelledby="weak">
   <h2 id="weak">Where this setup is still weak</h2>
   <p>
-    Worth saying plainly, because a design document that only lists strengths is marketing. In the
-    reference setup, two things are weaker than the model above implies:
+    A design document that only lists strengths is a brochure. These are open today.
   </p>
   <ul>
     <li>
-      <strong>The CI runners are not least-privilege.</strong> Their service account is bound to a
-      role with <code>*</code> on <code>*</code>, and their namespace allows unrestricted egress.
-      That is the largest hole in the design, and it exists because builds needed it — which is a
-      reason, not a justification. The fix is a per-workflow role and an egress allow-list; the
-      constraint is that CI jobs which legitimately reconcile anything need real permissions, so
-      the work is deciding which pipeline actually needs what.
+      <strong>Admission reports, it does not block.</strong> The policy that pins the agent's
+      identity to read-only verbs runs in Audit: violations land in a report, and nothing stops a
+      widened role. Enforcement is a deliberate one-way flip, taken once the report shows the
+      expected zero violations.
     </li>
     <li>
-      <strong>The agent holds a credential that can push branches.</strong> It has to, or the pull
-      request path does not exist. That token is scoped to a single repository and cannot create
-      repositories, change settings, or merge the cluster repo — and the guidance is that a
-      credential is used for its stated purpose and nothing else. A key that happens to be powerful
-      enough to do something is not permission to do it.
+      <strong>Scan triage is behind the findings.</strong> The image scanner is deployed and its
+      alerts are live; the first sweep found scores of running workloads carrying a fixable Critical.
+      Coverage is not the problem — working through the list is.
+    </li>
+    <li>
+      <strong>Nothing watches behaviour at runtime.</strong> Admission sees intent and scanning sees
+      images. Neither sees what a process does after it starts.
     </li>
   </ul>
+  <p class="small">
+    The full picture, including the parts that are weak on purpose, is on
+    <a href="architecture.html">Architecture</a>.
+  </p>
 </section>
 
 <section aria-labelledby="webhooks">
@@ -215,6 +219,8 @@
 <section aria-labelledby="next">
   <h2 id="next">Read on</h2>
   <p>
+    <a href="architecture.html">Architecture</a> — what is actually running: the reconciliation
+    spine, the security stack, the agent's GitHub identity, and the path an alert takes to wake it.
     <a href="limits.html">Permissions</a> — the actual role, the deliberate omissions, and why each
     odd-looking grant exists. <a href="network.html">Network</a> — default deny, and the mistake
     everyone makes with the API server. <a href="state.html">State &amp; storage</a> — what is
@@ -232,7 +238,7 @@
 
 <footer>
   <div class="wrap">
-    <p>Operating notes from a GitOps home cluster. Source lives in the cluster repository's <code>site/</code> directory.</p>
+    <p>Operating notes from a GitOps home cluster. Source lives in the cluster repository's <code>site/</code> directory. <a href="architecture.html">Architecture →</a></p>
   </div>
 </footer>
 </body>

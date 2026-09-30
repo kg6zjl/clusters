@@ -1,0 +1,9 @@
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: HelmRepository
+metadata:
+  name: dex
+  # The Flux Kustomization's targetNamespace lands this in ns sso; declared here to match.
+  namespace: sso
+spec:
+  interval: 1h
+  url: https://charts.dexidp.io

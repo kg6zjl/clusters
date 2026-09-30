@@ -1,0 +1,56 @@
+---
+# Default-deny, then allow exactly what Dex needs.
+#
+# Ingress: only Traefik, on Dex's HTTP port. Dex is reached by the browser via the IngressRoute in
+# ingressroute.yaml and by nothing else in the cluster.
+#
+# Egress: DNS, plus the public internet on 443/80 for the Google connector (token endpoint, JWKS,
+# and the userinfo endpoint Dex reads the email claim from). Dex does NOT call the Kubernetes API --
+# it only issues and validates tokens -- so there is deliberately no rule for the apiserver here.
+# Note for future edits: if Dex ever does need the API server, a namespaceSelector alone will NOT
+# work, because the apiserver is a host process rather than a pod, and it needs explicit ipBlocks
+# for the service CIDR and the node LAN subnet.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: dex-restrictive
+  namespace: sso
+spec:
+  podSelector:
+    # Must match the chart's pod labels (app.kubernetes.io/name: dex), not the shorthand `app: dex`.
+    # A podSelector that matches nothing does not deny anything -- it silently applies no policy at
+    # all, which would leave Dex wide open. Verified against a rendered chart.
+    matchLabels:
+      app.kubernetes.io/name: dex
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: traefik
+      ports:
+        - protocol: TCP
+          port: 5556
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 10.152.183.0/16   # cluster service CIDR
+              - 192.168.1.0/24   # node LAN
+      ports:
+        - protocol: TCP
+          port: 443
+        - protocol: TCP
+          port: 80

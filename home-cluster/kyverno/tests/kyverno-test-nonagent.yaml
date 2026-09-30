@@ -1,0 +1,21 @@
+apiVersion: cli.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: hermes-agent-request-guard-scope
+# Same policies and resource as the agent run, but the request user is Flux. The
+# point is the negative: the request-guard rules are scoped to the Hermes agent
+# ServiceAccount, so an ordinary writer (here kustomize-controller, which does
+# apply Secrets) must NOT be blocked when Kyverno is enforcing. Without this run,
+# a policy that denied every Secret write would still pass the agent run.
+policies:
+  - ../policies/hermes-agent-request-guard.yaml
+resources:
+  - resources/secret.yaml
+userinfo: userinfo/flux.yaml
+results:
+  - policy: hermes-agent-request-guard
+    rule: deny-agent-secret-write
+    resources:
+      - test-secret
+    kind: Secret
+    result: skip

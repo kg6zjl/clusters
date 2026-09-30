@@ -10,6 +10,8 @@ metadata:
     # all rather than asserting a 200, so a real Traefik/TLS/backend failure still
     # trips it.
     blackbox.stevearnett.com/module: http_auth_gated
+    external-dns.alpha.kubernetes.io/hostname: registry.kube.stevearnett.com
+    external-dns.alpha.kubernetes.io/target: kube.stevearnett.com
 spec:
   entryPoints:
     - websecure
