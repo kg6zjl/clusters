@@ -7,6 +7,9 @@ metadata:
     alert-on-down: "true"
 spec:
   replicas: 1
+  # Single ReadWriteOnce volume; a rolling update would need two pods on it at once.
+  strategy:
+    type: Recreate
   revisionHistoryLimit: 3
   selector:
     matchLabels:
