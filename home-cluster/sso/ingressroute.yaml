@@ -1,0 +1,30 @@
+---
+# Publishes the Dex issuer so a browser can reach the OIDC flow and so the apiserver can fetch
+# the discovery document.
+#
+# The TLS cert is not requested here: every IngressRoute in this repo omits a `tls:` block and relies
+# on the Traefik default TLSStore (home-cluster/traefik/tlsstore.yaml -> wildcard-stevearnett-com-tls),
+# which cert-manager issues from Let's Encrypt and which covers *.kube.stevearnett.com. Because that
+# chains to a publicly trusted root, the apiserver needs no --oidc-ca-file.
+#
+# Dex is served under /dex to match the `issuer:` in dex-helmrelease.yaml. The path prefix and the
+# issuer path must agree exactly or Dex will build wrong callback URLs.
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: dex
+  namespace: sso
+  annotations:
+    # ingress-blackbox-reconciler defaults to https://<host>/ with module http_2xx, but this
+    # host serves nothing at the root -- only /dex does. Point the prober at the discovery
+    # document (200 JSON) or IngressDown fires forever on a healthy Dex.
+    blackbox.stevearnett.com/target: https://sso.kube.stevearnett.com/dex/.well-known/openid-configuration
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - match: Host(`sso.kube.stevearnett.com`) && PathPrefix(`/dex`)
+      kind: Rule
+      services:
+        - name: dex
+          port: http

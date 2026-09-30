@@ -10,6 +10,12 @@
 #
 # Severity filter is "critical" only. Widen ALERT_SEVERITIES to include warnings when the
 # agent's investigation is worth more than the extra runs it will start.
+#
+# ALERT_EXCLUDE_ALERTNAMES is the other half of the filter: a name listed there never wakes
+# the agent whatever its severity. The OpenRouter balance/spend class is in it by the user's
+# decision (2026-09-30) - this is a home lab and the remaining balance is noise, not a thing
+# to act on. The rules, the metric and the ntfy/Discord routes are untouched; only this path
+# is deaf to them.
 apiVersion: batch/v1
 kind: CronJob
 metadata:
@@ -55,6 +61,11 @@ spec:
               value: "https://alerts.kube.stevearnett.com"
             - name: ALERT_SEVERITIES
               value: "critical"
+            # The OpenRouter balance/spend class, by alertname. Comma-separated, exact match;
+            # see the note at the top of this file. Keep in step with the openrouter group in
+            # monitoring/prometheus-rules.yaml when an alert there is added or renamed.
+            - name: ALERT_EXCLUDE_ALERTNAMES
+              value: "OpenRouterCreditLow,OpenRouterCreditExhausted,OpenRouterAccountBalanceLow,OpenRouterAccountBalanceCritical,OpenRouterBalanceDepletionImminent,OpenRouterBurnRateHigh,OpenRouterDailySpendHigh"
             # Longer than the 5m schedule on purpose: an alert is then covered even if one
             # run is delayed, and the duplicate it may produce is dropped by the adapter's
             # idempotency key rather than starting a second run.

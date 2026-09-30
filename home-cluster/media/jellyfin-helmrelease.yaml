@@ -15,10 +15,24 @@ spec:
         namespace: media
   install:
     createNamespace: true
+    timeout: 15m
   upgrade:
+    # #848 overrides the chart's appVersion 10.11.8 with 10.11.11, a 690 MB image. Helm's
+    # default 5m action timeout is shorter than this link's cold pull: four attempts each sat
+    # in ContainerCreating past the deadline (kube-state-metrics 09:12Z and 09:20Z, phase
+    # Pending, reason ContainerCreating, never ErrImagePull), the rollout was killed mid-pull
+    # every time, and 10.11.11 ended up on no node at all. Raised so one cold pull can finish;
+    # the pull sticks to the node afterwards, so this only cost matters on the first rollout.
     remediation:
       retries: 3
+    timeout: 15m
   values:
+    image:
+      # Chart 3.2.0 is the newest release in the jellyfin-helm repo (Apr 2026)
+      # and its appVersion is pinned at 10.11.8, whose Debian 13.4 base carries
+      # 5 fixable Criticals. 10.11.11 is the newest 10.11.x image; drop this
+      # override once a chart release ships a newer appVersion.
+      tag: "10.11.11"
     service:
       type: ClusterIP
       port: 8096
