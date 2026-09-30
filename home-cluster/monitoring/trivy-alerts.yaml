@@ -38,7 +38,9 @@ spec:
   # The corpus is large by design (44 running workloads carry a fixable Critical today). The
   # discord receiver rolls any group larger than 3 alerts up to a count, a sample of 8 and the
   # per-alert Alertmanager link, so a group this size no longer truncates the Discord message -
-  # the link is still the authoritative list.
+  # the link is still the authoritative list. The *cadence* is handled on the routing side:
+  # alertmanager-external-secret.yaml gives this one alertname repeat_interval 24h, because a
+  # group this size that never clears would otherwise re-notify every 4h forever.
   - name: trivy
     rules:
     - alert: TrivyCriticalVulnerability
