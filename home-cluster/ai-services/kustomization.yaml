@@ -30,6 +30,8 @@ resources:
   - network-policy-hermes-webhook.yaml
   - alert-detector-configmap.yaml
   - alert-detector-cronjob.yaml
+  - redis.yaml
+  - network-policy-redis.yaml
 
 configMapGenerator:
 
