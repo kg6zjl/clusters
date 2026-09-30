@@ -14,21 +14,30 @@ spec:
       automountServiceAccountToken: false
       # The registry is not anonymous (zot bearer auth), so a kubelet pull needs a credential. The
       # `registry-pull` Secret is minted in-cluster by registry/pull-rotator.yaml and rotated daily;
-      # nothing in git holds it. This reference arrives with the workflow that first publishes an
-      # image here -- until then naming the Secret would only make kubelet log a lookup it does not
-      # need at every pod start.
+      # nothing in git holds it. This reference was held back until an image actually lived in the
+      # registry, so kubelet would not log a lookup it does not need on every pod start; the
+      # canary pull is what made it necessary and the summerwind tag is what no longer needs it.
       imagePullSecrets:
         - name: registry-pull
       repository: kg6zjl/clusters
       labels:
         - self-hosted
         - kubernetes
-      # ROLLED BACK from the in-house image. It pulls fine but its runners never registered with
-      # GitHub -- num_runners_registered stayed 0 while the pods churned, and no job ever ran on one
-      # of them. The old summerwind set masked that by serving every job, so the flip looked healthy
-      # until that set was reaped. Do not re-pin a digest here until a pod from it has actually
-      # appeared in GitHub's runner list: a green build and a 53ms image pull prove neither.
-      image: summerwind/actions-runner:v2.337.0-ubuntu-24.04
+      # The in-house image, built FROM ghcr.io/actions/actions-runner. The previous attempt at this
+      # failed because the base image sets no ENTRYPOINT -- ARC sets RUNNER_* and expects the image
+      # to turn them into config.sh + run.sh, so with only the base's `Cmd: ["/bin/bash"]` the pods
+      # started bash, hit EOF and exited 0. None ever registered. See #802.
+      #
+      # This digest was not taken on a green build. It was promoted only after a canary pod from it
+      # appeared in GitHub's runner list (agentId 22323, online, "Listening for Jobs") and ran the
+      # canary-smoke.yaml job, which asserts the agent is alive, that no RUNNER_* leaks into the job,
+      # that kubectl/kustomize/yamllint resolve, that the node-local toolcache is mounted with
+      # trufflehog 3.97.9 in it, and that the workspace is on the mounted volume. The image config
+      # was also read back out of the registry: Entrypoint ['/usr/bin/entrypoint.sh'].
+      #
+      # Pinned by digest so the runners cannot drift under us, and so a rollback is a one-line
+      # revert to summerwind/actions-runner:v2.337.0-ubuntu-24.04.
+      image: registry.kube.stevearnett.com/github-runners/runner@sha256:0e2e2f2818f5a58b62117ca59df0eef57e7909810b4c20817675dbf06d86db78
       # init: only makes the node-local cache writable by the non-root runner. It must stay free of
       # network I/O -- it runs on every pod, and a pod that cannot finish init cannot register.
       # The cache itself (trufflehog, used by the Secret Scan job) is warmed per node by the

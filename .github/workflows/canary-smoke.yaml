@@ -87,6 +87,18 @@ jobs:
           }
           "$RUNNER_TOOL_CACHE/tools/trufflehog" --version
 
+      - name: Docker works, because the build workflow needs it
+        run: |
+          set -euo pipefail
+          # build-runner-image.yaml runs docker/build-push-action on a self-hosted runner, so an
+          # image that can register but cannot talk to a dockerd will pass every assertion above and
+          # then wedge the build of its own successor. ARC injects the dind sidecar and the DOCKER_*
+          # env, so what is actually being tested is that the client can reach the socket.
+          docker version --format 'client {{.Client.Version}} / server {{.Server.Version}}'
+          # A round trip, not just a version string: a socket that answers `version` can still
+          # refuse a real image pull.
+          docker run --rm hello-world 2>&1 | tail -3
+
       - name: Job workspace is on the ARC-provided volume, not the image layer
         run: |
           set -euo pipefail
