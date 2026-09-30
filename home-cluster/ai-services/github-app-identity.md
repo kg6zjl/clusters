@@ -1,13 +1,17 @@
 # The agent's own GitHub identity
 
-> **Status: phase 1 of 2.** This PR lands the plumbing (the App credentials Secret and the
-> minting script) plus a verification Job (`github-app-verify`), and deliberately changes
-> nothing about how the agent authenticates today: the owner's PAT is still mounted and still
-> the only credential the agent reads. The switch described below — the Deployment reading a
-> minted installation token, the removal of the PAT, and `CODEOWNERS` — lands separately, and
-> only once the verification Job has run green against the real API. Sequencing the removal
-> behind a passing proof is the point: a credential is not retired until its replacement is
-> demonstrated by the consumer that will depend on it.
+> **Status: landed.** Phase 1 proved the App path against the real API before anything depended
+> on it: a verification CronJob minted an installation token from the Secret ESO syncs, then
+> created and deleted a ref on each of `kg6zjl/clusters` and `kg6zjl/skills` — a real write, and
+> not the `permissions` object in `GET /repos/{owner}/{repo}`, which reports `push=false
+> pull=false` for an installation token regardless of its rights. Phase 2 switched the
+> Deployment to the minted token, removed the PAT, and added `CODEOWNERS`.
+>
+> Two things worth knowing. The App's permission set is wider than the minimum described below:
+> it holds read on roughly thirty scopes (webhooks, Actions variables, branch protection,
+> registry, security alerts) because that capability is wanted, plus `pages: write`, knowingly
+> beyond the original design. And merging, per GitHub's docs for "Merge a pull request", requires
+> `Contents: write` — not `Pull requests: write` — so contents write must stay.
 
 **Decision.** The Hermes agent authenticates to GitHub as a **GitHub App owned by @kg6zjl**,
 installed on `kg6zjl/clusters` and `kg6zjl/skills` only. The owner's personal access token is
