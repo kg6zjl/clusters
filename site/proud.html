@@ -11,6 +11,7 @@
 <nav class="topnav">
   <ul>
     <li><a href="index.html">The model</a></li>
+    <li><a href="architecture.html">Architecture</a></li>
     <li><a href="limits.html">Permissions</a></li>
     <li><a href="network.html">Network</a></li>
     <li><a href="state.html">State &amp; storage</a></li>
@@ -81,9 +82,21 @@
       went from an incident, to a skill, to a published page without a human transcribing anything.
     </li>
     <li>
+      <strong>The widest credential in the setup was removed.</strong> The runner identity used to
+      hold a cluster role of <code>*</code> on <code>*</code>, inherited by every job. It now holds no
+      cluster RBAC at all, its namespace has an explicit egress list with private ranges excluded, and
+      registry pushes authenticate with a projected token instead of a stored password. Every job that
+      ran before the change had full cluster control; none of them needed it.
+    </li>
+    <li>
+      <strong>The agent's identity is its own, and short-lived.</strong> A GitHub App instead of the
+      owner's account, an installation token instead of a personal one, and the App's private key never
+      in the container the model drives. Authorship and review are finally separate accounts.
+    </li>
+    <li>
       <strong>The failure modes got written down instead of hidden.</strong> Approval fatigue, the
-      self-recovery trap, the runner RBAC hole, the whitelist that hides the answer: naming those is
-      the difference between a design and a brochure.
+      self-recovery trap, the whitelist that hides the answer, the guardrails still in audit mode:
+      naming those is the difference between a design and a brochure.
     </li>
   </ul>
 </section>
@@ -92,9 +105,18 @@
   <h2 id="not">What isn't finished</h2>
   <ul>
     <li>
-      <strong>The runners are still cluster-admin with blanket egress.</strong> The one component
-      that holds the widest credentials is the one that has not been given the treatment everything
-      else got. It is on the list, and it is the honest headline weakness of this setup.
+      <strong>The image scanner finds faster than anyone triages.</strong> The rules are live and the
+      dashboard is real, but the first sweep left dozens of running workloads carrying a fixable
+      Critical. Scanning was the easy half.
+    </li>
+    <li>
+      <strong>The guardrails report rather than block.</strong> The admission policies over the
+      agent's own identity are in audit mode until their reports go clean. Until then a widened role
+      is observed, not prevented.
+    </li>
+    <li>
+      <strong>Nothing observes a running process.</strong> Admission and image scanning both stop at
+      the boundary of what is deployed; there is no runtime detection layer yet.
     </li>
     <li>
       <strong>Approval fatigue is real.</strong> An approval gate stops mattering when it fires
