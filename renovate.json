@@ -37,6 +37,26 @@
     },
     {
       "customType": "regex",
+      "description": "Kyverno CLI pin in the CI workflow, where the policy-test fallback reads it",
+      "managerFilePatterns": [
+        "/^\\.github/workflows/ci\\.ya?ml$/"
+      ],
+      "matchStrings": [
+        "# renovate: datasource=(?<datasource>.*?) depName=(?<depName>.*?)\\s*(?:\\r?\\n)+\\s*KYVERNO_VERSION: \"(?<currentValue>.*?)\""
+      ]
+    },
+    {
+      "customType": "regex",
+      "description": "Kyverno CLI pin in the node-local cache warmer DaemonSet",
+      "managerFilePatterns": [
+        "/^home-cluster/github-runners/toolcache-warmer\\.ya?ml$/"
+      ],
+      "matchStrings": [
+        "# renovate: datasource=(?<datasource>.*?) depName=(?<depName>.*?)\\s*(?:\\r?\\n)+\\s*- name: KYVERNO_VERSION\\s*(?:\\r?\\n)+\\s*value: \"(?<currentValue>.*?)\""
+      ]
+    },
+    {
+      "customType": "regex",
       "description": "node_exporter release pin in the Beast exporter bootstrap script",
       "managerFilePatterns": [
         "/^home-cluster/ai-services/scripts/beast-exporters\\.sh$/"
