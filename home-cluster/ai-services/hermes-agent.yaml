@@ -12,8 +12,10 @@ metadata:
     # container start changes: the initContainer re-seeds config.yaml from this
     # ConfigMap and pulls the skill tree from kg6zjl/skills, so a merge alone is
     # otherwise a no-op until the next unrelated restart. Reloader watches for changes.
-    configmap.reloader.stakater.com/reload: "hermes-config,hermes-soul"
-    secret.reloader.stakater.com/reload: "hermes-agent-secrets"
+    # hermes-github-token-minter: the minting script only takes effect at container start.
+    # hermes-github-app: the App credentials the minter reads.
+    configmap.reloader.stakater.com/reload: "hermes-config,hermes-soul,hermes-github-token-minter"
+    secret.reloader.stakater.com/reload: "hermes-agent-secrets,hermes-github-app"
 spec:
   replicas: 1
   revisionHistoryLimit: 5
@@ -44,6 +46,13 @@ spec:
         - -c
         - |
           set -eu
+          # Mint the App installation token once up front: the skills fetch below needs
+          # GitHub auth, and initContainers run before the minter sidecar starts. The App
+          # private key is mounted only here and in the sidecar, never in the agent
+          # container. --once exits non-zero if the mint fails, so a broken App fails the
+          # pod start rather than booting the agent with a stale credential.
+          python3 -B /app/mint.py --once
+          chown 10000:10000 /etc/hermes /etc/hermes/github-token
           BIN=/opt/data/.local/bin
           LIB=/opt/data/.local/pylib
           # Bump when a pinned version below changes, or when a tool is added to or
@@ -186,8 +195,14 @@ spec:
           mountPath: /opt/data
         - name: hermes-config
           mountPath: /hermes-config
-        - name: hermes-github-token
+        - name: github-token
           mountPath: /etc/hermes
+        - name: github-app-creds
+          mountPath: /app-creds
+          readOnly: true
+        - name: github-token-minter
+          mountPath: /app
+          readOnly: true
       containers:
       - name: hermes
         image: nousresearch/hermes-agent:v2026.9.24
@@ -279,9 +294,11 @@ spec:
         - name: hermes-gitconfig
           mountPath: /opt/data/git-credential-helper
           subPath: git-credential-helper
-        - name: hermes-github-token
-          mountPath: /etc/hermes/github-token
-          subPath: github-token
+        # Same path the tools already read. The emptyDir is served by the minter
+        # sidecar and refreshed hourly; mounted as a directory so the file is
+        # replaced in place (a subPath mount would pin the original file).
+        - name: github-token
+          mountPath: /etc/hermes
           readOnly: true
         readinessProbe:
           httpGet:
@@ -302,6 +319,48 @@ spec:
           limits:
             memory: "4Gi"
             cpu: "2"
+      # Mints and refreshes the App installation token the agent reads as a file.
+      # Deliberately its own container so the App private key never enters the agent
+      # container's filesystem: a compromise of the model-driven container yields a
+      # token that expires within the hour, not a key that can mint new ones.
+      # See github-app-identity.md.
+      - name: github-token-minter
+        image: python:3.13.13-alpine
+        command: ["python3", "-B", "/app/mint.py"]
+        env:
+        - name: PYTHONDONTWRITEBYTECODE
+          value: "1"
+        volumeMounts:
+        - name: github-token
+          mountPath: /etc/hermes
+        - name: github-app-creds
+          mountPath: /app-creds
+          readOnly: true
+        - name: github-token-minter
+          mountPath: /app
+          readOnly: true
+        # Gates pod readiness on a token actually existing, so a broken App shows up
+        # as a not-Ready pod instead of an agent that quietly cannot reach GitHub.
+        readinessProbe:
+          exec:
+            command: ["test", "-s", "/etc/hermes/github-token"]
+          initialDelaySeconds: 5
+          periodSeconds: 30
+        resources:
+          requests:
+            cpu: 10m
+            memory: 32Mi
+          limits:
+            cpu: 100m
+            memory: 128Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          runAsNonRoot: true
+          runAsUser: 10000
+          runAsGroup: 10000
+          capabilities:
+            drop: ["ALL"]
       volumes:
       - name: data
         persistentVolumeClaim:
@@ -316,13 +375,19 @@ spec:
         configMap:
           name: hermes-gitconfig
           defaultMode: 0555
-      - name: hermes-github-token
+      # Shared file the minter writes and the agent reads. An emptyDir (not a Secret)
+      # because the value rotates hourly and a projected Secret does not refresh a
+      # subPath mount; consumers read this path fresh on every call.
+      - name: github-token
+        emptyDir: {}
+      - name: github-app-creds
         secret:
-          secretName: hermes-agent-secrets
-          items:
-          - key: GITHUB_TOKEN
-            path: github-token
+          secretName: hermes-github-app
           defaultMode: 0444
+      - name: github-token-minter
+        configMap:
+          name: hermes-github-token-minter
+          defaultMode: 0555
       - name: hermes-config
         configMap:
           name: hermes-config

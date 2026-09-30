@@ -1,0 +1,180 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: hermes-github-token-minter
+  namespace: ai-services
+  labels:
+    app: hermes-agent
+data:
+  # The App's private key is mounted only into the initContainer and the minter
+  # sidecar of the hermes-agent pod; this container is the only place it is read.
+  # See github-app-identity.md for the design and the ordering constraints.
+  mint.py: |
+    #!/usr/bin/env python3
+    """Mint a GitHub App installation token and publish it to a file the agent reads.
+
+    Why a sidecar: the App's private key is the durable credential, and the agent runs a
+    model with shell access in its own container. Mounting the key into the agent container
+    would put a mint-anything credential inside the model's reach. Instead this container
+    alone holds the key, mints a ~1h installation token, and writes it to a shared
+    emptyDir; the agent container reads only that token. A compromise of the agent then
+    buys an hour of the App's narrow permissions, not a durable credential.
+
+    Why no third-party package: RS256 is signed below in ~25 lines of stdlib so the
+    container is a plain python image with no pip install and no openssl binary to depend
+    on. Verified against OpenSSL: a JWT produced by this code verifies with the matching
+    public key.
+
+    Interface: reads /app-creds/{app-id,installation-id,private-key}, writes
+    /etc/hermes/github-token (mode 0444). Prints no token material, only expiry.
+    """
+    import base64
+    import calendar
+    import hashlib
+    import json
+    import os
+    import sys
+    import time
+    import urllib.error
+    import urllib.request
+
+    CREDS = os.environ.get("APP_CREDS_DIR", "/app-creds")
+    OUT = os.environ.get("TOKEN_PATH", "/etc/hermes/github-token")
+    API = os.environ.get("GITHUB_API", "https://api.github.com")
+    # Refresh this far before expiry, and never sleep less than MIN_SLEEP.
+    REFRESH_SKEW = int(os.environ.get("REFRESH_SKEW_SECONDS", "300"))
+    MIN_SLEEP = int(os.environ.get("MIN_SLEEP_SECONDS", "60"))
+    RETRY = int(os.environ.get("RETRY_SECONDS", "60"))
+    # GitHub issues installation tokens with a 1h lifetime; anything near that is fine.
+    JWT_TTL = 540
+
+
+    def b64url(raw):
+        return base64.urlsafe_b64encode(raw).rstrip(b"=").decode()
+
+
+    def read_tlv(buf, pos):
+        tag = buf[pos]
+        length = buf[pos + 1]
+        pos += 2
+        if length & 0x80:
+            nbytes = length & 0x7F
+            length = int.from_bytes(buf[pos:pos + nbytes], "big")
+            pos += nbytes
+        return tag, buf[pos:pos + length], pos + length
+
+
+    def parse_pkcs1(der):
+        """RSAPrivateKey ::= SEQUENCE { version, n, e, d, ... } -> (n, d)."""
+        tag, seq, _ = read_tlv(der, 0)
+        assert tag == 0x30
+        pos = 0
+        items = []
+        while pos < len(seq):
+            tag, val, pos = read_tlv(seq, pos)
+            items.append((tag, val))
+        return int.from_bytes(items[1][1], "big"), int.from_bytes(items[3][1], "big")
+
+
+    def parse_private_key(pem_text):
+        body = "".join(l.strip() for l in pem_text.strip().splitlines()
+                       if l.strip() and not l.startswith("-----"))
+        der = base64.b64decode(body)
+        if "BEGIN PRIVATE KEY" in pem_text:  # PKCS#8: unwrap to the inner PKCS#1
+            _, seq, _ = read_tlv(der, 0)
+            pos = 0
+            _tag, _ver, pos = read_tlv(seq, pos)   # version
+            _tag, _alg, pos = read_tlv(seq, pos)   # AlgorithmIdentifier
+            tag, inner, pos = read_tlv(seq, pos)   # OCTET STRING
+            assert tag == 0x04, tag
+            return parse_pkcs1(inner)
+        return parse_pkcs1(der)
+
+
+    def sign_rs256(message, n, d, kbytes):
+        digest = hashlib.sha256(message.encode()).digest()
+        digest_info = bytes.fromhex("3031300d060960864801650304020105000420") + digest
+        em = b"\x00\x01" + b"\xff" * (kbytes - len(digest_info) - 3) + b"\x00" + digest_info
+        signature = pow(int.from_bytes(em, "big"), d, n)
+        return b64url(signature.to_bytes(kbytes, "big"))
+
+
+    def read_cred(name):
+        with open(os.path.join(CREDS, name)) as handle:
+            return handle.read().strip()
+
+
+    def app_jwt(app_id, n, d, kbytes):
+        now = int(time.time())
+        header = b64url(json.dumps({"alg": "RS256", "typ": "JWT"}, separators=(",", ":")).encode())
+        payload = b64url(json.dumps({"iat": now, "exp": now + JWT_TTL, "iss": app_id},
+                                    separators=(",", ":")).encode())
+        signing_input = f"{header}.{payload}"
+        return f"{signing_input}.{sign_rs256(signing_input, n, d, kbytes)}"
+
+
+    def mint():
+        """Return (token, seconds_until_expiry). Raises on failure."""
+        app_id = read_cred("app-id")
+        installation_id = read_cred("installation-id")
+        if not app_id.isdigit() or not installation_id.isdigit():
+            raise SystemExit("FATAL: app-id and installation-id must be digits; check the 1Password item")
+        n, d = parse_private_key(read_cred("private-key"))
+        kbytes = (n.bit_length() + 7) // 8
+
+        request = urllib.request.Request(
+            f"{API}/app/installations/{installation_id}/access_tokens",
+            data=b"",
+            method="POST",
+            headers={
+                "Accept": "application/vnd.github+json",
+                "X-GitHub-Api-Version": "2022-11-28",
+                "Authorization": f"Bearer {app_jwt(app_id, n, d, kbytes)}",
+            },
+        )
+        with urllib.request.urlopen(request, timeout=30) as response:
+            body = json.loads(response.read())
+        token = body.get("token")
+        expires_at = body.get("expires_at")
+        if not token or not expires_at:
+            raise SystemExit(f"FATAL: no token in GitHub's response: {body}")
+        remaining = calendar.timegm(time.strptime(expires_at, "%Y-%m-%dT%H:%M:%SZ")) - time.time()
+        return token, max(remaining, 0)
+
+
+    def publish(token):
+        tmp = OUT + ".tmp"
+        with open(tmp, "w") as handle:
+            handle.write(token)
+        os.chmod(tmp, 0o444)
+        os.replace(tmp, OUT)
+
+
+    def main():
+        once = "--once" in sys.argv
+        while True:
+            try:
+                token, remaining = mint()
+                publish(token)
+                print(f"published installation token to {OUT}, valid for {int(remaining // 60)}m",
+                      flush=True)
+                if once:
+                    return 0
+                time.sleep(max(remaining - REFRESH_SKEW, MIN_SLEEP))
+            except SystemExit:
+                raise
+            except urllib.error.HTTPError as error:
+                message = error.read().decode(errors="replace").strip()[:300]
+                print(f"mint failed: HTTP {error.code}: {message}", file=sys.stderr, flush=True)
+                if once:
+                    return 1
+                time.sleep(RETRY)
+            except Exception as error:  # noqa: BLE001 - any failure must not kill the file already served
+                print(f"mint failed: {type(error).__name__}: {error}", file=sys.stderr, flush=True)
+                if once:
+                    return 1
+                time.sleep(RETRY)
+
+
+    if __name__ == "__main__":
+        sys.exit(main())
