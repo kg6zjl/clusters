@@ -24,6 +24,10 @@ metadata:
   labels:
     app: alert-detector
 spec:
+  # Suspended 2026-09-30 by user decision: alert-driven wakes were the dominant API cost
+  # against a 50 USD monthly budget (11.51 USD in 24h measured). Set to false to re-enable.
+  # The rules, the metric and the ntfy/Discord routes are untouched - only this path is off.
+  suspend: true
   schedule: "*/5 * * * *"
   concurrencyPolicy: Forbid
   startingDeadlineSeconds: 120
