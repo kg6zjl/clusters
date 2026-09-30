@@ -60,10 +60,14 @@ spec:
         responseTypes: ["code"]
 
       staticClients:
-        # The apiserver's --oidc-client-id. It never sends a client secret, so this stays a
-        # public client with no secret.
+        # The apiserver's --oidc-client-id. It never sends a client secret, so this is a public
+        # client. `public: true` is not documentation here, it is the field Dex validates:
+        # cmd/dex/serve.go rejects any static client with no secret, no secretEnv and
+        # public != true ("invalid config: Secret or SecretEnv field is required for client"),
+        # which crash-looped the pod on its very first start after the chart resolved.
         - id: kubernetes
           name: Kubernetes API
+          public: true
           redirectURIs:
             - urn:ietf:wg:oauth:2.0:oob
         # Headlamp's built-in OIDC client. Deliberately a PUBLIC client with no secret.
