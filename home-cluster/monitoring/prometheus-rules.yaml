@@ -364,3 +364,98 @@ spec:
       annotations:
         summary: "alert-detector has not succeeded in an hour - the agent is not being woken by alerts"
         description: "The cluster can no longer start the agent on its own. Alerts still notify through Alertmanager, so this is a loss of investigation rather than of paging. Check `kubectl -n ai-services get jobs` and the detector's logs: a webhook rejection shows as an HTTP error, a rejected HMAC or a 429 from the route's rate limit, and an Alertmanager read failure shows as a connection error."
+  # Trivy had a dashboard and no alerting at all: a Critical CVE in a running workload and a
+  # scanner that had stopped producing reports were both invisible unless someone opened
+  # Grafana. severity is the routing decision here - critical reaches ntfy and wakes the agent
+  # (alert-detector forwards only severity="critical"), warning stops at the Discord channel.
+  #
+  # The metric names the scanned object (namespace, resource_kind, resource_name,
+  # container_name, image_repository, image_tag), so the finding rules key on a workload that
+  # is running rather than on every report that exists. Measured on this Prometheus
+  # 2026-09-30: 49 series at severity="Critical", 44 of them on running objects and 5 on
+  # ReplicaSets scaled to 0 - three old hermes-agent revisions and two external-dns ones,
+  # reporting the same CVEs as the live revision of the same image. No report was left behind
+  # for a deleted object, so a scaled-down ReplicaSet is the only inflation source and the
+  # only thing excluded; every other kind passes through, so a kind added later alerts by
+  # default and fails loud instead of silent.
+  #
+  # The corpus is large by design (44 running workloads carry a fixable Critical today), so
+  # the Discord rendering is expected to truncate - the per-alert Alertmanager link is the
+  # authoritative list.
+  - name: trivy
+    rules:
+    - alert: TrivyCriticalVulnerability
+      # sum by drops the per-report `name` label, so one workload+container+image is one alert
+      # rather than one per scan report.
+      expr: |
+        sum by (namespace, resource_kind, resource_name, container_name, image_repository, image_tag) (
+          trivy_image_vulnerabilities{severity="Critical"} > 0
+          unless on (namespace, resource_kind, resource_name)
+          (
+            label_replace(label_replace(kube_replicaset_spec_replicas == 0, "resource_name", "$1", "replicaset", "(.*)"), "resource_kind", "ReplicaSet", "", "")
+          )
+        )
+      for: 15m
+      labels:
+        severity: critical
+      annotations:
+        summary: "{{ $value }} fixable Critical CVE(s) in {{ $labels.image_repository }}:{{ $labels.image_tag }} running as {{ $labels.resource_kind }} {{ $labels.namespace }}/{{ $labels.resource_name }}"
+        description: "Container {{ $labels.container_name }} of {{ $labels.resource_kind }} {{ $labels.namespace }}/{{ $labels.resource_name }} runs an image with {{ $value }} Critical vulnerability(ies), each with a fix available - scans run with ignoreUnfixed, so every count here is actionable. The CVE list is on the report: kubectl get vulnerabilityreports -n {{ $labels.namespace }} -l trivy-operator.resource.name={{ $labels.resource_name }} -o yaml. The fix is an image bump in the workload's manifest (PR, not a kubectl edit); the re-scan happens on its own once it rolls out."
+    - alert: TrivyHighVulnerability
+      # Rolled up per namespace: this is a backlog signal, not the thing you fix tonight, and
+      # 94 series at severity="High" would otherwise be a notification longer than anyone reads.
+      expr: |
+        sum by (namespace) (
+          trivy_image_vulnerabilities{severity="High"} > 0
+          unless on (namespace, resource_kind, resource_name)
+          (
+            label_replace(label_replace(kube_replicaset_spec_replicas == 0, "resource_name", "$1", "replicaset", "(.*)"), "resource_kind", "ReplicaSet", "", "")
+          )
+        )
+      for: 1h
+      labels:
+        severity: warning
+      annotations:
+        summary: "{{ $value }} fixable High CVE(s) in running workloads in {{ $labels.namespace }}"
+        description: "Running images in {{ $labels.namespace }} carry {{ $value }} High vulnerabilities with a fix available. Per-workload detail: kubectl get vulnerabilityreports -n {{ $labels.namespace }} -o yaml. Housekeeping rather than an incident - TrivyCriticalVulnerability is what pages."
+    # A failed scan writes no report, so it does not read as a finding, it reads as nothing at
+    # all - which is the failure mode worth paging on, and precisely the coverage fiction this
+    # cluster keeps having to fix. Six jobs sat Failed with reason=DeadlineExceeded when this
+    # was written. The chart's KubeJobFailed already covers a failed Job at warning/15m to
+    # Discord, so this adds the critical tier and names the scan rather than adding coverage.
+    #
+    # 5m, not 15m: the operator TTLs a finished scan job after 30m (operator.scanJobTTL), so a
+    # long `for` would race the object dying and the rule would just never fire.
+    - alert: TrivyScanJobFailed
+      expr: kube_job_status_failed{namespace="security-scanning",job_name=~"scan-.*"} > 0
+      for: 5m
+      labels:
+        severity: critical
+      annotations:
+        summary: "Trivy scan job {{ $labels.job_name }} failed ({{ $labels.reason }})"
+        description: "No report was written for the workload {{ $labels.job_name }} was scanning, so its image is unscanned and an all-clear on the dashboard silently excludes it. reason=DeadlineExceeded means the job ran past the deadline on the scan job itself (activeDeadlineSeconds: 300, from trivy.timeout: 5m0s); BackoffLimitExceeded means the container kept failing. The job is deleted 30 minutes after it finishes, so this clears on its own; read its pod's log while it lasts, kubectl -n security-scanning logs job/{{ $labels.job_name }}, and check whether the same workload reports again on the next scan."
+    # Nothing else pages on this. The HelmRelease carries the alert-on-down label, but the
+    # generic rule that read it was deleted (kube-state-metrics does not expose that label),
+    # and the chart's KubeDeploymentReplicasMismatch is a warning on the Discord channel.
+    - alert: TrivyOperatorUnavailable
+      expr: kube_deployment_status_replicas_available{namespace="security-scanning",deployment="trivy-operator"} == 0
+      for: 10m
+      labels:
+        severity: critical
+      annotations:
+        summary: "trivy-operator has no available replicas - nothing is being scanned"
+        description: "No scan can run and no report can be written while the operator has zero available replicas, which includes a crash loop and being scaled to 0. Check kubectl -n security-scanning describe deploy/trivy-operator and the operator's log; its config comes from the trivy-operator-config ConfigMap, which the reloader restarts the deployment for."
+    # The reports going away is the case the operator being up does not rule out: a broken
+    # informer, a lost RBAC grant or a wiped cache publishes nothing while the scrape still
+    # succeeds, and an empty dashboard is then indistinguishable from a clean cluster.
+    # Gated on the producer so an operator outage, which TrivyOperatorUnavailable reports,
+    # is not also accused here. absent() because a report carries no timestamp label, so there
+    # is no staleness to measure - absence is all this data offers.
+    - alert: TrivyReportMetricsMissing
+      expr: absent(trivy_image_vulnerabilities) and on() (up{job="trivy-operator"} == 1)
+      for: 30m
+      labels:
+        severity: critical
+      annotations:
+        summary: "trivy-operator is up but exporting no scan results"
+        description: "The operator is scrapeable but publishes no trivy_image_vulnerabilities, so every rule above and the dashboard itself are blind. Note the limit: this sees the reports all going away, not one workload quietly being skipped - nothing exports a per-report timestamp. Check the operator's log for watch/list errors on the report CRDs and that its ServiceAccount's list/watch on trivy-operator's own CRDs still exists."
