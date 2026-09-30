@@ -1,0 +1,114 @@
+# Verifies the in-house runner image, on the runners themselves.
+#
+# This began as a canary-only check (#809) used to gather the evidence that the digest in
+# runner-deployment.yaml was safe to promote. The canary has done its job and is gone, but the
+# assertions are worth keeping: every one of them corresponds to something that has actually broken
+# this runner image, and a green image build proves none of them.
+#
+#   - the base image sets no ENTRYPOINT (#802): without one, pods start bash, hit EOF on empty
+#     stdin and exit 0. They report Completed/0, register nothing, and ARC churns replacements.
+#   - RUNNER_TOOL_CACHE (#803): the base omits it, so trufflehog -- which the Secret Scan job
+#     calls -- is not where the runner looks.
+#   - docker: build-runner-image.yaml runs docker/build-push-action on these runners, so an image
+#     that registers but cannot reach a dockerd would wedge the build of its own successor.
+#
+# It runs on the live pool rather than a canary because that is the thing worth protecting: the
+# runners executing every job in this repo. It is cheap (a few seconds), and it is the check that
+# would have caught #802 before anyone pinned the broken digest.
+name: Runner self-test
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - home-cluster/github-runners/Dockerfile.optimized
+      - home-cluster/github-runners/entrypoint.sh
+      - home-cluster/github-runners/runner-deployment.yaml
+      - .github/workflows/runner-selftest.yaml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# One at a time: this asserts the pool is usable, and stacking copies of itself would be a strange
+# way to test that.
+concurrency:
+  group: runner-selftest
+  cancel-in-progress: false
+
+jobs:
+  selftest:
+    runs-on: [self-hosted, kubernetes]
+    timeout-minutes: 10
+    steps:
+      - name: The agent is running
+        run: |
+          set -euo pipefail
+          # If this step runs at all, the entrypoint worked: no-ENTRYPOINT images exit 0 in under a
+          # second without ever starting a job. Named explicitly so the log says so rather than
+          # leaving the reader to infer it.
+          echo "job is executing on $(hostname)"
+          ps -eo pid,comm --no-headers | grep -i runner || {
+            echo "no runner listener process found"
+            exit 1
+          }
+
+      - name: Agent identity
+        run: |
+          set -euo pipefail
+          # entrypoint.sh unsets ARC's registration env before exec'ing run.sh, so none of it
+          # should reach the job. A leaked RUNNER_TOKEN would hand a credential to every step.
+          #
+          # RUNNER_NAME is deliberately excluded: it is one of the runner's own documented default
+          # job variables, so the agent re-sets it after the entrypoint unsets it. Asserting on it
+          # tests the agent, not the entrypoint -- it did, and it was a false positive.
+          for v in RUNNER_TOKEN RUNNER_REPO RUNNER_ORG RUNNER_ENTERPRISE RUNNER_LABELS RUNNER_GROUP; do
+            if [ -n "${!v:-}" ]; then
+              echo "LEAK: $v is set in the job environment"
+              exit 1
+            fi
+          done
+          echo "no ARC registration env leaked into the job"
+          echo "RUNNER_NAME (agent-set): ${RUNNER_NAME:-<unset>}"
+          echo "tool cache: ${RUNNER_TOOL_CACHE:-<unset>}"
+          echo "work dir:   ${GITHUB_WORKSPACE:-<unset>}"
+
+      - name: The tools this repo's CI depends on
+        run: |
+          set -euo pipefail
+          kubectl version --client
+          kustomize version
+          yamllint --version
+
+      - name: Node-local toolcache is mounted and has trufflehog
+        run: |
+          set -euo pipefail
+          # The RunnerDeployment mounts the hostPath cache that runner-toolcache-warmer keeps warm.
+          # Without RUNNER_TOOL_CACHE in the image the runner searches elsewhere and the Secret Scan
+          # job cannot find trufflehog.
+          test -n "${RUNNER_TOOL_CACHE:-}" || { echo "RUNNER_TOOL_CACHE unset"; exit 1; }
+          test -d "$RUNNER_TOOL_CACHE" || { echo "$RUNNER_TOOL_CACHE is not a directory"; exit 1; }
+          test -x "$RUNNER_TOOL_CACHE/tools/trufflehog" || {
+            echo "trufflehog missing from the toolcache"
+            ls -la "$RUNNER_TOOL_CACHE/tools" 2>/dev/null || true
+            exit 1
+          }
+          "$RUNNER_TOOL_CACHE/tools/trufflehog" --version
+
+      - name: Docker works, because the build workflow needs it
+        run: |
+          set -euo pipefail
+          # A socket that answers `version` can still refuse a real pull, so do a round trip.
+          docker version --format 'client {{.Client.Version}} / server {{.Server.Version}}'
+          docker run --rm hello-world 2>&1 | tail -3
+
+      - name: Job workspace is on the ARC-provided volume, not the image layer
+        run: |
+          set -euo pipefail
+          # entrypoint.sh passes --work $RUNNER_WORKDIR, the emptyDir ARC mounts at /runner/_work.
+          # Without it the runner would check out into the image layer and every job on the node
+          # would share one writable layer across pods.
+          case "$GITHUB_WORKSPACE" in
+            /runner/*) echo "workspace is on the mounted volume: $GITHUB_WORKSPACE" ;;
+            *) echo "workspace is NOT under /runner: $GITHUB_WORKSPACE"; exit 1 ;;
+          esac
