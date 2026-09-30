@@ -1,0 +1,133 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: falco-default-deny
+  namespace: falco
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+  - Egress
+---
+# Falco reads syscalls from the kernel of every node, and ships every event to falcosidekick
+# in the same namespace. Its only cluster-internal dependency is the kube-apiserver (the
+# container plugin resolves pod/namespace metadata through it).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: falco-agent
+  namespace: falco
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: falco
+      app.kubernetes.io/instance: falco
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  # kubelet liveness/readiness/startup probes hit the webserver port from the node itself.
+  - from:
+    - ipBlock:
+        cidr: 192.168.1.0/24
+    ports:
+    - protocol: TCP
+      port: 8765
+  egress:
+  # DNS (CoreDNS)
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: kube-system
+    ports:
+    - protocol: UDP
+      port: 53
+    - protocol: TCP
+      port: 53
+  # falcosidekick: service ClusterIP (pre-DNAT) and the pod itself (post-DNAT)
+  - to:
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/name: falcosidekick
+    ports:
+    - protocol: TCP
+      port: 2801
+  - to:
+    - ipBlock:
+        cidr: 10.152.183.0/16
+    ports:
+    - protocol: TCP
+      port: 2801
+  # kube-apiserver: service ClusterIP plus the node host ports (post-DNAT endpoints)
+  - to:
+    - ipBlock:
+        cidr: 10.152.183.0/16
+    ports:
+    - protocol: TCP
+      port: 443
+  - to:
+    - ipBlock:
+        cidr: 192.168.1.0/24
+    ports:
+    - protocol: TCP
+      port: 443
+    - protocol: TCP
+      port: 16443
+---
+# falcosidekick is the only component that leaves this namespace's alert path: it posts to
+# Alertmanager in `monitoring`, which owns the ntfy/Discord routing and the alert-detector
+# CronJob that wakes the agent. Nothing here reaches the internet.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: falcosidekick
+  namespace: falco
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: falcosidekick
+      app.kubernetes.io/instance: falco
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/name: falco
+          app.kubernetes.io/instance: falco
+    ports:
+    - protocol: TCP
+      port: 2801
+  # kubelet probes
+  - from:
+    - ipBlock:
+        cidr: 192.168.1.0/24
+    ports:
+    - protocol: TCP
+      port: 2801
+  egress:
+  # DNS (CoreDNS)
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: kube-system
+    ports:
+    - protocol: UDP
+      port: 53
+    - protocol: TCP
+      port: 53
+  # Alertmanager: namespace (post-DNAT pod) and service ClusterIP (pre-DNAT)
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: monitoring
+    ports:
+    - protocol: TCP
+      port: 9093
+  - to:
+    - ipBlock:
+        cidr: 10.152.183.0/16
+    ports:
+    - protocol: TCP
+      port: 9093
