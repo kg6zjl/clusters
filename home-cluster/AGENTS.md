@@ -249,6 +249,26 @@ env:
 
 ---
 
+## Agent Runs Cost Money (READ BEFORE ASSIGNING WORK)
+
+Every run bills the same OpenRouter account: a kanban worker, an alert-detector wake, a cron job
+with a prompt. The budget is **$12/month**. A worker run has measured ~$0.41, and recent burn was
+$14/day ($430/month at that pace). Cost, not capability, is the binding constraint here.
+
+- **Do the work inline first.** The interactive session is already loaded and paid for; a worker
+  re-reads AGENTS.md, skills and repo context before it starts. Spawn a worker only when the job is
+  long enough that a fresh context is cheaper than carrying it.
+- **A ticket is 2-3 runs** (implement, review, fix). Do not raise one ticket per finding.
+- **Never widen the alert path to "just see" something.** The detector wakes at most
+  `MAX_WAKES_PER_DAY` (1) and only for names on `ALERT_INCLUDE_ALERTNAMES`; both are budget controls.
+- **The model is not the lever.** It is already at the floor (~$0.02/Mtok in, $0.40/Mtok out).
+  Output tokens and run count are what cost, so write less and run less.
+- **Prove it before shipping, cheaply.** A local test against the real consumer costs cents; a
+  failed rollout costs a run to detect and another to fix.
+
+An assigned, ready ticket is a run waiting to be billed. `hermes kanban list` shows them and
+`hermes kanban reassign <id> none` parks one — check before you create.
+
 ## Git Workflow (IMPORTANT)
 
 ### WORK IN YOUR OWN GIT WORKTREE (non-negotiable)

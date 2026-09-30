@@ -24,7 +24,8 @@ data:
     in-cluster and converts it. Standard library only: no pip install on the stock image.
 
     Exposed:
-      beast_service_active{service="comfyui"}   1 = holds the GPU, 0 = has yielded it
+      beast_service_active{service="comfyui"}   1 = holds the GPU, 0 = has yielded it;
+                                                absent for the whole time the last poll failed
       beast_service_active{service="llama"}     same
       beast_status_up                           1 if the last poll of :8126 succeeded
       beast_status_scrape_timestamp_seconds     Unix time of the last successful poll
@@ -112,12 +113,13 @@ data:
 
         lines.append(f"# HELP beast_service_active {HELP['beast_service_active']}")
         lines.append("# TYPE beast_service_active gauge")
-        # Emitted only for services seen in the last successful poll. On a failed poll they are
-        # left out, so Prometheus' staleness handling marks them unknown (a gap in Grafana)
-        # rather than this exporter asserting a state it did not observe.
-        for service in SERVICES:
-            if service in snapshot:
-                lines.append(f'beast_service_active{{service="{service}"}} {snapshot[service]}')
+        # Emitted only while the last poll succeeded. A failed poll drops them from the scrape
+        # entirely, so Prometheus' staleness handling marks them unknown (a gap in Grafana)
+        # rather than this exporter re-asserting the values it last saw before the host went away.
+        if up:
+            for service in SERVICES:
+                if service in snapshot:
+                    lines.append(f'beast_service_active{{service="{service}"}} {snapshot[service]}')
 
         lines.append(f"# HELP beast_status_up {HELP['beast_status_up']}")
         lines.append("# TYPE beast_status_up gauge")

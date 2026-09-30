@@ -7,6 +7,7 @@ break because an upstream theme moved.
 ```
 site/
   index.html            the model: reach without authority
+  architecture.html     the current stack: reconciliation, security, identity, alert path
   limits.html           read-only RBAC, no secret access, credential scope
   network.html          default-deny, the API-server trap, egress paths
   state.html            disposable pod, worktree discipline, the self-repair trap
@@ -34,7 +35,7 @@ the job prints the URL.
 
 ## Editing
 
-Py edit any page directly. Keep the shared `<nav class="topnav">` block identical across pages (it is
+Edit any page directly. Keep the shared `<nav class="topnav">` block identical across pages (it is
 the only duplicated markup) and the "previous / next" links in each footer in step with the nav
 order.
 

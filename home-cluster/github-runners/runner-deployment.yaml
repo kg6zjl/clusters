@@ -4,7 +4,10 @@ metadata:
   name: github-runner
   namespace: github-runners
 spec:
-  replicas: 2
+  # 4, up from 2: every CI run lands three jobs (Lint, Validate, Secret Scan) and they contend for
+  # the same pool, so a 2-runner pool serialises two of every three. These are ephemeral runners, so
+  # the cost of an idle one is a pod, not a billed VM.
+  replicas: 4
   template:
     spec:
       priorityClassName: system-cluster-critical

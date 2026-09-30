@@ -8,6 +8,7 @@ resources:
   - netalertx-kustomization.yaml
   - speedtest-kustomization.yaml
   - headlamp-kustomization.yaml
+  - sso-kustomization.yaml
   - mqtt-kustomization.yaml
   - meshtastic-kustomization.yaml
   - cloudflared-kustomization.yaml
@@ -42,3 +43,4 @@ resources:
   - crossplane-config-kustomization.yaml
   - kyverno-kustomization.yaml
   - kyverno-policies-kustomization.yaml
+  - falco-kustomization.yaml

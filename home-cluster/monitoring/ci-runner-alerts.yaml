@@ -1,0 +1,29 @@
+# Split out of prometheus-rules.yaml on 2026-09-30, one file per rule group, so that
+# review and ownership follow the group that changed. It buys reviewability and nothing
+# else: Prometheus reloads its rule set as a whole - LoadGroups aggregates errors across
+# every file and refuses the entire reload if any one rule is bad - so a file boundary is
+# not blast-radius isolation. The CI `promtool check rules` step is what makes a bad rule
+# fail the PR instead of the reload.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: ci-runner-alerts
+  namespace: monitoring
+  labels:
+    prometheus: kube-prometheus-stack-prometheus
+    app: kube-prometheus-stack-prometheus
+spec:
+  groups:
+  # An empty pool leaves no kube_pod_info series at all, so count(...) == 0 returns no samples and
+  # stays silent - absent_over_time is load-bearing, verified against the 2026-09-27 outage
+  # (1 at 10:00Z while count(...) was empty). The 10m window is the debounce; no `for` on top.
+  - name: ci-runners
+    rules:
+    - alert: CIRunnerPoolEmpty
+      expr: absent_over_time(kube_pod_info{namespace="github-runners",created_by_kind="Runner"}[10m])
+      labels:
+        severity: critical
+      annotations:
+        summary: "CI runner pool is empty - no PR on this repo can merge"
+        description: "No github-runner pods have existed for over 10 minutes. Lint, Validate and Secret Scan are required status checks on main with enforce_admins enabled, so every PR is now frozen - including a PR that would fix it. The pool normally holds at least the HorizontalRunnerAutoscaler floor of 4 (github-runner-autoscaler, min 4 / max 12). Check the controller in arc-systems (arc-operator-actions-runner-controller) and its logs for registration errors. Do NOT add a second ARC install as the fix: the chart hardcodes the webhook name, so two installs veto each other - that is exactly what caused the 2026-09-27 outage."
+        runbook_url: "https://github.com/kg6zjl/clusters/settings/variables/actions"

@@ -1,0 +1,42 @@
+# Split out of prometheus-rules.yaml on 2026-09-30, one file per rule group, so that
+# review and ownership follow the group that changed. It buys reviewability and nothing
+# else: Prometheus reloads its rule set as a whole - LoadGroups aggregates errors across
+# every file and refuses the entire reload if any one rule is bad - so a file boundary is
+# not blast-radius isolation. The CI `promtool check rules` step is what makes a bad rule
+# fail the PR instead of the reload.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: disk-space-alerts
+  namespace: monitoring
+  labels:
+    prometheus: kube-prometheus-stack-prometheus
+    app: kube-prometheus-stack-prometheus
+spec:
+  groups:
+  - name: disk-space
+    rules:
+    - alert: DiskSpaceWarning
+      expr: (node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"}) < 0.15
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: "Disk space warning on {{ $labels.instance }}"
+        description: "Disk space is below 15% on {{ $labels.instance }}"
+    - alert: DiskSpaceCritical
+      expr: (node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"}) < 0.1
+      for: 2m
+      labels:
+        severity: critical
+      annotations:
+        summary: "Disk space critical on {{ $labels.instance }}"
+        description: "Disk space is below 10% on {{ $labels.instance }} - imminent failure risk"
+    - alert: Pod CrashLooping
+      expr: rate(kube_pod_container_status_restarts_total[5m]) > 0.1
+      for: 2m
+      labels:
+        severity: warning
+      annotations:
+        summary: "Pod {{ $labels.pod }} in {{ $labels.namespace }} is crash looping"
+        description: "Container {{ $labels.container }} has restarted multiple times in the last 5 minutes"

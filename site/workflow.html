@@ -11,6 +11,7 @@
 <nav class="topnav">
   <ul>
     <li><a href="index.html">The model</a></li>
+    <li><a href="architecture.html">Architecture</a></li>
     <li><a href="limits.html">Permissions</a></li>
     <li><a href="network.html">Network</a></li>
     <li><a href="state.html">State &amp; storage</a></li>
@@ -96,6 +97,11 @@ verify the object in the cluster  ←  reconcile  ←  merge (human)  ←  requi
       <strong>An action that runs on the pull request but only works on main.</strong> Deployment
       workflows must be scoped so they do not run on a pull request, and checks that gate a merge must
       not depend on something that cannot happen before the merge.
+    </li>
+    <li>
+      <strong>A change to a workflow file that the agent cannot push.</strong> The App deliberately has
+      no Workflows permission, so a PR that edits CI is rejected at push time. Either make the edit by
+      hand or grant the permission on purpose — knowing it lets the App change the checks that gate it.
     </li>
   </ul>
 </section>
