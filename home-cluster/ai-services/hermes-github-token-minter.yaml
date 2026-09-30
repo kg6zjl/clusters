@@ -220,9 +220,14 @@ data:
     EXPECTED = ("kg6zjl/clusters", "kg6zjl/skills")
 
 
-    def call(path, token):
+    def call(path, token, method="GET", payload=None):
+        data = None
+        if payload is not None:
+            data = json.dumps(payload).encode()
         request = urllib.request.Request(
             API + path,
+            data=data,
+            method=method,
             headers={
                 "Authorization": "Bearer " + token,
                 "Accept": "application/vnd.github+json",
@@ -231,7 +236,8 @@ data:
             },
         )
         with urllib.request.urlopen(request, timeout=20) as response:
-            return json.load(response)
+            body = response.read()
+        return json.loads(body) if body else {}
 
 
     def main():
@@ -279,12 +285,30 @@ data:
             if wanted not in repos:
                 problems.append(f"{wanted}: not in the installation")
                 continue
-            permissions = call("/repos/" + wanted, token).get("permissions", {})
-            print(f"{wanted}: push={permissions.get('push')} pull={permissions.get('pull')} admin={permissions.get('admin')}")
-            if not permissions.get("push"):
-                problems.append(f"{wanted}: not writable with this token")
-            if permissions.get("admin"):
-                problems.append(f"{wanted}: has admin, which is more than the design allows")
+            repo = call("/repos/" + wanted, token)
+            # Reported for the record only. This permissions object comes back all-false for an
+            # installation token even when the App holds contents: write on that repo, so it is
+            # not a signal of what the token can do -- a real write below is.
+            permissions = repo.get("permissions", {})
+            print(f"{wanted}: api_permissions_report push={permissions.get('push')} "
+                  f"pull={permissions.get('pull')} admin={permissions.get('admin')} (not a signal)")
+            branch = repo.get("default_branch") or "main"
+            base = call(f"/repos/{wanted}/git/ref/heads/{branch}", token)["object"]["sha"]
+            probe = f"hermes-app-verify-{os.getpid()}"
+            ref = f"refs/heads/{probe}"
+            try:
+                call(f"/repos/{wanted}/git/refs", token, method="POST",
+                     payload={"ref": ref, "sha": base})
+            except Exception as error:
+                problems.append(f"{wanted}: cannot create a ref ({type(error).__name__}: {error})")
+                continue
+            print(f"{wanted}: created {ref} at {base[:7]} -- write access confirmed")
+            try:
+                call(f"/repos/{wanted}/git/refs/heads/{probe}", token, method="DELETE")
+                print(f"{wanted}: deleted {ref}")
+            except Exception as error:
+                problems.append(f"{wanted}: created a ref but could not delete it "
+                                f"({type(error).__name__}: {error})")
         if problems:
             for problem in problems:
                 print("FAIL:", problem, file=sys.stderr)
