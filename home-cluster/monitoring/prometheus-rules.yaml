@@ -232,12 +232,19 @@ spec:
         summary: "A node has left the cluster ({{ $value }} present, 3 expected)"
         description: "Fewer node objects than the known cluster size for 20 minutes. A deleted or rebuilt node vanishes from kube_node_info rather than reporting NotReady, so KubeNodeNotReady cannot see it. Check kubectl get nodes, and whether the node is mid-rebuild; if the cluster legitimately shrank, update the constant in this rule."
         runbook_url: "https://headlamp.kube.stevearnett.com/c/in-cluster/nodes"
-    # node-exporter is a DaemonSet, one per node, plus the two external hosts scraped as
-    # job=beast and job=ugreen-dxp2800 (the NAS). A host whose exporter stops being
-    # scrapeable is the "not reporting" case: it can be perfectly healthy while blind, and
-    # while it is blind none of its disk, memory or filesystem alerts can fire.
+    # node-exporter is a DaemonSet, one per node - the three thinkcentres, which are
+    # 24/7 and must alert the moment that changes - plus the NAS scraped as
+    # job=ugreen-dxp2800. A host whose exporter stops being scrapeable is the "not
+    # reporting" case: it can be perfectly healthy while blind, and while it is blind
+    # none of its disk, memory or filesystem alerts can fire.
+    #
+    # beast (job=beast) is deliberately NOT in this selector. It is the on-demand GPU
+    # box, powered off for days at a time, so "unscrapeable" is its normal state rather
+    # than a fault. No expression can tell "off on purpose" from "blind", so including
+    # it pages critical on every power-off. Coverage for it is the Grafana "Beast AI Box
+    # Overview" dashboard, read when someone deliberately wants to know.
     - alert: NodeExporterDown
-      expr: up{job=~"node-exporter|beast|ugreen-dxp2800"} == 0
+      expr: up{job=~"node-exporter|ugreen-dxp2800"} == 0
       for: 10m
       labels:
         severity: critical
