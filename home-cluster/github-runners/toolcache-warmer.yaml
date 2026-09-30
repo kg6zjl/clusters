@@ -21,6 +21,11 @@ spec:
       # release CDN delivers ~300KB/s from here, so the 35MB trufflehog tarball takes ~2 minutes,
       # and pods are recycled mid-download (rollout, autoscaler) so the cache never lands and every
       # job falls back to paying that download itself.
+      #
+      # Kyverno is the same story with a bigger tarball: 53MB, which measures as ~2m30s in the CI
+      # job that needs it (148s of that job's 157s was the download; the policy tests themselves
+      # take 1s). ci.yaml already probes /opt/hostedtoolcache/tools/kyverno before falling back to
+      # downloading into $RUNNER_TEMP, so warming it here needs no change to that job.
       containers:
         - name: warmer
           image: alpine:3.24
@@ -29,43 +34,78 @@ spec:
             - -c
             - |
               set -eu
-              mkdir -p /opt/hostedtoolcache/tools
+              # Fail loudly rather than warming a tarball named for an empty version.
+              : "${TRUFFLEHOG_VERSION:?TRUFFLEHOG_VERSION must be set}"
+              : "${KYVERNO_VERSION:?KYVERNO_VERSION must be set}"
+
+              CACHE=/opt/hostedtoolcache/tools
+              mkdir -p "$CACHE"
               chmod 1777 /opt/hostedtoolcache
               # alpine ships no curl, and busybox wget cannot retry or bound a stalled transfer.
               command -v curl >/dev/null || apk add --no-cache curl
-              cd /opt/hostedtoolcache/tools
-              V="${TRUFFLEHOG_VERSION:?}"
-              DIR="trufflehog_${V}_linux_amd64"
-              URL="https://github.com/trufflesecurity/trufflehog/releases/download/v${V}"
-              while :; do
-                # The version stamp is what makes a version bump re-warm: without it a cached
-                # binary from an older pin would look "warm" forever.
-                if [ -x trufflehog ] && [ "$(cat .version 2>/dev/null)" = "$V" ]; then
-                  sleep 3600
-                  continue
+
+              # warm <binary> <version> <base-url> <checksums-file> <tarball>
+              #
+              # The per-tool version stamp is what makes a version bump re-warm: without it a
+              # cached binary from an older pin would look "warm" forever, and the CI job that
+              # consumes it would silently test against a CLI that no longer matches the pin.
+              # Each tool gets its own stamp, named after its binary, because they can be at
+              # different versions at the same time.
+              warm() {
+                BIN="$1"; VER="$2"; URL="$3"; SUMS="$4"; TARBALL="$5"
+                cd "$CACHE"
+                if [ -x "$BIN" ] && [ "$(cat ".${BIN}.version" 2>/dev/null)" = "$VER" ]; then
+                  return 0
                 fi
-                echo "warming trufflehog ${V}"
-                rm -rf .warm
-                mkdir .warm
-                cd .warm
+                echo "warming ${BIN} ${VER}"
+                rm -rf ".warm-${BIN}"
+                mkdir ".warm-${BIN}"
+                cd ".warm-${BIN}"
                 # Verify in a scratch dir and move the binary into place: a partial download must
                 # never be visible to a runner, and `mv` within the volume is atomic.
-                if curl -sSfL --retry 3 --retry-delay 10 --max-time 1800 -o "${DIR}.tar.gz" "${URL}/${DIR}.tar.gz" \
-                   && curl -sSfL --retry 3 --retry-delay 10 --max-time 120 -o checksums.txt "${URL}/trufflehog_${V}_checksums.txt" \
-                   && grep -F "${DIR}.tar.gz" checksums.txt > expected.txt \
+                if curl -sSfL --retry 3 --retry-delay 10 --max-time 1800 -o "${TARBALL}" "${URL}/${TARBALL}" \
+                   && curl -sSfL --retry 3 --retry-delay 10 --max-time 120 -o checksums.txt "${URL}/${SUMS}" \
+                   && grep -F "${TARBALL}" checksums.txt > expected.txt \
                    && sha256sum -c expected.txt \
-                   && tar -xzf "${DIR}.tar.gz" trufflehog \
-                   && chmod 0755 trufflehog; then
-                  cd ..
-                  mv -f .warm/trufflehog trufflehog
-                  printf '%s\n' "$V" > .version
-                  rm -rf .warm
-                  echo "warmed trufflehog ${V}"
+                   && tar -xzf "${TARBALL}" "${BIN}" \
+                   && chmod 0755 "${BIN}"; then
+                  cd "$CACHE"
+                  mv -f ".warm-${BIN}/${BIN}" "${BIN}"
+                  printf '%s\n' "$VER" > ".${BIN}.version"
+                  rm -rf ".warm-${BIN}"
+                  echo "warmed ${BIN} ${VER}"
+                  return 0
+                fi
+                cd "$CACHE"
+                rm -rf ".warm-${BIN}"
+                echo "warm of ${BIN} failed"
+                return 1
+              }
+
+              # One failed tool must not stop the other from being attempted, and the loop
+              # period depends on whether everything landed: a warm cache needs nothing for an
+              # hour, but after a failure it has to come back in 60s or every CI job that draws
+              # a fresh runner in the meantime pays the full download on its own.
+              while :; do
+                OK=true
+
+                warm trufflehog "$TRUFFLEHOG_VERSION" \
+                  "https://github.com/trufflesecurity/trufflehog/releases/download/v${TRUFFLEHOG_VERSION}" \
+                  "trufflehog_${TRUFFLEHOG_VERSION}_checksums.txt" \
+                  "trufflehog_${TRUFFLEHOG_VERSION}_linux_amd64.tar.gz" || OK=false
+
+                # kyverno publishes one checksums.txt covering every platform it builds, so the
+                # file name is not version-interpolated the way trufflehog's is. grep -F picks our
+                # tarball's line out of it and sha256sum -c verifies only that one.
+                warm kyverno "$KYVERNO_VERSION" \
+                  "https://github.com/kyverno/kyverno/releases/download/v${KYVERNO_VERSION}" \
+                  "checksums.txt" \
+                  "kyverno-cli_v${KYVERNO_VERSION}_linux_x86_64.tar.gz" || OK=false
+
+                if [ "$OK" = true ]; then
                   sleep 3600
                 else
-                  cd ..
-                  rm -rf .warm
-                  echo "warm failed; retrying in 60s"
+                  echo "retrying in 60s"
                   sleep 60
                 fi
               done
@@ -73,6 +113,9 @@ spec:
             # renovate: datasource=github-releases depName=trufflesecurity/trufflehog
             - name: TRUFFLEHOG_VERSION
               value: "3.97.9"
+            # renovate: datasource=github-releases depName=kyverno/kyverno
+            - name: KYVERNO_VERSION
+              value: "1.19.1"
           resources:
             requests:
               cpu: 10m
