@@ -67,8 +67,14 @@ spec:
             cpu: 500m
             memory: 512Mi
       serviceMonitor:
+        # additionalLabels is the chart's key. `labels` is accepted by Helm and then
+        # silently dropped by the template, which leaves the ServiceMonitor without the
+        # release label Prometheus selects on (matchLabels: release=kube-prometheus-stack)
+        # - so the controller exports no metrics at all. Measured 2026-09-30: all four
+        # controllers had ServiceMonitors in-cluster and Prometheus held zero kyverno_*
+        # series, which also hides every policy result from monitoring.
         enabled: true
-        labels:
+        additionalLabels:
           release: kube-prometheus-stack
     backgroundController:
       resources:
@@ -80,7 +86,7 @@ spec:
           memory: 384Mi
       serviceMonitor:
         enabled: true
-        labels:
+        additionalLabels:
           release: kube-prometheus-stack
     cleanupController:
       resources:
@@ -92,7 +98,7 @@ spec:
           memory: 256Mi
       serviceMonitor:
         enabled: true
-        labels:
+        additionalLabels:
           release: kube-prometheus-stack
     reportsController:
       resources:
@@ -104,5 +110,5 @@ spec:
           memory: 384Mi
       serviceMonitor:
         enabled: true
-        labels:
+        additionalLabels:
           release: kube-prometheus-stack
