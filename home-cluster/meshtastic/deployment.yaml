@@ -14,8 +14,17 @@ spec:
   # rollback until the app has run a full cycle.
   replicas: 1
   # Single ReadWriteOnce volume; a rolling update would need two pods on it at once.
+  # maxSurge 0 / maxUnavailable 1 is delete-before-replace. This is also the landing
+  # spot for the step 1 -> step 2 migration to type: Recreate: spec.strategy.rollingUpdate
+  # is a defaulted field this controller never applied, so server-side apply will not
+  # remove it, and "type: Recreate" + a live rollingUpdate block is rejected by
+  # validation. Applying the block explicitly here makes Flux own it, so dropping it in
+  # step 2 is then a legal removal.
   strategy:
-    type: Recreate
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 0
+      maxUnavailable: 1
   revisionHistoryLimit: 5
   selector:
     matchLabels:
