@@ -28,6 +28,7 @@ resources:
   - dashboard-trivy-operator.yaml
   - dashboard-openrouter.yaml
   - dashboard-spegel.yaml
+  - dashboard-nodes.yaml
   - alertmanager-external-secret.yaml
   - alertmanager-discord-external-secret.yaml
   - alertmanager-security-external-secret.yaml
