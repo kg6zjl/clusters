@@ -5,6 +5,6 @@ resources:
   - deployment.yaml
   - service.yaml
   - serviceaccount.yaml
-- clusterrolebinding-oidc.yaml
+  - clusterrolebinding-oidc.yaml
   - ingressroute.yaml
   - networkpolicy.yaml
