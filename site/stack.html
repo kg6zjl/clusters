@@ -77,6 +77,15 @@
           has a step I ran by hand, and a hand-run step is the one nobody can reproduce.</td>
       </tr>
       <tr>
+        <td>Dex</td>
+        <td>Single sign-on, and it is the humans who use it rather than the workloads: the API
+          server trusts it as an OIDC issuer and the dashboard signs in against it, so access is a
+          token with an expiry rather than a client certificate copied between machines. It is
+          served on a path, not a host root, and a relying party reads the discovery document under
+          the issuer. The API server side of it is a playbook a human runs, because the API server
+          is a host process with no object to patch.</td>
+      </tr>
+      <tr>
         <td>Kustomize and Helm</td>
         <td>How a directory becomes YAML. Overlays and pinned chart values, so the difference
           between two environments is a small diff rather than a branch of copy-pasted files.</td>
@@ -122,7 +131,8 @@
         <td>Replicated block storage across the nodes, with no separate SAN to buy or maintain.
           It is the heaviest thing in here and I would still keep it: a node can die without taking
           a volume with it, and "the disk went with the machine" is a failure mode I have already
-          had once.</td>
+          had once. A version bump for it waits for an explicit approval and a maintenance window,
+          because it is the one component whose upgrade can leave a pod unable to start.</td>
       </tr>
     </tbody>
   </table>
@@ -257,15 +267,16 @@
         <td>Node configuration lives in the same repository as the manifests, and resolves its
           secrets at run time so nothing lands in git. The split that matters: the operating
           system is a machine problem and the cluster is a set of pinned versions, and people
-          usually ruin both by treating them as one.</td>
+          usually ruin both by treating them as one. A role there also looks for a CSI mount a
+          storage volume left behind on a host — a failure no controller inside the cluster can
+          see — and reports it before anything is cleared.</td>
       </tr>
     </tbody>
   </table>
 
   <p class="small">
     Also present, and unremarkable enough to skip a row: metrics-server for autoscaling, an SMB
-    CSI driver for the NAS, a registry mirror, an identity provider for single sign-on, and a
-    container registry of my own.
+    CSI driver for the NAS, a registry mirror, and a container registry of my own.
   </p>
 </section>
 

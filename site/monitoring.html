@@ -102,7 +102,9 @@
       <p>
         blackbox-exporter probes each published hostname from outside the cluster, so "the site is
         up" is measured rather than assumed. Certificate expiry is watched separately, because a cert
-        that expires in silence looks like an outage at 2am.
+        that expires in silence looks like an outage at 2am. The single sign-on issuer is probed
+        the same way but on its discovery document rather than its host root, because a pod that is
+        Running says nothing about whether the document a relying party fetches is being served.
       </p>
     </div>
     <div class="card">
