@@ -1,0 +1,56 @@
+flowchart LR
+%% Discord is the whole human interface here, and it is worth being precise about why that is
+%% safe rather than just convenient.
+%%
+%% Everything posting into Discord holds a channel webhook. A webhook can add one message to the
+%% one channel it was created in and do nothing else: it cannot read history, cannot react,
+%% cannot join another channel, and no API client anywhere holds it. Four producers, four
+%% webhooks — and losing any one of them silences exactly one channel.
+%%
+%% The agent's outbound path is the only other credential, and it is the opposite shape: one
+%% Discord App token, minted and re-minted by a sidecar that the model's own container never
+%% holds. A compromise there yields a token that dies within the hour.
+%%
+%% One consequence worth stating plainly: because a channel webhook is bound to the channel it
+%% was born in, the security channel's webhook cannot be swapped for the alerts channel's URL.
+%% That separation is a property of the credential, not a routing rule somebody has to maintain.
+
+  subgraph producers["Producers — each holds one channel webhook"]
+    am["Alertmanager<br/>firing alerts"]
+    fluxnotif["Flux notifications<br/>reconcile errors only"]
+    github["GitHub webhook<br/>via Crossplane"]
+    ci["CI<br/>a failed required check"]
+  end
+
+  subgraph channels["Discord channels"]
+    alerts["#alerts"]
+    security["#security"]
+    prs["#pull-requests"]
+    fluxfail["#flux-failures"]
+    cic["#ci"]
+  end
+
+  subgraph agentbox["Hermes"]
+    minter["token sidecar<br/>re-mints hourly"]
+    agent["the container the<br/>model drives"]
+  end
+
+  me["me, reading them"]
+
+  am -->|"webhook A"| alerts
+  am -->|"webhook B,<br/>a different channel"| security
+  fluxnotif --> fluxfail
+  github --> prs
+  ci --> cic
+
+  minter -->|"short-lived<br/>App token"| agent
+  agent -->|"posts and replies"| alerts
+  agent --> prs
+
+  me --> prs
+  me --> alerts
+
+  trust["A channel webhook can post to one channel.<br/>It cannot read, and it cannot post anywhere else.<br/>A stolen webhook costs a noisy channel, not the workspace."]
+
+  alerts -.-> trust
+  security -.-> trust

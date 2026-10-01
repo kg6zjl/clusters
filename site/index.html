@@ -15,6 +15,7 @@
     <li><a href="monitoring.html">Monitoring</a></li>
     <li><a href="alerting.html">Alerting</a></li>
     <li><a href="workflow.html">The loop</a></li>
+    <li><a href="stack.html">The stack</a></li>
   </ul>
 </nav>
 
@@ -27,7 +28,8 @@
     change anything it opens a pull request, and I review and merge it.
   </p>
   <p class="small">
-    The guardrails, what it monitors, how it alerts, and what's still broken. No addresses, no
+    Everything it does and everything the cluster notices arrives in a few Discord channels. The
+    guardrails, what it monitors, how it alerts, and what's still broken. No addresses, no
     hostnames, no credentials.
   </p>
 </header>
@@ -47,11 +49,20 @@
     interacts with the cluster is a pull request that a human gates. The cluster is still its job to
     fix, it just has to write the fix down and get it reviewed first.
   </p>
-  <p>
-    It's safe because the cluster is reconciled from git. Anything not in a merged commit gets
-    reverted on the next reconcile. A bad idea from the agent costs a rejected pull request, not an
-    outage.
+<p>
+    It's safe because the cluster is reconciled from git by Flux. Anything not in a merged commit
+    gets reverted on the next reconcile. A bad idea from the agent costs a rejected pull request,
+    not an outage.
   </p>
+
+  <figure class="shot">
+    <img src="assets/img/loop.svg" alt="Flow diagram of the change path: something breaks or a version moves, a branch and commit are made by either me or Hermes, a pull request is opened, required checks run, a human decides who merges, the merge goes to main, and Flux reconciles it." width="822" height="1096" loading="lazy">
+    <figcaption>
+      <strong>The only write path.</strong> Including for me. No apply, no patch, no "just this once" —
+      because the moment there is, the rest of this stops being true.
+    </figcaption>
+  </figure>
+
   <div class="note">
     <span class="label">The part I didn't expect</span>
     <p>
@@ -80,14 +91,14 @@
     </li>
     <li>
       <strong>Turned on runtime detection, then tuned it.</strong> Image scanning sees what's inside
-      an image, admission sees intent. Neither sees what a process does after it starts. Falco is live
-      now, with a curated rule set rather than the whole upstream one.
+      an image, admission sees intent. Neither sees what a process does after it starts. Falco is
+      live now, with a curated rule set rather than the whole upstream one.
     </li>
     <li>
       <strong>Found the hole in its own allow-list.</strong> Three things in this cluster legitimately
       talk to the API server. The obvious fix was to allow-list their image, except two of them run a
-      generic base image, and that would have exempted every container built on it. It matched them on
-      namespace and pod name instead, and wrote down why.
+      generic base image, and that would have exempted every container built on it. It matched them
+      on namespace and pod name instead, and wrote down why.
     </li>
     <li>
       <strong>Killed an alert that fired every night for nothing.</strong> A maintenance job on the
@@ -102,8 +113,10 @@
       directory still alerts.
     </li>
     <li>
-      <strong>Made half-built alerting visible.</strong> Policy findings were being reported into an
-      audit report nobody reads. They land in a security channel now, straight from the reports.
+      <strong>Turned two policies from reports into refusals.</strong> The policies guarding the
+      agent's own identity were reporting violations into an audit report nobody read. Now a
+      violation is refused, and the findings that are genuinely informational land in a security
+      channel instead of being lost.
     </li>
     <li>
       <strong>Built the dashboard I actually wanted.</strong> The question was "why does this node
@@ -117,21 +130,23 @@
 <section aria-labelledby="cost">
   <h2 id="cost">What it costs</h2>
   <p>
-    The agent's budget is about twelve dollars a month and it holds itself to it. Every wake costs real
-    money, so the budget is part of the design.
+    Every wake spends real money, and the number moves as the models do, so I am not going to
+    quote one here — it would be a measurement of a month that has already changed. What I can say
+    is where the money went and what I changed because of it.
   </p>
   <p>
-    Alert-driven wakes were the dominant cost at first, so I turned that path off and rebuilt it
-    narrower: an hourly poll, a short allow-list of alerts genuinely worth an unattended run, and a
-    gate that stops a standing alert waking it once an hour. Then I turned it back on. The lesson was
-    that the fix is the filters, not disabling the thing.
+    Alert-driven wakes were the dominant cost at the start, by a wide margin. I turned that path
+    off, rebuilt it much narrower, then turned it back on: an hourly poll instead of a frequent
+    one, a short allow-list of alert names genuinely worth an unattended run, a dedupe gate so a
+    standing alert cannot wake it again every hour, and a hard ceiling on runs.
   </p>
   <div class="note">
-    <span class="label">Also measured</span>
+    <span class="label">The lesson, and the mistake I nearly made</span>
     <p>
-      A spend meter runs every morning and reports what was burned. When a cost number looks alarming,
-      read what it actually measures: one scare was the whole provider account, not the agent, and the
-      agent's share of it was a fraction.
+      The fix was the filters, not disabling the thing. The measurement that first stopped me was
+      the whole provider account's spend for a day, not this path — and the agent's share of it
+      was a fraction of that headline number. Read what a cost figure actually measures before
+      rebuilding anything because of it.
     </p>
   </div>
 </section>
@@ -158,6 +173,11 @@
       answer "what happened last night", not "what happened last month".
     </li>
     <li>
+      <strong>One channel is the whole record.</strong> Discord holds the alerts, the policy
+      findings, the reconcile errors and the pull requests, so there is exactly one place to look.
+      That is also a single point of failure, and nothing here archives it.
+    </li>
+    <li>
       <strong>The image registry is open inside the cluster.</strong> Any workload can pull any image
       in it. Fine while everything there is a public base image or a build output. Not fine the day
       that stops being true.
@@ -172,7 +192,7 @@
     policies that stop the agent widening its own rights. <a href="monitoring.html">Monitoring</a> is
     what's measured, and why that list is short. <a href="alerting.html">Alerting</a> is the pipeline
     and the decisions that keep it quiet enough to trust. <a href="workflow.html">The loop</a> is how
-    a change actually gets in.
+    a change actually gets in. <a href="stack.html">The stack</a> is every tool, and why that one.
   </p>
   <p class="small">
     Corrections welcome. This describes a running system, not a product, and the parts that broke are

@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Guardrails: read-only, no secrets, and a policy that watches the agent itself</title>
-<meta name="description" content="What stops an AI agent in a Kubernetes cluster from going wrong: read-only RBAC, no path to a secret value, default-deny networking, admission policies that watch the agent's own identity, and a job that must be reviewed before it runs.">
+<meta name="description" content="What stops an AI agent in a Kubernetes cluster from going wrong: read-only RBAC, no path to a secret value, default-deny NetworkPolicies, Kyverno admission policies that watch the agent's own identity, and a pull request a human must merge. Plus Ansible and Renovate for the hosts and the pinned versions.">
 <link rel="stylesheet" href="assets/style.css">
 </head>
 <body>
@@ -15,6 +15,7 @@
     <li><a href="monitoring.html">Monitoring</a></li>
     <li><a href="alerting.html">Alerting</a></li>
     <li><a href="workflow.html">The loop</a></li>
+    <li><a href="stack.html">The stack</a></li>
   </ul>
 </nav>
 
@@ -34,6 +35,23 @@
 </header>
 
 <main>
+
+<section aria-labelledby="controls">
+  <h2 id="controls">Five controls, none of them load-bearing alone</h2>
+  <p>
+    They are independent on purpose. Any one of them being wrong has to leave the other four
+    standing — a single gate that mostly works is one bug away from nothing, and five narrow ones
+    are one bug away from four.
+  </p>
+
+  <figure class="shot">
+    <img src="assets/img/guardrails.svg" alt="Five stacked boxes, unconnected: read-only RBAC with no write verb; network policy default-deny in both directions; admission policies on the agent's own identity; secrets reachable by one path from a vault; and the pull request, which only a human merges." width="388" height="1209" loading="lazy">
+    <figcaption>
+      <strong>The five.</strong> In order from the control that is hardest to bypass to the one
+      easiest to get wrong, which is the order they are worth reviewing in.
+    </figcaption>
+  </figure>
+</section>
 
 <section aria-labelledby="reach">
   <h2 id="reach">Reach, not authority</h2>
@@ -68,7 +86,7 @@
 <section aria-labelledby="rbac">
   <h2 id="rbac">Permissions: get, list, watch, and nothing else</h2>
   <p>
-    The cluster role behind the agent has <code>get</code>, <code>list</code> and <code>watch</code>
+    The ClusterRole behind the agent has <code>get</code>, <code>list</code> and <code>watch</code>
     on the resources it needs and no write verb anywhere.
   </p>
   <ul>
@@ -86,8 +104,8 @@
     ssh path at all.
   </p>
   <p>
-    That role is only half of it. Two admission policies watch the agent's own identity, because they
-    cover the case where the agent talks me into a bad change.
+    That role is only half of it. Two Kyverno ClusterPolicies watch the agent's own identity,
+    because they cover the case where the agent talks me into a bad change.
   </p>
   <ul>
     <li>
@@ -120,9 +138,10 @@
 <section aria-labelledby="secrets">
   <h2 id="secrets">Secrets: one path in, and the agent isn't on it</h2>
   <p>
-    Secret values live in a password manager. An operator syncs one declared item per need into the
-    namespace that needs it. Nothing is copied into git, and there is no second path, because a second
-    path is just a leak you haven't noticed yet.
+    Secret values live in a password manager. External Secrets Operator pulls one declared item per
+    need out of it through an in-cluster bridge, and syncs it into the namespace that needs it.
+    Nothing is copied into git, and there is no second path, because a second path is just a leak
+    you haven't noticed yet.
   </p>
   <p>
     The agent's own credentials follow the same rule with one extra step. Its identity is a GitHub App
@@ -143,9 +162,10 @@
 <section aria-labelledby="network">
   <h2 id="network">Networking: default deny, then a written exception</h2>
   <p>
-    Every namespace is default-deny for ingress and egress. Nothing talks to anything until a policy
-    says it may, and the exceptions are objects in git like everything else. The agent's own egress is
-    a short list: DNS, the API server, the event webhook, GitHub over 443.
+    Every namespace is default-deny for ingress and egress with a NetworkPolicy. Nothing talks to
+    anything until a policy says it may, and the exceptions are objects in git like everything else.
+    The agent's own egress is a short list: DNS, the API server, the event webhook, and one host over
+    443 for git.
   </p>
   <div class="note">
     <span class="label">The trap that catches everyone</span>
@@ -185,22 +205,37 @@
       purpose — by process, parent and host, never by file path or image name.
     </li>
   </ul>
+  <p class="small">
+    The layering only works if each one is genuinely blind to what the others cover. That is the
+    argument for running all three rather than picking the best one: they fail differently, and
+    together they cover intent, contents and behaviour.
+  </p>
 </section>
 
 <section aria-labelledby="patching">
-  <h2 id="patching">Patching: the hosts on a timetable, the manifests by pull request</h2>
+  <h2 id="patching">Patching: the hosts on a timetable, the versions by pull request</h2>
   <p>
-    Two different problems that people usually solve with one bad habit. The hosts are machines with an
-    operating system. The cluster is a set of pinned versions in a repository. Both are handled as code,
-    and neither is handled by logging in and running something.
+    Two different problems that people usually solve with one bad habit. The hosts are machines with
+    an operating system. The cluster is a set of pinned versions in a repository. Both are handled
+    as code, and neither is handled by logging in and running something.
   </p>
+
+  <figure class="shot">
+    <img src="assets/img/patching.svg" alt="Two lanes feeding one review queue. The hosts lane: Ansible playbooks resolve secrets from the vault at run time, install unattended security updates, and reboot one host at a time ordered so control-plane quorum holds. The manifests lane: Renovate checks hourly and opens one pull request per pinned version. Both merge through the same review into the fleet." width="1412" height="857" loading="lazy">
+    <figcaption>
+      <strong>Two lanes, one queue.</strong> The hosts are Ansible; the cluster is Renovate. They
+      arrive at the same review, which is the point — a version change is a reviewed change whether
+      it is an operating system or a chart.
+    </figcaption>
+  </figure>
+
   <h3>The hosts</h3>
   <p>
-    Node configuration is playbooks in the same repository as everything else: base packages, kernel
-    settings, the pinned Kubernetes snap channel, the kubelet's node address, the mounts, the accounts.
-    A run resolves its secrets from the vault at run time, so nothing lands in git. Security updates
-    then install unattended, and the machines reboot to apply them on a staggered timetable — one host
-    at a time, ordered so control-plane quorum never drops.
+    Node configuration is Ansible playbooks in the same repository as everything else: base packages,
+    kernel settings, the pinned Kubernetes snap channel, the kubelet's node address, the mounts, the
+    accounts. A run resolves its secrets from the vault at run time, so nothing lands in git. Security
+    updates then install unattended, and the machines reboot to apply them on a staggered timetable —
+    one host at a time, ordered so control-plane quorum never drops.
   </p>
   <p>
     That last part is why a reboot is not an alert here. It's the patching mechanism working, and
@@ -208,17 +243,26 @@
     instead, so an <em>unscheduled</em> reboot is obvious by looking rather than by waking me up. See
     <a href="alerting.html">Alerting</a>.
   </p>
-  <h3>The manifests</h3>
+  <h3>The versions</h3>
   <p>
     Nothing in the cluster floats on <code>latest</code>. Chart versions, image tags, GitHub Action
-    versions and the CLI tools the pipeline pins are all pinned in the repository, and a bot checks
-    hourly for newer versions and opens a pull request when it finds one, one at a time.
+    versions and the CLI tools the pipeline pins are all pinned in the repository, and Renovate checks
+    hourly for newer ones and opens a single pull request when it finds one.
   </p>
   <p>
     So a version changes the way everything else changes: a reviewed merge, with the checks run against
-    the new version first. A pin nobody merges stays pinned, so the bot's pull requests are a to-do
+    the new version first. A pin nobody merges stays pinned, so Renovate's pull requests are a to-do
     list that can rot. That's the price of nothing silently upgrading itself underneath me.
   </p>
+  <div class="note">
+    <span class="label">Why Renovate and not dependabot</span>
+    <p>
+      It understands Helm values and Kustomize overlays, which is most of what this repository is, and
+      it can be told to hold a release back for a few days before proposing it. Waiting a week before
+      proposing a two-year-old tag is exactly backwards; waiting a week before proposing yesterday's
+      release is the point.
+    </p>
+  </div>
 </section>
 
 <section aria-labelledby="state">
