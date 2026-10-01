@@ -20,12 +20,28 @@ spec:
     #
     # A ClusterPolicyReport only exists while it holds at least one result, so this
     # resolves by itself when Kyverno rewrites the report with no failures.
-    - alert: KyvernoAuditPolicyViolation
+    - alert: KyvernoPolicyViolation
       expr: |
         kube_customresource_kyverno_policy_result{result=~"fail|error"} == 1
       for: 10m
       labels:
-        severity: warning
+        severity: critical
       annotations:
         summary: "Kyverno policy: {{ $labels.policy }} reports {{ $labels.result }} on rule {{ $labels.rule }}"
         description: "ClusterPolicy {{ $labels.policy }} records a {{ $labels.result }} for rule {{ $labels.rule }} (report {{ $labels.policy_report }}, severity {{ $labels.severity }}, category {{ $labels.category }}). Reports come from background scans of stored objects, so a fail on an Enforce policy means an object already in the cluster violates it - the write that put it there was not necessarily blocked. Read the finding with kubectl get clusterpolicyreport {{ $labels.policy_report }} -o yaml. result=error means the rule could not be evaluated at all, so the policy is silently not covering whatever it matched."
+
+    # The other half: a refusal at admission time. rule_result=fail on an
+    # admission_request is Kyverno refusing the request, and dry_run=false keeps dry-run
+    # requests (which write nothing) out of it. The report above only sees objects that
+    # got stored, so this is the rule that notices someone trying.
+    - alert: KyvernoPolicyBlockedRequest
+      expr: |
+        sum by (policy_name, rule_name, resource_kind, resource_namespace, resource_request_operation) (
+          increase(kyverno_policy_results_total{rule_result=~"fail|error",
+            rule_execution_cause="admission_request", dry_run="false"}[10m])
+        ) > 0
+      labels:
+        severity: critical
+      annotations:
+        summary: "Kyverno refused a {{ $labels.resource_request_operation }} of {{ $labels.resource_kind }} ({{ $labels.policy_name }})"
+        description: "ClusterPolicy {{ $labels.policy_name }} rule {{ $labels.rule_name }} refused an admission request for {{ $labels.resource_kind }} {{ $labels.resource_namespace }}, so the change was not applied. A policy that fails closed means a refused change is a blocked one rather than a logged one. result=error says the rule could not be evaluated at all, so the webhook's failurePolicy decided the outcome instead."

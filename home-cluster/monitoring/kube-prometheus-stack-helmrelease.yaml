@@ -159,9 +159,11 @@ spec:
                       suspended: [spec, suspend]
                       revision: [status, artifact, revision]
                       url: [spec, url]
-              # Kyverno records Audit-mode violations as wgpolicyk8s ClusterPolicyReport
-              # objects. Reading the report (not Kyverno's /metrics) is what makes
-              # KyvernoAuditPolicyViolation report-driven.
+              # Kyverno records violations it finds in background scans as wgpolicyk8s
+              # ClusterPolicyReport objects. Reading the report (not Kyverno's /metrics) is
+              # what makes KyvernoPolicyViolation report-driven. A refusal at admission time
+              # never reaches a report, so that side is alerted from Kyverno's own result
+              # counter instead (KyvernoPolicyBlockedRequest).
               #
               # ClusterPolicyReport only; a namespaced Policy would need PolicyReport
               # added here, and none exists in this cluster today.

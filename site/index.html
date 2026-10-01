@@ -106,12 +106,6 @@
       audit report nobody reads. They land in a security channel now, straight from the reports.
     </li>
     <li>
-      <strong>Moved admission from reporting to blocking.</strong> The policies that keep the agent's
-      identity read-only and refuse privileged calls ran in audit mode: they wrote reports and stopped
-      nothing. It checked its own result counters first, found zero failures across a day of real
-      traffic, then flipped both to enforce.
-    </li>
-    <li>
       <strong>Built the dashboard I actually wanted.</strong> The question was "why does this node
       look unstable". Load average and iowait answered nothing. The dashboard shows pressure stall
       metrics, per-disk latency <em>with</em> throughput, memory, and reboots. The answer turned out
