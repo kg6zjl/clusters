@@ -11,10 +11,12 @@ spec:
   - name: kyverno-audit
     rules:
     # Report-driven on purpose. The data comes from the ClusterPolicyReport objects
-    # Kyverno writes for Audit-mode policies, read by the customResourceState block in
-    # kube-prometheus-stack-helmrelease.yaml - not from Kyverno's /metrics endpoint. An
-    # Audit policy blocks nothing, so the report is the only record that a violation
-    # happened, and a rule fed by the report cannot drift from what the report says.
+    # Kyverno writes for policies it evaluates in background scans, read by the
+    # customResourceState block in kube-prometheus-stack-helmrelease.yaml - not from
+    # Kyverno's /metrics endpoint. A background scan of a stored object is what fills a
+    # report, so the rule cannot drift from what the report says. Both policies are
+    # Enforce as of 2026-10-01; a report still records a stored object that violates
+    # them even though new writes of that shape are now refused.
     #
     # A ClusterPolicyReport only exists while it holds at least one result, so this
     # resolves by itself when Kyverno rewrites the report with no failures.
@@ -25,5 +27,5 @@ spec:
       labels:
         severity: warning
       annotations:
-        summary: "Kyverno audit: {{ $labels.policy }} reports {{ $labels.result }} on rule {{ $labels.rule }}"
-        description: "ClusterPolicy {{ $labels.policy }} is in Audit mode: it blocked nothing, and its report ({{ $labels.policy_report }}, severity {{ $labels.severity }}, category {{ $labels.category }}) records a {{ $labels.result }} for rule {{ $labels.rule }}. Nothing was blocked and no workload was refused - read the finding with kubectl get clusterpolicyreport {{ $labels.policy_report }} -o yaml. result=error means the rule could not be evaluated at all, so the policy is silently not covering whatever it matched."
+        summary: "Kyverno policy: {{ $labels.policy }} reports {{ $labels.result }} on rule {{ $labels.rule }}"
+        description: "ClusterPolicy {{ $labels.policy }} records a {{ $labels.result }} for rule {{ $labels.rule }} (report {{ $labels.policy_report }}, severity {{ $labels.severity }}, category {{ $labels.category }}). Reports come from background scans of stored objects, so a fail on an Enforce policy means an object already in the cluster violates it - the write that put it there was not necessarily blocked. Read the finding with kubectl get clusterpolicyreport {{ $labels.policy_report }} -o yaml. result=error means the rule could not be evaluated at all, so the policy is silently not covering whatever it matched."
