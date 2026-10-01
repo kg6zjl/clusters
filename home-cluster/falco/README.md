@@ -101,7 +101,10 @@ verbs - read from all 166 pods present on 2026-09-30 (138 running) and their Ser
 longhorn's manager and CSI sidecars, the flux/kyverno/cert-manager/ESO/crossplane controllers,
 traefik, metallb's frr-k8s, the ARC controller, zot, Grafana's `k8s-sidecar`, the prometheus
 config-reloader, kube-state-metrics, alloy, the kube-prometheus-stack admission hook,
-trivy-operator, headlamp and the agent. `k8s_containers` already excludes the whole `kube-system`
+trivy-operator, headlamp and the agent. The roster is per image repository, so a vendor's init step
+needs its own entry: Kyverno's `kyvernopre` is a separate repository from its controllers and dials
+the API server only while a pod is initialising, which is how it survived both sweeps below.
+`k8s_containers` already excludes the whole `kube-system`
 namespace, so no kube-system image needs an entry. Longhorn's data-path images (engine,
 instance-manager, share-manager, livenessprobe, node-driver-registrar) are deliberately *not* listed:
 they talk to `longhorn-backend` on `10.152.183.60` and to the kubelet, not to the API server, and none
@@ -184,6 +187,13 @@ matches on).
 
 ## Known gaps / follow-ups
 
+- **An init container's image is a separate client, and both sweeps missed one.**
+  `reg.kyverno.io/kyverno/kyvernopre` (container `kyverno-pre`, process `kyverno-init`) fired on the
+  2026-10-01 02:58Z Kyverno restart - the one that followed the 00:43Z thinkcentre02 node event. This
+  is structural rather than an oversight: that container dials the API server only while a pod is
+  initialising, and no Kyverno pod started inside either sweep window, so no amount of sweeping the
+  same windows would have found it. Derive the client set from `spec.initContainers` as well as
+  `spec.containers` - one image per vendor per component is not the same as one image per vendor.
 - **`Contact K8S API Server From Container` is still the firehose, and the allow-list now carries the
   cluster's whole API client set.** Swept twice on 2026-09-30. The first sweep (07:48Z-14:46Z, 1453
   events, all this rule) predates CRI enrichment, so `k8s.pod.name` and

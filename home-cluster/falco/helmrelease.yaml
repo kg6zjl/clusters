@@ -237,6 +237,9 @@ spec:
           - reg.kyverno.io/kyverno/reports-controller
           - reg.kyverno.io/kyverno/kyverno-cli
           - ghcr.io/kyverno/kyverno-cli
+          # kyverno's init container ships as its own repository (kyvernopre, not kyverno)
+          - reg.kyverno.io/kyverno/kyvernopre
+          - ghcr.io/kyverno/kyvernopre
           # certificates, secrets, cloud APIs
           - quay.io/jetstack/cert-manager-controller
           - quay.io/jetstack/cert-manager-webhook
@@ -307,6 +310,12 @@ spec:
         # home-assistant, nodered, adsb, vpn, netalertx, meshtastic, speedtest, local-services,
         # sso), none of which has any business dialling the API server. An unlisted container
         # still fires; keep this list to things that exist to drive the API.
+        #
+        # Enumerate the images actually running before declaring this list complete, including
+        # initContainers: a vendor ships its init step as a separate repository (kyverno's
+        # kyvernopre, not kyverno), and it only connects on pod start, so a sweep window that
+        # contains no restart of that workload cannot see it. Missing kyvernopre fired on the
+        # 2026-10-01 02:58Z restart, 2h after both sweeps above had closed.
         - macro: user_known_contact_k8s_api_server_activities
           condition: >
             (container.image.repository in (known_k8s_api_clients))
