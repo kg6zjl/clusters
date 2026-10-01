@@ -4,10 +4,15 @@
 Headlamp dashboard shows "Failed to get authentication information: Request timed-out" when accessed via browser.
 
 ## Root Cause
-The NetworkPolicy for Headlamp used `ipBlock` CIDRs for internal cluster communication, but this approach was causing connection timeouts to the Kubernetes API server. Other working services in the cluster use `namespaceSelector: {}` instead.
+The apiserver is a **host process, not a pod**, so egress that only uses `namespaceSelector`
+never matches its traffic and Headlamp times out reaching the API. The node-LAN (post-DNAT)
+source is likewise not a pod. `headlamp-restrictive` therefore allows egress to the API with
+explicit `ipBlock`s (`10.152.183.0/16` for the ClusterIP, `192.168.1.0/24` for the node
+endpoints).
 
 ## Changes Made
-Updated `headlamp-restrictive` NetworkPolicy to use `namespaceSelector: {}` for internal cluster traffic.
+`headlamp-restrictive` starts from default-deny: ingress only from the `traefik` namespace,
+egress only DNS plus the API and the OIDC issuer (see "NetworkPolicy Rules Applied" below).
 
 ## Verification Steps
 
@@ -47,8 +52,11 @@ Navigate to https://headlamp.kube.stevearnett.com in browser and verify it loads
 ## NetworkPolicy Rules Applied
 
 ### headlamp-restrictive (for headlamp pod)
-- **Ingress**: From traefik namespace (ports 80, 4466)
-- **Egress**: Allow all
+- **Ingress**: From the `traefik` namespace (ports 80, 4466)
+- **Egress**: `kube-system` on 53 (DNS); `10.152.183.0/16` and `192.168.1.0/24` on 443/16443
+  (the Kubernetes API -- the apiserver is a host process, so `namespaceSelector` cannot cover
+  it); and the Traefik MetalLB VIP that `sso.kube.stevearnett.com` resolves to, for the OIDC
+  back-channel.
 
 ## Related Files
 - `headlamp/networkpolicy.yaml` - Headlamp pod NetworkPolicy
@@ -74,6 +82,6 @@ The charts then need two things to actually load:
    `monitoring-allow-all`'s `namespaceSelector`-only rule does not cover its node-LAN source. That
    is why `monitoring/network-policy.yaml` carries `prometheus-allow-apiserver-proxy`.
 
-The Headlamp pod is not on that path: `headlamp-restrictive` already allows all egress (`- {}`), so
-no Headlamp-side rule is involved. To verify, use Test Connection or open any Pod detail view and
+The Headlamp pod is not on that path: `headlamp-restrictive`'s egress is limited to DNS, the API
+and the OIDC issuer, so no Headlamp-side rule is involved. To verify, use Test Connection or open any Pod detail view and
 look for the metrics charts; if it still fails, re-check item 2 first.
