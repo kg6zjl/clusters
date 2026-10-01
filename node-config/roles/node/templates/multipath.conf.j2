@@ -1,0 +1,23 @@
+# Managed by Ansible - node-config/roles/node. Do not edit by hand.
+#
+# Longhorn exports every volume as an iSCSI LUN (vendor IET, product VIRTUAL-DISK).
+# Left unblacklisted, multipathd claims each one and stacks a device-mapper map
+# (mpathX) on top of it. The kernel then rejects the CSI driver's mount with
+# "already mounted or mount point busy", the pod wedges in ContainerCreating, and
+# Longhorn still reports the volume attached and healthy -- so nothing self-heals.
+#
+# https://longhorn.io/kb/troubleshooting-volume-with-multipath/
+#
+# user_friendly_names preserves the stock setting this file replaces. Blacklisting
+# by vendor/product (rather than devnode "^sd[a-z0-9]+") leaves non-iSCSI SCSI
+# disks, and the OS nvme/dm devices, alone.
+defaults {
+    user_friendly_names yes
+}
+
+blacklist {
+    device {
+        vendor "IET"
+        product "VIRTUAL-DISK"
+    }
+}
