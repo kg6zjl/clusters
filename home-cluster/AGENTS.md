@@ -28,7 +28,7 @@ Catch a pod's inability to reach the kube-apiserver:
 ## Repository Overview
 
 This is a **three-node Kubernetes home lab cluster** running MicroK8s (snap `v1.35.6`, rev 9072) across
-three ThinkCentre machines. It is **not** single-node, and it is **not** kubeadm.
+three ThinkCentre machines.
 
 The datastore is **dqlite** — not etcd, not kine. All three nodes are datastore masters listening on
 port 19001, and each node runs its own local `kube-apiserver` embedded in the `kubelite` process rather
@@ -36,12 +36,9 @@ than talking to one shared control-plane endpoint:
 
 | Node | Address | Role |
 |------|---------|------|
-| `thinkcentre01` | 192.168.1.144 | datastore master, Ubuntu 22.04 |
-| `thinkcentre02` | 192.168.1.121 | datastore master, Ubuntu 22.04 |
-| `thinkcentre03` | 192.168.1.146 | datastore master, Ubuntu 26.04 |
-
-`pikube` (192.168.1.175, Raspberry Pi) appears in `node-config/inventory/` but is **not** a cluster
-member and was unreachable as of 2026-10-01. Inventory is in `node-config/inventory/hosts.yml`.
+| `thinkcentre01` | 192.168.1.144 | datastore master |
+| `thinkcentre02` | 192.168.1.121 | datastore master |
+| `thinkcentre03` | 192.168.1.146 | datastore master |
 
 - **Deployment model**: Declarative
 - **Config management**: Kustomize (manifests) + Helmfile (Helm releases)
@@ -51,7 +48,7 @@ member and was unreachable as of 2026-10-01. Inventory is in `node-config/invent
 
 ## Deployment Model
 
-This cluster uses **Flux CD** for GitOps reconciliation. There is NO "Apply to Cluster" GitHub Actions workflow.
+This cluster uses **Flux CD** for GitOps reconciliation.
 
 ### How changes reach the cluster
 
