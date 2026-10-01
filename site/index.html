@@ -106,6 +106,12 @@
       audit report nobody reads. They land in a security channel now, straight from the reports.
     </li>
     <li>
+      <strong>Moved admission from reporting to blocking.</strong> The policies that keep the agent's
+      identity read-only and refuse privileged calls ran in audit mode: they wrote reports and stopped
+      nothing. It checked its own result counters first, found zero failures across a day of real
+      traffic, then flipped both to enforce.
+    </li>
+    <li>
       <strong>Built the dashboard I actually wanted.</strong> The question was "why does this node
       look unstable". Load average and iowait answered nothing. The dashboard shows pressure stall
       metrics, per-disk latency <em>with</em> throughput, memory, and reboots. The answer turned out
@@ -143,9 +149,10 @@
   </p>
   <ul>
     <li>
-      <strong>Admission reports, it doesn't block.</strong> The policy that keeps the agent's identity
-      read-only runs in audit mode. It produces a report and stops nothing. Flipping it to enforce is a
-      one-way change, taken once the report shows the expected zero.
+      <strong>One policy is fail-open on purpose.</strong> The guard that refuses pod exec, token
+      minting and Secret writes made as the agent doesn't run if Kyverno is down. Failing closed there
+      would block every Secret write in the cluster, so it's a trade: what it covers, its RBAC already
+      covers too.
     </li>
     <li>
       <strong>Scan triage is behind the findings.</strong> The scanner works and the alerts are live.
