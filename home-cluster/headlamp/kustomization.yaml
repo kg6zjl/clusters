@@ -9,4 +9,3 @@ resources:
   - clusterrolebinding-oidc.yaml
   - ingressroute.yaml
   - networkpolicy.yaml
-  - kubeconfig.yaml
