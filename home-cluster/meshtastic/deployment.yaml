@@ -9,9 +9,25 @@ metadata:
     configmap.reloader.stakater.com/reload: "meshmonitor-scripts"
     secret.reloader.stakater.com/reload: "meshtastic-admin"
 spec:
-  # Stage 2: the copy job completed (source 2.6G, 186 entries, both assertions passed)
-  # and both consumers now read the Longhorn claim. The hostpath claim stays as the
-  # rollback until the app has run a full cycle.
+  # ROLLED BACK to the hostpath claim on 2026-10-01. The Longhorn claim carries a
+  # complete copy of the data (stage 2 of #729 verified 2.6G / 186 entries) and is
+  # still healthy on disk, but its CSI mount step fails on every node with
+  # `mount failed: exit status 32 ... already mounted or mount point busy`, which
+  # leaves the pod in Init:0/1 indefinitely. Rebooting nodes and restarting the
+  # longhorn-csi-plugin pods did not clear it.
+  #
+  # meshmonitor-data is the claim this app ran on for 148 days before the migration
+  # and was only ever mounted read-only during it, so it still holds the original
+  # 3.1G (meshmonitor.db + system-backups) per #636. It is a node-pinned hostPath PV
+  # bound to thinkcentre02, which is where this pod now runs.
+  #
+  # Consequence to be aware of: this claim holds data as of 2026-09-26, so ~5 days of
+  # accumulated node/telemetry history is not present. The nightly NAS backup on the
+  # Longhorn claim is the only copy of that window.
+  #
+  # Do not re-point this at meshmonitor-data-longhorn until the CSI mount fault is
+  # actually understood and fixed. It is not a stale-mount or leaked-namespace
+  # problem: dmesg shows the kernel logging zero errors for those devices.
   replicas: 1
   # Single ReadWriteOnce volume; a rolling update would need two pods on it at once.
   # Note for future edits: switching an existing object from RollingUpdate to Recreate
@@ -31,11 +47,10 @@ spec:
         app: meshmonitor
       annotations:
         configmap.reloader.stakater.com/reload: "meshmonitor-scripts"
-        # Forces a fresh pod rather than reviving 74f8b6cfd, which sat in Init:0/1 for
-        # 133m across the Longhorn engine migration to thinkcentre02 and kept failing
-        # its kubelet mount with exit status 32. Storage side is healthy (engine and
-        # both replicas running); a new pod gets a fresh NodeStageVolume.
-        meshmonitor.stevearnett.com/rwo-recreate-rollout: "2026-09-30"
+        # Changing the claim above changes the pod template, which is what forces the
+        # replacement pod. Bumped alongside the hostpath rollback so the roll-out is
+        # unambiguous in `kubectl describe` and in git blame.
+        meshmonitor.stevearnett.com/data-claim: "hostpath-rollback-2026-10-01"
     spec:
       initContainers:
       - name: install-scripts
@@ -104,7 +119,7 @@ spec:
       volumes:
       - name: meshmonitor-data
         persistentVolumeClaim:
-          claimName: meshmonitor-data-longhorn
+          claimName: meshmonitor-data
       - name: meshmonitor-scripts
         configMap:
           name: meshmonitor-scripts
