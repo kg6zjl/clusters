@@ -15,6 +15,7 @@
     <li><a href="monitoring.html" aria-current="page">Monitoring</a></li>
     <li><a href="alerting.html">Alerting</a></li>
     <li><a href="workflow.html">The loop</a></li>
+    <li><a href="stack.html">The stack</a></li>
   </ul>
 </nav>
 
@@ -31,14 +32,22 @@
 
 <section aria-labelledby="shape">
   <h2 id="shape">The shape</h2>
-<pre><code>exporters ──▶ metrics store ──▶ dashboards  (a question per panel)
-     │                 │
-     │                 └──▶ alert rules (in git) ──▶ alerting pipeline
-     └──▶ logs  (short retention, on purpose for now)</code></pre>
+
+  <figure class="shot">
+    <img src="assets/img/monitoring.svg" alt="Collectors on the left feeding a Prometheus store and a Loki store; Prometheus feeds Grafana dashboards and the alert rules in git; a firing rule goes to Alertmanager, and nothing goes back from Alertmanager into the cluster." width="1303" height="629" loading="lazy">
+    <figcaption>
+      <strong>Collectors in, dashboards and alerts out.</strong> The dashed arrow is the important
+      one: nothing measured can reach the cluster's desired state, because a number moving is not an
+      opinion about what the cluster should be.
+    </figcaption>
+  </figure>
+
   <p>
-    One metrics store, one log store, one dashboard tool. Metrics are scraped, logs are shipped from
-    every pod by a collector. Nothing is sampled down and nothing is thrown away early, except logs,
-    which I keep hours of rather than weeks. That's a known weakness, not a plan.
+    One metrics store, one log store, one dashboard tool. Prometheus and Alertmanager and Grafana come
+    from a single well-worn chart rather than three decisions, because what is actually portable is
+    the rule format and the query language. Metrics are scraped; logs are shipped from every pod by
+    Grafana Alloy. Nothing is sampled down and nothing is thrown away early, except logs, which I keep
+    hours of rather than weeks. That's a known weakness, not a plan.
   </p>
 </section>
 
@@ -91,9 +100,9 @@
     <div class="card">
       <h3>Is it reachable</h3>
       <p>
-        Blackbox probes from outside for each published hostname, so "the site is up" is measured
-        rather than assumed. Certificate expiry is watched separately, because a cert that expires in
-        silence looks like an outage at 2am.
+        blackbox-exporter probes each published hostname from outside the cluster, so "the site is
+        up" is measured rather than assumed. Certificate expiry is watched separately, because a cert
+        that expires in silence looks like an outage at 2am.
       </p>
     </div>
     <div class="card">
@@ -147,6 +156,20 @@
       the same picture, which is the most expensive mistake in monitoring.
     </p>
   </div>
+
+  <figure class="shot">
+    <div class="shot-pending" role="img" aria-label="Screenshot pending: the node dashboard in Grafana, showing pressure stall, per-disk latency with throughput, memory and reboot annotations.">
+      <span class="todo">Screenshot pending</span>
+      <code class="path">assets/img/shots/node-dashboard.png</code>
+      <span class="hint">The node dashboard: pressure stall on top, then per-disk latency plotted
+        <em>with</em> throughput, then memory and swap. Reboots appear as annotations across all of
+        it.</span>
+    </div>
+    <figcaption>
+      <strong>The node dashboard.</strong> The one I open under pressure. Four questions, and the
+      bottom one is the answer to "is this machine sick".
+    </figcaption>
+  </figure>
 </section>
 
 <section aria-labelledby="gaps">

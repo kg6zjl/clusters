@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>The loop: a pull request is the only write path</title>
-<meta name="description" content="How a change reaches a GitOps cluster: branch, commit, required checks on runners that are pods in the same cluster, human merge, reconcile — and the mechanics that waste an afternoon.">
+<meta name="description" content="How a change reaches a GitOps cluster: branch, commit, required checks on runner pods in the same cluster, human merge, Flux reconcile. Plus Renovate proposing version bumps and an agent that may never merge its own infrastructure changes.">
 <link rel="stylesheet" href="assets/style.css">
 </head>
 <body>
@@ -15,6 +15,7 @@
     <li><a href="monitoring.html">Monitoring</a></li>
     <li><a href="alerting.html">Alerting</a></li>
     <li><a href="workflow.html" aria-current="page">The loop</a></li>
+    <li><a href="stack.html">The stack</a></li>
   </ul>
 </nav>
 
@@ -31,20 +32,27 @@
 
 <section aria-labelledby="loop">
   <h2 id="loop">The loop</h2>
-<pre><code>branch ──▶ commit ──▶ pull request ──▶ required checks ──▶ human merge ──▶ reconcile
-                                          (runners are
-                                           pods in the
-                                           same cluster)</code></pre>
+
+  <figure class="shot">
+    <img src="assets/img/loop.svg" alt="Flow diagram: something breaks or a version moves, a branch and commit are made by either me or Hermes, a pull request is opened, required checks run and loop back on failure, a decision asks who merges, a human always merges the cluster repository, then Flux reconciles and the new state is attributable to a commit." width="822" height="1096" loading="lazy">
+    <figcaption>
+      <strong>The whole loop.</strong> The dashed path is the design: the agent's pull request lands in
+      the same queue as mine, so "it wrote the fix" and "a human approved the fix" stay two separate
+      events.
+    </figcaption>
+  </figure>
+
   <p>
-    A controller watches the repository, renders the manifests and applies them. Each top-level path
-    is one reconciliation unit with its own interval and health checks. Failure is alerted on the
-    outcome — still not ready after fifteen minutes — rather than on every attempt, because a
-    controller that retries is working, not broken.
+    Flux watches the repository, renders the manifests and applies them. Each top-level path is one
+    reconciliation unit with its own interval and health checks. Failure is alerted on the outcome —
+    still not ready after fifteen minutes — rather than on every attempt, because a controller that
+    retries is working, not broken.
   </p>
   <p>
-    The runners that test the repository are pods in the cluster the repository describes. A bad
-    change can break the thing that validates the next change. The pipeline is tested against reality,
-    not a hosted runner with different network rules than production.
+    The runners that test the repository are pods in the cluster the repository describes, spawned by
+    the Actions Runner Controller and discarded after the job. A bad change can break the thing that
+    validates the next change. The pipeline is tested against reality, not a hosted runner with
+    different network rules than production.
   </p>
 </section>
 
@@ -69,6 +77,20 @@
       independent ways of saying no.
     </p>
   </div>
+
+  <figure class="shot">
+    <div class="shot-pending" role="img" aria-label="Screenshot pending: a pull request opened by the agent, showing the app identity as the author and the required checks passing.">
+      <span class="todo">Screenshot pending</span>
+      <code class="path">assets/img/shots/agent-pr.png</code>
+      <span class="hint">A pull request opened by the agent. The thing to capture is the
+        <em>author</em> — it shows the app identity, not your account — plus the checks going green
+        and the merge button being yours.</span>
+    </div>
+    <figcaption>
+      <strong>The agent's pull request.</strong> A different identity from the reviewer. That single
+      detail is what makes the commit history evidence rather than a story.
+    </figcaption>
+  </figure>
 </section>
 
 <section aria-labelledby="unattended">
@@ -124,13 +146,22 @@
     where most of the lessons on this site came from: something broke, the fix went in the repository,
     and the next session starts already knowing.
   </p>
+  <div class="note">
+    <span class="label">The diagrams on this site are written the same way</span>
+    <p>
+      Every figure here is a Mermaid source file in the repository, rendered to SVG by a pinned image.
+      Editing a diagram is editing text, reviewing it is reviewing a diff, and it cannot quietly
+      drift from what the prose says — which is the failure mode of every diagram I have ever seen
+      go stale.
+    </p>
+  </div>
 </section>
 
 </main>
 
 <footer>
   <div class="wrap">
-    <p><a href="alerting.html">← Alerting</a> · <a href="index.html">Why →</a></p>
+    <p><a href="alerting.html">← Alerting</a> · <a href="stack.html">The stack →</a></p>
   </div>
 </footer>
 </body>
