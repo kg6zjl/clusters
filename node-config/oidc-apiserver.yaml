@@ -178,19 +178,44 @@
               | reject('match', '^\s*$')
               | list) }}
 
+    # args_desired is ONLY the OIDC block. The apply below writes
+    # `args_preserved + args_desired`, and args_preserved already holds every unrelated
+    # original line -- so adding `args_lines` here (as this did) wrote the entire file a
+    # second time. kube-apiserver then refuses to start on the duplicated flags:
+    #   service-account-issuer "https://kubernetes.default.svc" is already specified,
+    #   authorization-mode ["Node" "RBAC" "Node" "RBAC"] has mode specified more than once
+    # That is what actually took thinkcentre01's control plane down on 2026-10-01; the
+    # Dex-co-location theory was a red herring for this crash.
     - name: Compute the OIDC block to append
       ansible.builtin.set_fact:
         args_desired: >-
           {{ [] if (oidc_remove | default(false) | bool)
-             else (args_lines + oidc_flags) }}
+             else oidc_flags }}
+
+    # Belt and braces: even if a future edit reintroduces the doubling, refuse to write a
+    # file that carries the same --flag= twice. The apiserver rejects those, so this turns
+    # a would-be control-plane outage into a failed pre-write assertion.
+    - name: Assert the rewrite would not duplicate any flag
+      vars:
+        args_rewritten: "{{ args_preserved + args_desired }}"
+        flag_lines_rewritten: "{{ args_rewritten | select('match', '^--[a-z0-9-]+=') | list }}"
+      ansible.builtin.assert:
+        that:
+          - flag_lines_rewritten | length == flag_lines_rewritten | unique | length
+        fail_msg: >-
+          Refusing to write {{ apiserver_args }}: the rewrite would contain duplicate
+          --flag= lines ({{ flag_lines_rewritten | length }} flags,
+          {{ flag_lines_rewritten | unique | length }} unique). kube-apiserver aborts at
+          startup on duplicated flags, so nothing has been written.
 
     - name: Report the exact rewrite
       ansible.builtin.debug:
         msg:
           - "fix requested: {{ fix | default(false) }}"
           - "removing all --oidc-* flags: {{ oidc_remove | default(false) }}"
-          - "would add: {{ [] if (oidc_remove | default(false) | bool) else oidc_flags }}"
+          - "would add: {{ args_desired }}"
           - "would preserve {{ (args_preserved | length) }} unrelated lines untouched"
+          - "would write {{ (args_preserved + args_desired) | length }} lines to {{ apiserver_args }}"
 
     # `check_mode: false` on the read-only probes below. These only query state; Ansible would
     # otherwise skip them under --check, return empty stdout, and make the asserts below fail
