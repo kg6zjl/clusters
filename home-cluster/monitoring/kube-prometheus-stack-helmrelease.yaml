@@ -159,6 +159,33 @@ spec:
                       suspended: [spec, suspend]
                       revision: [status, artifact, revision]
                       url: [spec, url]
+              # Kyverno records Audit-mode violations as wgpolicyk8s ClusterPolicyReport
+              # objects. Reading the report (not Kyverno's /metrics) is what makes
+              # KyvernoAuditPolicyViolation report-driven.
+              #
+              # ClusterPolicyReport only; a namespaced Policy would need PolicyReport
+              # added here, and none exists in this cluster today.
+              - groupVersionKind:
+                  group: wgpolicyk8s.io
+                  version: v1alpha2
+                  kind: ClusterPolicyReport
+                metricNamePrefix: kyverno
+                metrics:
+                  - name: "policy_result"
+                    help: "One Kyverno policy result from a ClusterPolicyReport; the value is always 1 and the result is in the labels."
+                    each:
+                      type: Info
+                      info:
+                        # results is an array, so one series is emitted per element.
+                        path: [results]
+                        labelsFromPath:
+                          result: [result]
+                          policy: [policy]
+                          rule: [rule]
+                          severity: [severity]
+                          category: [category]
+                    labelsFromPath:
+                      policy_report: [metadata, name]
       rbac:
         # The chart's own roles cover core resources only; its values file is explicit that
         # the CRs named in customResourceState.config need list/watch granted here. Read
@@ -174,6 +201,13 @@ spec:
               - gitrepositories
               - ocirepositories
               - helmrepositories
+            verbs:
+              - list
+              - watch
+          - apiGroups:
+              - wgpolicyk8s.io
+            resources:
+              - clusterpolicyreports
             verbs:
               - list
               - watch
@@ -346,6 +380,7 @@ spec:
           - alertmanager-templates
         secrets:
           - alertmanager-discord
+          - alertmanager-security
         # 28Mi peak against a 200Mi request and no declared limit: this one was
         # over-reserved rather than under.
         resources:

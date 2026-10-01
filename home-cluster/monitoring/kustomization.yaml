@@ -19,6 +19,7 @@ resources:
   - pod-scheduling-alerts.yaml
   - cronjob-health-alerts.yaml
   - trivy-alerts.yaml
+  - kyverno-audit-rules.yaml
   - suppression-sentinels.yaml
   - node-disk-io-rules.yaml
   - ingress-availability-rules.yaml
@@ -29,6 +30,7 @@ resources:
   - dashboard-spegel.yaml
   - alertmanager-external-secret.yaml
   - alertmanager-discord-external-secret.yaml
+  - alertmanager-security-external-secret.yaml
   - alertmanager-templates-configmap.yaml
   - alertmanager-deadman-external-secret.yaml
   - alertmanager-deadman-script.yaml
