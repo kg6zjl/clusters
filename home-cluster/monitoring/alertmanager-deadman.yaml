@@ -20,6 +20,9 @@ spec:
       # otherwise block every later run under Forbid, and the deadman going quiet is
       # the one failure nothing else here would report.
       activeDeadlineSeconds: 120
+      # One attempt: the script exits 0 once it has paged, so a retry only re-sends a page that may
+      # already have landed, and the default 6 retries outlive the 120s deadline.
+      backoffLimit: 0
       template:
         metadata:
           labels:
