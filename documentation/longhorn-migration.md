@@ -491,3 +491,50 @@ kubectl -n longhorn-system delete pod -l app=longhorn-manager --field-selector s
 - Do not "fix" a wedged pod by deleting it. If the pod's mount is stuck on a
   leaked node-side mount, a fresh pod fails identically — check the event reason
   (`FailedAttachVolume` vs `FailedMount`) before recreating anything.
+
+## 9. Known failure mode: `multipathd` claims the Longhorn iSCSI LUNs
+
+**Same event as §8, different cause — rule this one out first.** It is the more
+common of the two on this cluster and it is fully Ansible-managed, so it needs no
+human on the node.
+
+**Symptom**
+
+Identical to §8: `MountVolume.MountDevice failed ... exit status 32 ... already
+mounted or mount point busy` (or the CSI plugin's log saying
+`/dev/longhorn/pvc-<uuid> is in use.`), pod wedged in `Init:0/1` /
+`ContainerCreating`, while `volumes.longhorn.io` reports the volume attached and
+healthy and `engines.longhorn.io` is running.
+
+**Mechanism**
+
+`multipath-tools` is installed on every node. Longhorn exports each volume as an
+iSCSI LUN with vendor `IET`, product `VIRTUAL-DISK`. With no blacklist, `multipathd`
+claims the LUN and stacks a device-mapper map (`mpathX`) on top of `/dev/sdX`. The
+mount then sees the device as already in use and fails with `EBUSY`, forever —
+unlike §8 there is **no host mount to `umount`** and no leaked `globalmount`, so
+the §8 recovery steps do nothing and a pod delete fails identically.
+
+**How to tell it apart from §8** (the dm map / `multipathd` is the tell):
+
+```bash
+# [READ-ONLY]
+sudo multipath -ll                       # mpathX (...) dm-X IET,VIRTUAL-DISK  <- the cause
+lsblk -o NAME,VENDOR,MODEL,HOLDERS       # /dev/sdX ... HOLDERS dm-X
+sudo fuser -vm /dev/longhorn/pvc-<uuid>  # the only open fds are multipathd
+sudo findmnt -S /dev/longhorn/pvc-<uuid> # empty (nothing to umount, unlike §8)
+```
+
+**Fix**
+
+`node-config/roles/node` renders `/etc/multipath.conf` with a blacklist for vendor
+`IET` / product `VIRTUAL-DISK`, restarts `multipathd`, and flushes any map it had
+already built. Run the node playbook on the affected node; the kubelet's own retry
+succeeds once the map is gone — no reboot, no pod deletion:
+
+```bash
+cd node-config && ANSIBLE_SSH_KEY=~/.ssh/ansible_cluster \
+  ansible-playbook playbook.yaml -l <node>
+```
+
+Reference: <https://longhorn.io/kb/troubleshooting-volume-with-multipath/>.
