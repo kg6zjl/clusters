@@ -5,3 +5,7 @@ resources:
   - longhorn-helmrepository.yaml
   - longhorn-helmrelease.yaml
   - network-policy-metrics.yaml
+  - externalsecret-longhorn-ui-auth.yaml
+  - middleware-longhorn-ui.yaml
+  - ingressroute-longhorn-ui.yaml
+  - network-policy-ui.yaml

@@ -1,0 +1,106 @@
+version: "3"
+
+# Tasks for working on the site. Deliberately separate from home-cluster/Taskfile.yaml: nothing
+# here touches the cluster, and nothing there needs to know the site exists.
+#
+# Run from this directory:  cd documentation/site-diagrams && task diagrams
+#
+# This directory is deliberately NOT inside site/. Pages publishes every file under site/, so any
+# tooling placed there would be published with the pages, and this tooling is full of the registry
+# hostname. The rendered SVGs are committed into site/assets/img/ because those ARE the site.
+
+vars:
+  IMAGE: registry.kube.stevearnett.com/site/mermaid-renderer:latest
+  SITE: ../../site
+
+tasks:
+  default:
+    desc: "You are here"
+    cmds:
+      - task --list-all
+
+  diagrams:
+    desc: "Render every src/*.mmd into site/assets/img/*.svg"
+    deps: [diagrams:build]
+    cmds:
+      - >-
+        docker run --rm
+        -v "$PWD/src:/src:ro"
+        -v "$PWD/{{.SITE}}/assets/img:/out"
+        {{.IMAGE}}
+
+  diagrams:build:
+    desc: "Build the Mermaid renderer image, tagged for the cluster registry"
+    cmds:
+      - docker build -t {{.IMAGE}} .
+
+  diagrams:push:
+    desc: "Build and push the renderer, so the in-cluster agent can render without internet egress"
+    cmds:
+      - >-
+        docker build
+        -t {{.IMAGE}}
+        -t {{.IMAGE}}:${{ default `git rev-parse --short HEAD` `no-git` }}
+        .
+
+  check:
+    desc: "Sanity-check the site: nav is consistent, figures resolve, nothing public leaks the network"
+    cmds:
+      - task check:nav
+      - task check:figures
+      - task check:public
+
+  check:nav:
+    desc: "Every page has the same nav, in the same order, with one aria-current"
+    cmds:
+      - |
+        cd {{.SITE}}
+        for f in *.html; do
+          items=$(grep -c '<li><a href="[a-z]*\.html"' "$f")
+          current=$(grep -c 'aria-current="page"' "$f")
+          printf '%-18s nav=%s aria-current=%s\n' "$f" "$items" "$current"
+          [ "$items" -eq 6 ] && [ "$current" -eq 1 ] || { echo "  FAIL: expected 6 nav items and 1 aria-current"; exit 1; }
+        done
+        echo "nav ok"
+
+  check:figures:
+    desc: "Every figure points at a file that exists and declares matching dimensions"
+    cmds:
+      - |
+        cd {{.SITE}}
+        status=0
+        for f in *.html; do
+          while IFS= read -r src; do
+            [ -f "assets/img/$src" ] || { echo "FAIL $f: missing assets/img/$src"; status=1; continue; }
+            vb=$(grep -o 'viewBox="[^"]*"' "assets/img/$src" | head -1 | sed 's/viewBox="//;s/"//')
+            # Round, never truncate. Mermaid emits fractional viewBox values (1458.84375) and awk's
+            # printf "%d" truncates, so a truncating check fails a correctly-rounded pair by a pixel.
+            w=$(echo "$vb" | awk '{printf "%d", int($3 + 0.5)}')
+            h=$(echo "$vb" | awk '{printf "%d", int($4 + 0.5)}')
+            line=$(grep "$src" "$f" | head -1)
+            case "$line" in
+              *"width=\"$w\""*"height=\"$h\""*) printf 'ok   %-18s %s (%sx%s)\n' "$f" "$src" "$w" "$h" ;;
+              *) echo "FAIL $f: $src is ${w}x${h} but the <img> does not declare it"; status=1 ;;
+            esac
+          done < <(grep -o 'assets/img/[a-z-]*\.svg' "$f" | sed 's|assets/img/||' | sort -u)
+        done
+        [ "$status" -eq 0 ] && echo "figures ok" || exit 1
+
+  check:public:
+    desc: "Nothing in site/ describes the network rather than the mechanism"
+    cmds:
+      - |
+        cd {{.SITE}}
+        # The one gate this directory cannot pass by accident. The repository is public, so the
+        # site is, and it is the only artifact here written *for* strangers. Addresses, hostnames,
+        # domains, ports, usernames and secret values stay out; describe the category instead.
+        # Product names are fine - public OSS and public services.
+        #
+        # This runs over site/ only, which is why the tooling lives outside it.
+        if grep -rEn "([0-9]{1,3}\.){3}[0-9]{1,3}|@[a-z0-9.-]+\.[a-z]{2,}|[a-z0-9.-]+\.(com|net|org|io|local)" . \
+             | grep -v "^\S*:[0-9]*:.*\(example\|schema\|w3\.org\|github\|docs\)"; then
+          echo "FAIL: something in site/ looks like a real address, hostname or domain."
+          echo "      Product names are fine. Anything describing THIS network is not."
+          exit 1
+        fi
+        echo "no network detail in site/"

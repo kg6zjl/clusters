@@ -27,7 +27,19 @@ Catch a pod's inability to reach the kube-apiserver:
 
 ## Repository Overview
 
-This is a **single-node Kubernetes home lab cluster** running on an AMD-based Acemagicial K1 (NUC-size) system.
+This is a **three-node Kubernetes home lab cluster** running MicroK8s (snap `v1.35.6`, rev 9072) across
+three ThinkCentre machines.
+
+The datastore is **dqlite** — not etcd, not kine. All three nodes are datastore masters listening on
+port 19001, and each node runs its own local `kube-apiserver` embedded in the `kubelite` process rather
+than talking to one shared control-plane endpoint:
+
+| Node | Address | Role |
+|------|---------|------|
+| `thinkcentre01` | 192.168.1.144 | datastore master |
+| `thinkcentre02` | 192.168.1.121 | datastore master |
+| `thinkcentre03` | 192.168.1.146 | datastore master |
+
 - **Deployment model**: Declarative
 - **Config management**: Kustomize (manifests) + Helmfile (Helm releases)
 - **Cluster scope**: Home / self-hosted, not production SaaS
@@ -36,7 +48,7 @@ This is a **single-node Kubernetes home lab cluster** running on an AMD-based Ac
 
 ## Deployment Model
 
-This cluster uses **Flux CD** for GitOps reconciliation. There is NO "Apply to Cluster" GitHub Actions workflow.
+This cluster uses **Flux CD** for GitOps reconciliation.
 
 ### How changes reach the cluster
 
@@ -248,6 +260,26 @@ env:
 - Secret value must be in the `password` field (or custom field if specified in ExternalSecret)
 
 ---
+
+## Agent Runs Cost Money (READ BEFORE ASSIGNING WORK)
+
+Every run bills the same OpenRouter account: a kanban worker, an alert-detector wake, a cron job
+with a prompt. The budget is **$12/month**. A worker run has measured ~$0.41, and recent burn was
+$14/day ($430/month at that pace). Cost, not capability, is the binding constraint here.
+
+- **Do the work inline first.** The interactive session is already loaded and paid for; a worker
+  re-reads AGENTS.md, skills and repo context before it starts. Spawn a worker only when the job is
+  long enough that a fresh context is cheaper than carrying it.
+- **A ticket is 2-3 runs** (implement, review, fix). Do not raise one ticket per finding.
+- **Never widen the alert path to "just see" something.** The detector wakes at most
+  `MAX_WAKES_PER_DAY` (1) and only for names on `ALERT_INCLUDE_ALERTNAMES`; both are budget controls.
+- **The model is not the lever.** It is already at the floor (~$0.02/Mtok in, $0.40/Mtok out).
+  Output tokens and run count are what cost, so write less and run less.
+- **Prove it before shipping, cheaply.** A local test against the real consumer costs cents; a
+  failed rollout costs a run to detect and another to fix.
+
+An assigned, ready ticket is a run waiting to be billed. `hermes kanban list` shows them and
+`hermes kanban reassign <id> none` parks one — check before you create.
 
 ## Git Workflow (IMPORTANT)
 

@@ -1,26 +1,16 @@
-/* Hand-written, dependency-free. One accent, generous space, system fonts.
-   Dark by default, light when the reader prefers it. No decoration. */
+/* Hand-written, no dependencies. Dark only, by request: one accent, system fonts, no decoration. */
 
 :root {
-  --bg: #0e1116;
-  --ink: #e8ebef;
-  --ink-soft: #a4adb8;
-  --ink-dim: #79828d;
-  --line: #232a33;
-  --accent: #5aa9ff;
+  --bg: #0c1014;
+  --bg-soft: #121820;
+  --ink: #e7edf3;
+  --ink-soft: #98a5b2;
+  --ink-dim: #6b7885;
+  --line: #1e2731;
+  --accent: #71b7ff;
+  --warn: #e3b341;
   --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
   --sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-}
-
-@media (prefers-color-scheme: light) {
-  :root {
-    --bg: #fbfbfc;
-    --ink: #15191e;
-    --ink-soft: #4a525c;
-    --ink-dim: #6d757f;
-    --line: #e4e7eb;
-    --accent: #1a63c8;
-  }
 }
 
 * { box-sizing: border-box; }
@@ -43,13 +33,13 @@ a { color: var(--accent); text-decoration-thickness: 1px; text-underline-offset:
 
 /* ---------- nav ---------- */
 
-.topnav { border-bottom: 1px solid var(--line); }
+.topnav { border-bottom: 1px solid var(--line); background: var(--bg-soft); }
 
 .topnav ul {
   list-style: none;
   margin: 0 auto;
   padding: 0.9rem 1.5rem;
-  max-width: 52rem;
+  max-width: 54rem;
   display: flex;
   flex-wrap: wrap;
   gap: 0.4rem 1.1rem;
@@ -62,55 +52,44 @@ a { color: var(--accent); text-decoration-thickness: 1px; text-underline-offset:
 
 /* ---------- layout ---------- */
 
-.wrap { max-width: 52rem; margin: 0 auto; padding: 0 1.5rem; }
+.wrap, main, .page-head { max-width: 54rem; margin: 0 auto; }
 
-main { max-width: 52rem; margin: 0 auto; padding: 3.5rem 1.5rem 4rem; }
+main { padding: 3rem 1.5rem 4rem; }
+.page-head { padding: 3.5rem 1.5rem 0; }
 
-.page-head { max-width: 52rem; margin: 0 auto; padding: 3.5rem 1.5rem 0; }
-
-section { margin: 0 0 4rem; }
+section { margin: 0 0 3.5rem; }
 
 /* ---------- type ---------- */
 
 h1 {
-  font-size: clamp(1.7rem, 4.5vw, 2.3rem);
+  font-size: clamp(1.6rem, 4.5vw, 2.1rem);
   line-height: 1.2;
   letter-spacing: -0.02em;
   font-weight: 650;
   margin: 0 0 1rem;
 }
 
-h2 {
-  font-size: 1.25rem;
-  line-height: 1.3;
-  font-weight: 650;
-  margin: 0 0 1.1rem;
-}
+h2 { font-size: 1.2rem; line-height: 1.3; font-weight: 650; margin: 0 0 1rem; }
 
-h3 { font-size: 1.02rem; font-weight: 650; margin: 1.8rem 0 0.5rem; }
+h3 { font-size: 1rem; font-weight: 650; margin: 1.6rem 0 0.5rem; }
 
-p { margin: 0 0 1.3rem; }
+p { margin: 0 0 1.2rem; }
 
 .eyebrow {
-  margin: 0 0 1rem;
+  margin: 0 0 0.9rem;
   font-size: 0.72rem;
   font-weight: 650;
   letter-spacing: 0.16em;
   text-transform: uppercase;
-  color: var(--accent);
+  color: var(--ink-dim);
 }
 
-.lede {
-  font-size: 1.14rem;
-  line-height: 1.6;
-  color: var(--ink-soft);
-  margin: 0 0 1.4rem;
-}
+.lede { font-size: 1.12rem; line-height: 1.6; color: var(--ink-soft); margin: 0 0 1.3rem; }
 
 .small, .meta { font-size: 0.86rem; line-height: 1.6; color: var(--ink-dim); }
 
 ul, ol { padding-left: 1.2rem; }
-li { margin: 0 0 0.5rem; }
+li { margin: 0 0 0.55rem; }
 li:last-child { margin-bottom: 0; }
 
 strong { font-weight: 650; }
@@ -120,30 +99,84 @@ strong { font-weight: 650; }
 code { font-family: var(--mono); font-size: 0.88em; }
 
 pre {
-  margin: 0 0 1.5rem;
+  margin: 0 0 1.4rem;
   padding: 1rem 1.1rem;
+  background: var(--bg-soft);
   border: 1px solid var(--line);
   border-radius: 8px;
   overflow-x: auto;
-  font-size: 0.82rem;
+  font-size: 0.8rem;
   line-height: 1.6;
+  color: var(--ink-soft);
 }
 
 pre code { font-size: 1em; }
 
-/* ---------- callout ---------- */
+/* ---------- figures ---------- */
 
-.note {
-  margin: 2rem 0;
-  padding: 0 0 0 1.1rem;
-  border-left: 2px solid var(--accent);
+/* Diagrams and screenshots break out of the 54rem measure. A diagram that has to fit inside the
+   line length renders at about 60% scale, which turns 15px labels into 9px ones; giving figures
+   their own wider measure is cheaper than redrawing every diagram to be tall and narrow.
+   Centred on the column rather than left-aligned to it, so the text above and below it stays
+   where the eye expects. */
+figure.shot { margin: 2rem 0; }
+
+figure.shot img,
+figure.shot svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  margin: 0 auto;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg-soft);
 }
 
+figcaption {
+  margin: 0.7rem 0 0;
+  font-size: 0.84rem;
+  line-height: 1.55;
+  color: var(--ink-dim);
+}
+
+figcaption strong { color: var(--ink-soft); }
+
+/* A placeholder for a screenshot nobody has captured yet. Deliberately loud: it should be
+   obvious at a glance which figures are still outstanding, so the page cannot quietly ship with
+   three empty boxes that read as design. */
+.shot-pending {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  min-height: 9rem;
+  padding: 2rem 1.5rem;
+  border: 1px dashed var(--warn);
+  border-radius: 8px;
+  background: var(--bg-soft);
+  text-align: center;
+}
+
+.shot-pending .todo {
+  font-size: 0.72rem;
+  font-weight: 650;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--warn);
+}
+
+.shot-pending .path { font-size: 0.82rem; color: var(--ink-dim); }
+.shot-pending .hint { font-size: 0.86rem; color: var(--ink-soft); max-width: 34rem; }
+
+/* ---------- callout ---------- */
+
+.note { margin: 1.8rem 0; padding: 0 0 0 1.1rem; border-left: 2px solid var(--accent); }
 .note p:last-child { margin-bottom: 0; }
 
 .note .label {
   display: block;
-  margin: 0 0 0.5rem;
+  margin: 0 0 0.45rem;
   font-size: 0.72rem;
   font-weight: 650;
   letter-spacing: 0.14em;
@@ -151,25 +184,19 @@ pre code { font-size: 1em; }
   color: var(--accent);
 }
 
-/* ---------- index cards ---------- */
+/* ---------- cards ---------- */
 
-.cards { display: grid; gap: 2rem; margin: 2rem 0 0; }
-
-.card h3 { margin: 0 0 0.4rem; }
-.card p { margin: 0; color: var(--ink-soft); font-size: 0.96rem; }
+.cards { display: grid; gap: 1.6rem; margin: 1.8rem 0 0; }
+.card h3 { margin: 0 0 0.35rem; }
+.card p { margin: 0; color: var(--ink-soft); font-size: 0.94rem; }
 
 /* ---------- table ---------- */
 
-table {
-  width: 100%;
-  margin: 0 0 1.5rem;
-  border-collapse: collapse;
-  font-size: 0.92rem;
-}
+table { width: 100%; margin: 0 0 1.4rem; border-collapse: collapse; font-size: 0.9rem; }
 
 th, td {
   text-align: left;
-  padding: 0.7rem 1rem 0.7rem 0;
+  padding: 0.65rem 1rem 0.65rem 0;
   border-bottom: 1px solid var(--line);
   vertical-align: top;
 }
@@ -184,18 +211,20 @@ th {
 
 /* ---------- footer ---------- */
 
-footer {
-  border-top: 1px solid var(--line);
-  padding: 2rem 0 4rem;
-  font-size: 0.86rem;
-  color: var(--ink-dim);
-}
-
+footer { border-top: 1px solid var(--line); padding: 1.8rem 0 3.5rem; font-size: 0.86rem; color: var(--ink-dim); }
+footer .wrap { padding: 0 1.5rem; }
 footer p { margin: 0; }
 
 @media (min-width: 700px) {
   .cards { grid-template-columns: 1fr 1fr; }
-  .page-head { padding-top: 5rem; }
+  .page-head { padding-top: 4.5rem; }
+}
+
+@media (min-width: 76rem) {
+  /* 68rem of measure, centred on the 54rem column. main is width-constrained rather than
+     max-width-constrained so the breakout has a real containing block to centre against. */
+  main { width: 54rem; }
+  figure.shot { width: 68rem; margin-left: 50%; transform: translateX(-50%); }
 }
 
 @media (prefers-reduced-motion: reduce) {

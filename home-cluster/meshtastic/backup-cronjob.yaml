@@ -23,9 +23,11 @@ spec:
             app: meshmonitor-backup
         spec:
           restartPolicy: OnFailure
-          # meshmonitor-data-longhorn is RWO, so Longhorn can only attach it to the node
-          # already running meshmonitor. Without this the pod lands on any node and sits
-          # ContainerCreating on the attach forever.
+          # meshmonitor-data is a node-pinned hostPath PV (bound to thinkcentre02 by its
+          # nodeAffinity), so this job MUST be co-located with the app or the kubelet
+          # will never satisfy the PV's node requirement. With the previous Longhorn
+          # claim this was belt-and-braces for RWO; on hostpath it is the only thing
+          # making the backup schedulable at all.
           affinity:
             podAffinity:
               requiredDuringSchedulingIgnoredDuringExecution:
@@ -38,7 +40,7 @@ spec:
           volumes:
           - name: meshmonitor-data
             persistentVolumeClaim:
-              claimName: meshmonitor-data-longhorn
+              claimName: meshmonitor-data
               readOnly: true
           - name: nas-creds
             secret:

@@ -187,7 +187,7 @@ spec:
               type: RuntimeDefault
           containers:
             - name: reconcile
-              image: python:3.13-slim
+              image: python:3.14-slim
               command:
                 - python
                 - /app/reconcile.py

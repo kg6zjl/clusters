@@ -24,7 +24,10 @@ spec:
       sourceRef:
         kind: HelmRepository
         name: dex
-        namespace: flux-system
+        # The sso Kustomization sets targetNamespace: sso, which rewrites every namespaced
+        # resource in this directory -- the HelmRepository included -- into ns sso. Naming
+        # flux-system here resolves to nothing and the release never gets its chart.
+        namespace: sso
   install:
     createNamespace: false
   upgrade:
@@ -38,6 +41,12 @@ spec:
     serviceAccount:
       create: false
 
+    # Deliberately NOT pinned to a node. A pin to a control-plane node looks protective but is a
+    # boot deadlock: if that node reboots, the pinned pod cannot reschedule (its nodeSelector only
+    # matches the down node), so Dex stays Pending and that node's apiserver cannot fetch the OIDC
+    # discovery document at startup. Left to the scheduler, the Deployment moves Dex to a healthy
+    # node instead. A kubelite restart on its own keeps containers running (containerd holds them),
+    # so colocation is not the hazard the pin assumed -- see PR #916/#919 for the history.
     config:
       # MUST be reachable by a browser (Headlamp redirects there) AND by the apiserver (which
       # fetches the discovery document). TLS terminates at Traefik with the cert-manager
@@ -57,19 +66,29 @@ spec:
         responseTypes: ["code"]
 
       staticClients:
-        # The apiserver's --oidc-client-id. It never sends a client secret, so this stays a
-        # public client with no secret.
+        # The apiserver's --oidc-client-id. It never sends a client secret, so this is a public
+        # client. `public: true` is not documentation here, it is the field Dex validates:
+        # cmd/dex/serve.go rejects any static client with no secret, no secretEnv and
+        # public != true ("invalid config: Secret or SecretEnv field is required for client"),
+        # which crash-looped the pod on its very first start after the chart resolved.
         - id: kubernetes
           name: Kubernetes API
+          public: true
           redirectURIs:
             - urn:ietf:wg:oauth:2.0:oob
-        # Headlamp's built-in OIDC client. Note `secretEnv` takes the env var NAME with no `$` --
-        # that is the documented form for staticClients, unlike connector config which uses `$VAR`.
+        # Headlamp's built-in OIDC client. Deliberately a PUBLIC client with no secret.
+        #
+        # Why: a first-party app talking to our own Dex needs no shared secret, and making it
+        # one would mean creating a new 1Password item purely to store a credential that grants
+        # nothing an attacker could not get by just starting the login flow. Headlamp sends a
+        # PKCE code_challenge (`-oidc-use-pkce=true`), so the authorization code is useless
+        # without the verifier that only the client that started the flow holds. Net effect:
+        # fewer secrets to create, rotate and leak, with no loss of security.
         - id: headlamp
           name: Headlamp
           redirectURIs:
             - https://headlamp.kube.stevearnett.com/oidc-callback
-          secretEnv: DEX_HEADLAMP_CLIENT_SECRET
+          public: true
 
       connectors:
         - type: google
@@ -96,11 +115,6 @@ spec:
           secretKeyRef:
             name: dex-google-connector
             key: DEX_GOOGLE_CLIENT_SECRET
-      - name: DEX_HEADLAMP_CLIENT_SECRET
-        valueFrom:
-          secretKeyRef:
-            name: dex-headlamp-client
-            key: secret
 
     # sqlite3 needs a writable /data. emptyDir rather than a PVC: the only things Dex persists
     # are in-flight auth codes and refresh tokens, and losing them on restart just means the user

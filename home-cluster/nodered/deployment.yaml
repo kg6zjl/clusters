@@ -7,6 +7,12 @@ metadata:
     alert-on-down: "true"
 spec:
   replicas: 1
+  # Single ReadWriteOnce volume; a rolling update would need two pods on it at once.
+  # Step 2 of the migration from RollingUpdate; see meshtastic/deployment.yaml for why
+  # that transition cannot be done in a single apply. Flux owned rollingUpdate as of
+  # #884, so dropping it here is a legal removal.
+  strategy:
+    type: Recreate
   revisionHistoryLimit: 3
   selector:
     matchLabels:

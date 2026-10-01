@@ -1,0 +1,56 @@
+# Split out of prometheus-rules.yaml on 2026-09-30, one file per rule group, so that
+# review and ownership follow the group that changed. It buys reviewability and nothing
+# else: Prometheus reloads its rule set as a whole - LoadGroups aggregates errors across
+# every file and refuses the entire reload if any one rule is bad - so a file boundary is
+# not blast-radius isolation. The CI `promtool check rules` step is what makes a bad rule
+# fail the PR instead of the reload.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: flux-resource-alerts
+  namespace: monitoring
+  labels:
+    prometheus: kube-prometheus-stack-prometheus
+    app: kube-prometheus-stack-prometheus
+spec:
+  groups:
+  # "A Flux resource is not Ready" is a different question from "a Flux reconcile just
+  # failed". Flux emits an event per *attempt*, so an event-driven alert can never express
+  # duration; kube-state-metrics exports gotk_resource_info{ready="True|False"} read from the
+  # resource's own status, which can. The two are complementary and both stay: the Alert in
+  # flux-notifications/ fires on the first failed attempt (minus the datastore-write class,
+  # which self-heals), this fires only if the resource is still not Ready a quarter of an
+  # hour later - i.e. when a reconcile is genuinely stuck rather than retrying.
+  #
+  # Depends on the customResourceState block in kube-prometheus-stack-helmrelease.yaml. That
+  # dependency is stated twice on purpose: the second rule exists because a rule whose metric
+  # has never existed is silent, and "silent" is indistinguishable from "nothing is broken".
+  - name: flux-resources
+    rules:
+    - alert: FluxResourceNotReady
+      # Suspended resources are deliberately included: Flux does not flip the Ready
+      # condition when a resource is suspended, so a suspended resource stuck at
+      # Ready=False is still a real problem, and filtering on `suspended` would hide it.
+      expr: gotk_resource_info{ready="False"} == 1
+      for: 15m
+      labels:
+        severity: warning
+      annotations:
+        summary: "{{ $labels.customresource_kind }} {{ $labels.exported_namespace }}/{{ $labels.name }} not Ready for 15m"
+        description: "kube-state-metrics has reported {{ $labels.customresource_kind }} {{ $labels.exported_namespace }}/{{ $labels.name }} ({{ $labels.customresource_group }}) with Ready=False continuously for 15 minutes, so this is not a transient reconcile error that healed on retry. Check its status and message with `flux get {{ $labels.customresource_kind | toLower }} -n {{ $labels.exported_namespace }} {{ $labels.name }}`."
+    - alert: FluxResourceMetricsMissing
+      # absent() rather than a staleness check because gotk_resource_info never existed here
+      # before it was enabled, and a series that has never existed is not "missing recently"
+      # - there is nothing to measure a gap against. Gated on the producer so that a
+      # kube-state-metrics outage, which has its own alert, does not also accuse this config.
+      # Expected to be silent within ~30m of the kube-prometheus-stack change landing; if it
+      # fires, the customResourceState config is not being read and FluxResourceNotReady is
+      # blind, not healthy.
+      expr: absent(gotk_resource_info) and on() (up{job="kube-state-metrics"} == 1)
+      for: 30m
+      labels:
+        severity: warning
+      annotations:
+        summary: "gotk_resource_info is absent - FluxResourceNotReady cannot fire"
+        description: "kube-state-metrics is up but is not exporting gotk_resource_info, so no Flux resource going not-Ready will alert from here. Either the customResourceState config in kube-prometheus-stack-helmrelease.yaml is no longer being read (check the kube-state-metrics pod's log for custom resource state errors) or rbac.extraRules no longer grants list/watch on the flux CRs."
+        runbook_url: "https://prometheus.kube.stevearnett.com/targets"

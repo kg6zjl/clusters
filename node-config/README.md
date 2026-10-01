@@ -31,6 +31,10 @@ Per-host overrides live in `inventory/host_vars/`. Shared defaults in
 5. Pins `--node-ip` to the node's wired IP in kubelet args
 6. Enables addons (metrics-server)
 7. Restricts sudo to microk8s commands only
+8. Blacklists Longhorn's iSCSI LUNs (vendor `IET`, product `VIRTUAL-DISK`) from
+   `multipathd` in `/etc/multipath.conf`, so it stops stacking `mpathX` maps on
+   the volumes and breaking the CSI mount with `already mounted or mount point
+   busy` (see `documentation/longhorn-migration.md` §9)
 
 **`roles/nas-mount`**
 - Mounts `//192.168.1.176/Media/{Movies,TV,Torrents}` to

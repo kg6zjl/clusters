@@ -1,0 +1,36 @@
+flowchart TB
+%% The only write path, for the reader who wants to implement this part first.
+%%
+%% The dashed return path is the whole design. The agent's pull request lands in the same review
+%% queue as mine, so "it wrote the fix" and "a human approved the fix" stay two separate events
+%% with two separate identities attached to them.
+%%
+%% The invisible links (~~~) hold the two authors side by side without drawing an arrow between
+%% them — they are alternatives reaching the same place, not a sequence.
+
+  what["Something is broken,<br/>or a version moved"]
+
+  me["Me"]
+  agent["Hermes<br/>read-only in-cluster,<br/>a GitHub App in git"]
+
+  pr["Pull request"]
+  checks["Required checks<br/>lint, kustomize, policy tests"]
+  review{"Who merges?"}
+  merge["Merged to main"]
+  reconcile["Flux reconciles"]
+  done["New state, and the commit<br/>that caused it"]
+
+  what --> pr
+  me --> pr
+  agent --> pr
+  pr --> checks
+  checks -->|"red"| pr
+  checks -->|"green"| review
+  review -->|"a human, always"| merge
+  review -.->|"never for the<br/>cluster repository"| note["The agent may merge<br/>its own skills — that is<br/>its own knowledge"]
+  merge --> reconcile
+  reconcile -->|"ready"| done
+  reconcile -.->|"stuck"| what
+
+  classDef gate fill:#121820,stroke:#71b7ff,stroke-width:2px,color:#e7edf3
+  class review gate

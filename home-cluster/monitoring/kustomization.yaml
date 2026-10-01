@@ -5,7 +5,23 @@ resources:
   - ingressroute-grafana.yaml
   - ingressroute-prometheus.yaml
   - ingressroute-alertmanager.yaml
-  - prometheus-rules.yaml
+  # One PrometheusRule per rule group (split out of prometheus-rules.yaml on 2026-09-30) so a
+  # change touches the group it belongs to. It buys review, not isolation: Prometheus reloads
+  # the rule set as a whole.
+  - service-down-alerts.yaml
+  - disk-space-alerts.yaml
+  - openrouter-alerts.yaml
+  - prod-backup-alerts.yaml
+  - control-plane-write-alerts.yaml
+  - ci-runner-alerts.yaml
+  - node-health-alerts.yaml
+  - flux-resource-alerts.yaml
+  - pod-scheduling-alerts.yaml
+  - longhorn-volume-alerts.yaml
+  - cronjob-health-alerts.yaml
+  - trivy-alerts.yaml
+  - kyverno-audit-rules.yaml
+  - suppression-sentinels.yaml
   - node-disk-io-rules.yaml
   - ingress-availability-rules.yaml
   - dashboard-ugreen-nas.yaml
@@ -13,7 +29,11 @@ resources:
   - dashboard-trivy-operator.yaml
   - dashboard-openrouter.yaml
   - dashboard-spegel.yaml
+  - dashboard-nodes.yaml
   - alertmanager-external-secret.yaml
+  - alertmanager-discord-external-secret.yaml
+  - alertmanager-security-external-secret.yaml
+  - alertmanager-templates-configmap.yaml
   - alertmanager-deadman-external-secret.yaml
   - alertmanager-deadman-script.yaml
   - alertmanager-deadman.yaml

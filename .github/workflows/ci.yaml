@@ -8,10 +8,12 @@ on:
       - 'home-cluster/**'
       - 'node-config/**'
       - 'renovate.json'
+      - 'AGENTS.md'
       - '.github/workflows/**'
       - '.gitleaks.toml'
       - '.pre-commit-config.yaml'
       - '.githooks/**'
+      - 'site/**'
 
 env:
   # Single pin for the trufflehog CLI, shared by this workflow's fallback and the
@@ -19,6 +21,11 @@ env:
   # renovate.json); a rename here breaks that, so keep the token intact.
   # renovate: datasource=github-releases depName=trufflesecurity/trufflehog
   TRUFFLEHOG_VERSION: "3.97.9"
+  # Same shape for the Kyverno CLI, which the warmer now also caches: this workflow's fallback and
+  # the DaemonSet both read this one pin, and the warmer stamps the binary with it so a cached CLI
+  # from an older pin is a miss rather than a silently wrong policy schema.
+  # renovate: datasource=github-releases depName=kyverno/kyverno
+  KYVERNO_VERSION: "1.19.1"
 
 jobs:
   lint:
@@ -144,11 +151,24 @@ jobs:
         # matches the chart's appVersion (v1.19.1) so the policy schema validated in
         # CI is the one the cluster's controllers will apply. Checksum-verified
         # against the release's checksums.txt, the same shape as the trufflehog step.
+        #
+        # The node-local toolcache is preferred and is filled by the runner-toolcache-warmer
+        # DaemonSet: this tarball is 53MB off a CDN that delivers ~300KB/s from this cluster,
+        # which measured as 148s of this job's 157s. The version stamp the warmer writes
+        # alongside the binary is what makes the pin enforceable here - testing the policy
+        # schema against a CLI that is not the pinned one would quietly validate the wrong
+        # thing, so a stale or mismatched cache is treated as a cache miss rather than used.
         run: |
           set -euo pipefail
-          V="1.19.1"
+          V="${KYVERNO_VERSION:?KYVERNO_VERSION is not set}"
           KY="/opt/hostedtoolcache/tools/kyverno"
-          if [ ! -x "$KY" ]; then
+          STAMP="/opt/hostedtoolcache/tools/.kyverno.version"
+          if [ ! -x "$KY" ] || [ "$(cat "$STAMP" 2>/dev/null || true)" != "$V" ]; then
+            if [ -x "$KY" ]; then
+              echo "Cached kyverno is $(cat "$STAMP" 2>/dev/null || echo 'unversioned'), pin is ${V} - fetching the pinned copy"
+            else
+              echo "No cached kyverno on this runner - fetching pinned copy"
+            fi
             mkdir -p "$RUNNER_TEMP/kyverno-cli"
             cd "$RUNNER_TEMP/kyverno-cli"
             curl -sSfLO "https://github.com/kyverno/kyverno/releases/download/v${V}/kyverno-cli_v${V}_linux_x86_64.tar.gz"
@@ -156,6 +176,8 @@ jobs:
             sha256sum -c --ignore-missing checksums.txt
             tar -xzf "kyverno-cli_v${V}_linux_x86_64.tar.gz" kyverno
             KY="$RUNNER_TEMP/kyverno-cli/kyverno"
+          else
+            echo "Using cached kyverno ${V} from the node-local toolcache"
           fi
           "$KY" version
           echo "KYVERNO_CLI=$KY" >> "$GITHUB_ENV"
