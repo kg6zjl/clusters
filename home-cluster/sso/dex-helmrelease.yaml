@@ -41,19 +41,12 @@ spec:
     serviceAccount:
       create: false
 
-    # PINNED OFF THE NODE BEING ROLLED. Every node runs its own embedded kube-apiserver inside
-    # kubelite, and restarting kubelite also restarts kubelet on that node -- so a Dex pod on
-    # the node being rolled dies with it, and the apiserver then cannot fetch the OIDC discovery
-    # document at STARTUP and exits. node-config/oidc-apiserver.yaml therefore refuses to roll
-    # a node that hosts Dex, so Dex must sit on a node we are NOT restarting.
-    #
-    # tc01 and tc03 already carry the --oidc-* flags; tc02 is the last apiserver left, and Dex
-    # was on tc02, so the pin moves to thinkcentre03 to let tc02 be rolled. Leave Dex pinned
-    # afterward: every future kubelite restart (reboot, snap refresh) has the same hazard, so
-    # move this pin before touching whichever node hosts Dex.
-    nodeSelector:
-      kubernetes.io/hostname: thinkcentre03
-
+    # Deliberately NOT pinned to a node. A pin to a control-plane node looks protective but is a
+    # boot deadlock: if that node reboots, the pinned pod cannot reschedule (its nodeSelector only
+    # matches the down node), so Dex stays Pending and that node's apiserver cannot fetch the OIDC
+    # discovery document at startup. Left to the scheduler, the Deployment moves Dex to a healthy
+    # node instead. A kubelite restart on its own keeps containers running (containerd holds them),
+    # so colocation is not the hazard the pin assumed -- see PR #916/#919 for the history.
     config:
       # MUST be reachable by a browser (Headlamp redirects there) AND by the apiserver (which
       # fetches the discovery document). TLS terminates at Traefik with the cert-manager
