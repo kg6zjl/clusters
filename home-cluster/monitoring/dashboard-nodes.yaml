@@ -1142,7 +1142,7 @@ data:
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "description": "Milliseconds per operation, measured at the device. This is the metric that moved before tc02 rebooted: 28ms write, against 1.7ms once it was back.",
+          "description": "Milliseconds per operation at the device. Only meaningful with real throughput: on a near-idle disk this ratio is noise (tc02's sdb measured 11ms per write at 0.49 writes/s before it rebooted, while its NVMe sat at 1.17ms per write and 145 writes/s).",
           "fieldConfig": {
             "defaults": {
               "custom": {
