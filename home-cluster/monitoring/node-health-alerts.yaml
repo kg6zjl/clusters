@@ -17,8 +17,8 @@ spec:
   # A node can fail in ways the severity="critical" route never sees. The upstream node
   # alerts (KubeNodeNotReady, KubeNodeUnreachable, KubeNodeReadinessFlapping) all ship as
   # warning, and a deleted node drops its series rather than going false - so a count is the
-  # only signal that catches removal. Both rules here are routed to ntfy by alertname in the
-  # alertmanager config; this group only decides when they fire.
+  # only signal that catches removal. Of the rules below, only the critical ones are in the
+  # alertmanager ntfy list; warnings fall through to the discord route and cost no page.
   - name: node-health
     rules:
     # 3 is the current cluster size (thinkcentre01/02/03). Update it when the cluster grows:
@@ -53,3 +53,34 @@ spec:
         summary: "Node exporter not reporting on {{ $labels.instance }}"
         description: "The exporter on {{ $labels.instance }} (job={{ $labels.job }}) has been unscrapeable for 10 minutes. Disk and memory alerts for this host cannot fire while it is blind, so this alert reports that the monitoring is broken rather than the host."
         runbook_url: "https://prometheus.kube.stevearnett.com/targets"
+    # A reboot between scrapes never reaches NodeExporterDown: that rule needs 10 minutes of a blind
+    # exporter and a thinkcentre comes back in about two. Measured 2026-10-01: tc02 rebooted 00:42:30Z.
+    - alert: NodeRebooted
+      expr: changes(node_boot_time_seconds{job="node-exporter"}[15m]) > 0
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: "{{ $labels.instance }} rebooted"
+        description: "Boot time changed on {{ $labels.instance }} within the last 15 minutes, so the host restarted rather than its exporter. Every pod on the node was killed by the host, including ones that would never restart themselves, and the evidence stayed in the node's journal instead of in Prometheus. Check journalctl -b -1 -p err, dmesg and last -x reboot on the node; finding no metric that explains a reboot is the normal result, not a dead end."
+        runbook_url: "https://prometheus.kube.stevearnett.com/targets"
+    # PSI counts wall time tasks spent stalled, so unlike a load average it is not inflated by
+    # uninterruptible sleepers. Worst 7d on a cluster node: 2.2% io, 0.23% memory (measured 2026-10-01).
+    - alert: NodeIoPressureStalled
+      expr: rate(node_pressure_io_waiting_seconds_total{job="node-exporter"}[5m]) * 100 > 20
+      for: 15m
+      labels:
+        severity: warning
+      annotations:
+        summary: "I/O stalls on {{ $labels.instance }}"
+        description: "Tasks on {{ $labels.instance }} were stalled on I/O for {{ printf \"%.0f\" $value }}% of wall time over 15 minutes, against a 7-day cluster worst of 2.2%. iowait reports the CPU's view and can hide this, so judge the storage from device latency, utilisation and queue depth on the Cluster Nodes dashboard before blaming a workload."
+        runbook_url: "https://prometheus.kube.stevearnett.com/graph"
+    - alert: NodeMemoryPressureStalled
+      expr: rate(node_pressure_memory_waiting_seconds_total{job="node-exporter"}[5m]) * 100 > 10
+      for: 15m
+      labels:
+        severity: warning
+      annotations:
+        summary: "Memory stalls on {{ $labels.instance }}"
+        description: "Tasks on {{ $labels.instance }} were stalled on memory for {{ printf \"%.0f\" $value }}% of wall time over 15 minutes, against a 7-day cluster worst of 0.23%. This is reclaim or swap failing to keep up rather than a high used percentage, and it is the state the kernel starts killing processes from, so check for OOM kills and swap activity next."
+        runbook_url: "https://prometheus.kube.stevearnett.com/graph"
