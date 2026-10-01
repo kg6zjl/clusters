@@ -481,6 +481,28 @@ without hand-editing the mount table:
 kubectl -n longhorn-system delete pod -l app=longhorn-manager --field-selector spec.nodeName=<node>
 ```
 
+**Automated cleanup, in place and in `report` mode first.** Manual recovery is the right
+answer once and the wrong answer every time. `node-config/roles/kubelet-csi-mount-janitor`
+installs a systemd timer on every node that finds exactly this leak:
+
+```bash
+# roll out (report mode - logs what it would clear, changes nothing)
+cd node-config && ANSIBLE_SSH_KEY=~/.ssh/ansible_cluster ansible-playbook playbook-csi-janitor.yaml
+# read what it found, over a few days
+journalctl -t kubelet-csi-mount-janitor --since "-1 day"
+# then set csi_mount_janitor_mode to enforce in the role defaults and re-run
+```
+
+It matches only `.../plugins/kubernetes.io/csi/driver.longhorn.io/<64-hex>/globalmount` and skips
+any mount `fuser -m` reports as in use, so a live volume is never touched. Cleared, the kubelet's
+own retry succeeds within about two minutes and the pod starts.
+
+**The upgrade is the trigger, so upgrades get a gate.** A Longhorn chart bump rolls the manager
+and recreates volume engines, which is how the leak starts. `renovate.json` now holds those PRs
+behind `dependencyDashboardApproval`, with a maintenance-window label and a 7-day soak, and
+`CODEOWNERS` lists the storage directory explicitly: merge them while you can watch the result,
+not as routine dependency noise.
+
 **Two rules that follow from this:**
 
 - The **real** root cause of a stuck rollout is usually a single-replica

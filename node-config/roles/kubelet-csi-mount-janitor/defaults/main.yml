@@ -1,0 +1,7 @@
+---
+# report  - log what it would clear, change nothing. The roll-out default.
+# enforce - umount a staging mount, but only when no process holds that filesystem.
+csi_mount_janitor_mode: report
+
+# How often the timer fires. Recovery is bounded by this plus the kubelet's own retry.
+csi_mount_janitor_interval: 5min

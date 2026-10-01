@@ -51,6 +51,17 @@ Per-host overrides live in `inventory/host_vars/`. Shared defaults in
 - Reboot times staggered per host (host_vars) so patching never drops
   control-plane quorum: pikube 03:00, tc01 03:30, tc02 04:00, tc03 04:30
 
+**`roles/kubelet-csi-mount-janitor`**
+- Clears the CSI staging mount a Longhorn engine restart leaves behind on a node —
+  the wedge in `documentation/longhorn-migration.md` §8, the one storage failure
+  that otherwise needs a human with root on that node, every time
+- Systemd timer every 5 min. **`report` mode by default**: it logs what it *would*
+  umount and changes nothing. Flip `csi_mount_janitor_mode` to `enforce` once
+  `journalctl -t kubelet-csi-mount-janitor` has shown it identifying real leaks
+- Only ever matches `<kubelet plugin dir>/kubernetes.io/csi/driver.longhorn.io/<64-hex>/globalmount`,
+  and only when `fuser -m` shows no process holding that filesystem — so a volume
+  that is genuinely in use is never touched
+
 **`roles/ansible-user`**
 - One-time bootstrap: creates a dedicated `ansible` user on every node
   with passwordless sudo and its own SSH key
@@ -84,6 +95,9 @@ ANSIBLE_SSH_KEY=<(op read "op://home-cluster/ansible cluster private key/private
 
 # Materialize the key to disk once for convenience (0600, gitignored):
 ANSIBLE_SSH_KEY=~/.ssh/ansible_cluster ansible-playbook playbook.yaml
+
+# Roll out the mount janitor alone (report mode first):
+ANSIBLE_SSH_KEY=~/.ssh/ansible_cluster ansible-playbook playbook-csi-janitor.yaml
 
 # Provision + join a new node (get token first)
 microk8s add-node   # on any existing control-plane

@@ -1,0 +1,10 @@
+[Unit]
+Description=Run the Longhorn CSI mount janitor
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec={{ csi_mount_janitor_interval }}
+AccuracySec=30s
+
+[Install]
+WantedBy=timers.target

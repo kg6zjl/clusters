@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+# Clears the CSI staging mount a Longhorn engine restart leaves behind on a node - the
+# wedge in documentation/longhorn-migration.md section 8. Enforce mode is opt-in.
+set -uo pipefail
+
+MODE="{{ csi_mount_janitor_mode }}"
+
+# Anchored to the kubelet CSI plugin dir and a 64-hex volume handle, so nothing else can
+# match. The path is read from the mount table itself, never from a pod event or a name.
+PATTERN='^/var/snap/microk8s/common/var/lib/kubelet/plugins/kubernetes\.io/csi/driver\.longhorn\.io/[0-9a-f]{64}/globalmount$'
+
+log() { logger -t kubelet-csi-mount-janitor -- "$*"; }
+
+mapfile -t targets < <(findmnt -rn -o TARGET 2>/dev/null | grep -E "$PATTERN")
+
+if [ "${#targets[@]}" -eq 0 ]; then
+  exit 0
+fi
+
+for target in "${targets[@]}"; do
+  # A process holding this filesystem means a pod is still using the volume. Never touch it.
+  in_use=$(fuser -m "$target" 2>/dev/null | tr -s ' ' '\n' | grep -cE '^[0-9]+$')
+
+  if [ "${in_use:-0}" -gt 0 ]; then
+    log "in use by ${in_use} pid(s), skipping ${target}"
+    continue
+  fi
+
+  if [ "$MODE" != "enforce" ]; then
+    log "report: would umount leaked staging mount ${target}"
+    continue
+  fi
+
+  if umount "$target"; then
+    log "umounted leaked staging mount ${target}"
+  else
+    log "umount failed, left for a human: ${target}"
+  fi
+done
