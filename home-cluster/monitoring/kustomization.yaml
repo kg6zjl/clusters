@@ -17,6 +17,7 @@ resources:
   - node-health-alerts.yaml
   - flux-resource-alerts.yaml
   - pod-scheduling-alerts.yaml
+  - longhorn-volume-alerts.yaml
   - cronjob-health-alerts.yaml
   - trivy-alerts.yaml
   - kyverno-audit-rules.yaml

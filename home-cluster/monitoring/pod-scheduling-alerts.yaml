@@ -32,7 +32,16 @@ spec:
   - name: pod-scheduling
     rules:
     - alert: PodPendingTooLong
-      expr: kube_pod_status_phase{phase="Pending"} == 1
+      # Longhorn-PVC pods are escalated to PodStuckOnLonghornVolume, at critical, so the
+      # excluded set here is not uncovered - it is covered louder, once.
+      expr: |
+        kube_pod_status_phase{phase="Pending"} == 1
+        unless on(namespace, pod)
+        (
+          kube_pod_spec_volumes_persistentvolumeclaims_info
+          * on(namespace, persistentvolumeclaim) group_left(storageclass)
+          kube_persistentvolumeclaim_info{storageclass="longhorn"}
+        )
       for: 15m
       labels:
         severity: warning
