@@ -1,0 +1,29 @@
+---
+# Per-user admin, bound to the OIDC identity Dex issues.
+#
+# The apiserver is configured (node-config/oidc-apiserver.yaml) with:
+#   --oidc-issuer-url=https://sso.kube.stevearnett.com/dex
+#   --oidc-client-id=kubernetes
+#   --oidc-username-claim=email
+#   --oidc-username-prefix=
+#
+# The empty username prefix is essential. With a non-empty prefix the apiserver would present
+# the user as "<prefix>stevearnett2002@gmail.com" and this subject would never match, which is
+# the failure mode that locks you out of Headlamp rather than merely logging you out.
+#
+# Dex returns the Google connector's address in the `email` claim, so that address is the username.
+# This replaces cluster-admin-by-ServiceAccount with cluster-admin-by-human: an individual, a real
+# username in the audit log, and revocable by deleting one object.
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: headlamp-oidc-admin
+subjects:
+  - kind: User
+    name: stevearnett2002@gmail.com
+    apiGroup: rbac.authorization.k8s.io
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cluster-admin

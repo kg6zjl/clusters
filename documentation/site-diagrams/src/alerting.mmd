@@ -1,0 +1,35 @@
+flowchart TB
+%% From a firing rule to a person, and then on to the agent. Two exits, deliberately different.
+%%
+%% The paging exit wakes me. The agent exit only ever opens a pull request, so it arrives in the
+%% same review queue with the same human at the end of it — just started without me being awake.
+%%
+%% Everything between the two exits is a filter, and the filters are the design. An alert name has
+%% to be on a short written list before it is worth an agent run at all, and the poll is hourly
+%% because the paging path has already reached me by then.
+
+  rules["A rule fires<br/>(a file in git)"] --> am["Alertmanager<br/>groups, inhibits, routes, silences"]
+
+  subgraph human["Reaches me"]
+    direction TB
+    ntfy["ntfy push<br/>severity: critical only"]
+    alerts["#alerts<br/>the record, every severity"]
+    secchan["#security<br/>policy and scan findings"]
+  end
+
+  am --> ntfy
+  am --> alerts
+  am --> secchan
+
+  subgraph second["Reaches the agent"]
+    direction TB
+    detector["alert-detector<br/>hourly, and only for<br/>allow-listed alert names"]
+    agent["Hermes<br/>investigates, then opens<br/>a pull request and stops"]
+  end
+
+  am --> detector
+  detector -->|"one HMAC-signed POST,<br/>in-cluster only"| agent
+  agent -->|"replies in channel"| alerts
+
+  classDef gate fill:#121820,stroke:#71b7ff,stroke-width:2px,color:#e7edf3
+  class detector gate

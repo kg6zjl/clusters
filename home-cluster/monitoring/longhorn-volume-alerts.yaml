@@ -1,0 +1,33 @@
+---
+# The failure in documentation/longhorn-migration.md section 8, made loud. Critical
+# because nothing retries and nothing else alerts: the pod is still Pending tomorrow.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: longhorn-volume-alerts
+  namespace: monitoring
+  labels:
+    prometheus: kube-prometheus-stack-prometheus
+    app: kube-prometheus-stack-prometheus
+spec:
+  groups:
+  - name: longhorn-volume
+    rules:
+    # Same 15m signal as PodPendingTooLong, escalated for pods whose claim is on
+    # Longhorn - the class that does not self-heal. That rule excludes these pods so
+    # one wedged pod produces one notification, from here, at the paging severity.
+    - alert: PodStuckOnLonghornVolume
+      expr: |
+        kube_pod_status_phase{phase="Pending"} == 1
+        and on(namespace, pod)
+        (
+          kube_pod_spec_volumes_persistentvolumeclaims_info
+          * on(namespace, persistentvolumeclaim) group_left(storageclass)
+          kube_persistentvolumeclaim_info{storageclass="longhorn"}
+        )
+      for: 15m
+      labels:
+        severity: critical
+      annotations:
+        summary: "Pod {{ $labels.pod }} in {{ $labels.namespace }} stuck Pending on a Longhorn volume for 15m"
+        description: "A pod in this namespace owns a longhorn PVC that cannot start, and this class does not clear itself. Start with `kubectl -n {{ $labels.namespace }} describe pod {{ $labels.pod }}`. FailedAttachVolume means the RWO claim is still attached to another node. `FailedMount ... already mounted or mount point busy` means the node treats the volume's device as in use, and the path in that event is only where the kubelet tried to mount - so confirm a real mount exists on that node before acting: `findmnt -rn -S /dev/longhorn/<pvc>` and `grep -rlE ' 8:<minor> ' /proc/[0-9]*/mountinfo`. Mount found: umount it, and the kubelet's own retry succeeds. Nothing found: the holder sits below the filesystem - the CSI plugin logs `/dev/longhorn/<pvc> is in use.` - and no umount reaches it, so detach and reattach the volume in the Longhorn UI, or reboot that node. Volume health and Longhorn's own status stay green throughout: the events are the only evidence. Runbook: documentation/longhorn-migration.md section 8."

@@ -3,8 +3,6 @@ kind: Deployment
 metadata:
   name: headlamp
   namespace: headlamp
-  annotations:
-    configmap.reloader.stakater.com/reload: "headlamp-kubeconfig"
 spec:
   replicas: 1
   revisionHistoryLimit: 5
@@ -17,23 +15,46 @@ spec:
         app: headlamp
     spec:
       serviceAccountName: headlamp
-      volumes:
-        - name: kubeconfig
-          configMap:
-            name: headlamp-kubeconfig
       containers:
         - name: headlamp
           image: ghcr.io/headlamp-k8s/headlamp:v0.45.0
           imagePullPolicy: IfNotPresent
           args:
-            - "-kubeconfig=/home/headlamp/.config/Headlamp/kubeconfigs/config"
+            # -in-cluster builds Headlamp's cluster context from the pod (rest.InClusterConfig)
+            # rather than a mounted kubeconfig. It is the ONLY mode that wires the -oidc-* flags
+            # into the context: setupInClusterContext -> GetInClusterContext fills in the context's
+            # OidcConf, which is what the /oidc handler and AuthType() read. In kubeconfig mode
+            # OidcConfig() falls back to the context's auth-provider (nil for us), so /oidc returned
+            # 500 "authProvider is nil" -- the gap the #922 rollout exposed.
+            - "-in-cluster=true"
+            # Pin the cluster key; the default would be "main", or derived from the kubeadm-config
+            # ConfigMap (which needs API access). Keeps existing /clusters/in-cluster URLs stable
+            # and avoids that lookup.
+            - "-in-cluster-context-name=in-cluster"
             - "-plugins-dir=/headlamp/plugins"
+            # Built-in OIDC against Dex (home-cluster/sso). Flag names verified against the
+            # Headlamp v0.45.0 chart's rendered templates, not from memory.
+            #
+            # -oidc-client-id MUST equal the apiserver's --oidc-client-id (node-config: "kubernetes").
+            # Dex stamps the id_token's `aud` with the client id that requested it, and the apiserver
+            # accepts a token only when `aud` contains its own --oidc-client-id. A separate Headlamp
+            # client would mint aud=headlamp and the apiserver would reject every per-user request.
+            # Headlamp's own Dex guide says to use one client id for both -- see the single
+            # staticClient in home-cluster/sso/dex-helmrelease.yaml.
+            - "-oidc-client-id=kubernetes"
+            - "-oidc-idp-issuer-url=https://sso.kube.stevearnett.com/dex"
+            # Set explicitly rather than derived from request headers: Headlamp would otherwise
+            # guess the scheme from X-Forwarded-Proto, so a Traefik middleware that drops that
+            # header could silently break login. Must match the Dex staticClient redirectURI exactly.
+            - "-oidc-callback-url=https://headlamp.kube.stevearnett.com/oidc-callback"
+            # openid is added by Headlamp itself; listing it here too would just duplicate it.
+            - "-oidc-scopes=profile,email"
+            # PKCE: the client is public and has no secret, so the authorization code is useless
+            # without the verifier only the flow's initiator holds.
+            - "-oidc-use-pkce=true"
           ports:
             - name: http
               containerPort: 4466
-          volumeMounts:
-            - name: kubeconfig
-              mountPath: /home/headlamp/.config/Headlamp/kubeconfigs
           readinessProbe:
             httpGet:
               path: /

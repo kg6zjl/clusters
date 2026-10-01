@@ -13,6 +13,8 @@ This file provides guidance for AI coding agents operating in this repository.
 3. **Only use kubectl for READ-ONLY operations** - get, describe, logs, etc.
 4. **All changes MUST go through PR → GitHub Actions → Flux**
 5. **If you break these rules, you lose permissions**
+6. **NEVER use `--yolo` or any flag that bypasses dangerous-command approval prompts** - The prompts are the review layer; bypassing them means nothing is checked, including the commands the scanner correctly refuses. Not on a one-off, not "just this once", not to unblock a stalled script.
+7. **Composing a shell command** - Inline full binary paths instead of a variable in the command position (a `K=/path/kubectl` helper is refused as a dynamically selected executable), keep long text in a file rather than inline in the command, and keep one risk class per command - bundling makes an unparsable payload out of a safe action and loses the whole chain to an unanswered prompt.
 
 If you need to fix something in the cluster: Edit YAML → Branch → Commit → PR → Merge → Wait for Flux
 
@@ -41,7 +43,19 @@ Catch a pod's inability to reach the kube-apiserver:
 
 ## Repository Overview
 
-This is a **single-node Kubernetes home lab cluster** running on an AMD-based Acemagicial K1 (NUC-size) system.
+This is a **three-node Kubernetes home lab cluster** running MicroK8s (snap `v1.35.6`, rev 9072) across
+three ThinkCentre machines.
+
+The datastore is **dqlite** — not etcd, not kine. All three nodes are datastore masters listening on
+port 19001, and each node runs its own local `kube-apiserver` embedded in the `kubelite` process rather
+than talking to one shared control-plane endpoint:
+
+| Node | Address | Role |
+|------|---------|------|
+| `thinkcentre01` | 192.168.1.144 | datastore master |
+| `thinkcentre02` | 192.168.1.121 | datastore master |
+| `thinkcentre03` | 192.168.1.146 | datastore master |
+
 - **Deployment model**: Declarative
 - **Config management**: Kustomize (manifests) + Helmfile (Helm releases)
 - **Cluster scope**: Home / self-hosted, not production SaaS
@@ -52,7 +66,7 @@ This is a **single-node Kubernetes home lab cluster** running on an AMD-based Ac
 
 ## Deployment Model
 
-This cluster uses **Flux CD** for GitOps reconciliation. There is NO "Apply to Cluster" GitHub Actions workflow.
+This cluster uses **Flux CD** for GitOps reconciliation.
 
 ### How changes reach the cluster
 
@@ -84,6 +98,70 @@ kubectl apply -k .
 helmfile sync
 task apply
 ```
+
+**Exception (non-persisting, safe to use for validation):**
+```bash
+# --dry-run=server performs NO write. The apiserver evaluates the apply and
+# discards it. This is the only reliable way to answer "will Flux's apply be
+# accepted?" -- and it catches SSA/validation errors that --dry-run=client
+# cannot see. See the Recreate migration note below.
+kubectl apply --server-side --dry-run=server -n <ns> -f <file>
+```
+
+### ⚠️ Single-replica workloads on RWO volumes MUST use `strategy: Recreate`
+
+A `replicas: 1` Deployment that mounts a `ReadWriteOnce` claim and uses the
+default `RollingUpdate` **will deadlock on any image bump**:
+
+- The surge pod is scheduled on a node that cannot attach the volume (RWO has no
+  multi-attach), so it sits in `Init:0/1` forever.
+- The old pod is never released: `maxUnavailable: 25%` of `replicas: 1` floors
+  to **0**, so the controller may not take it down until the new pod is Ready.
+- The Deployment trips `ProgressDeadlineExceeded`. Both sides wait on each other.
+
+Every such workload in this repo sets `strategy: type: Recreate`. Before adding
+a new one that mounts a PVC, check the claim's `accessModes` — if it is
+`ReadWriteOnce`/`ReadWriteOncePod`, `Recreate` is required. There is no
+zero-downtime option here: with one non-shared, non-replicated volume, downtime
+during the swap is the honest behaviour.
+
+Do **not** convert these to StatefulSets to "fix" it. A StatefulSet would require
+moving the claim into a `volumeClaimTemplate`, which **renames the PVC** and so
+requires migrating live volume contents, and it renames the pod
+(`meshmonitor-74f8b6cfd-x` → `meshmonitor-0`), breaking label selectors and the
+`configmap.reloader.stakater.com/reload` annotations. `Recreate` is already the
+convention.
+
+#### The SSA trap: you cannot flip an *existing* object to `Recreate` in one PR
+
+`spec.strategy.rollingUpdate` in a live Deployment is an **apiserver-defaulted**
+field that `kustomize-controller` never applied, so the controller does not own
+it. Server-side apply only removes fields the applying manager previously owned,
+so the live `maxSurge`/`maxUnavailable` block **survives** the merge and the
+apiserver rejects the result:
+
+```
+spec.strategy.rollingUpdate: Forbidden: may not be specified when strategy `type` is 'Recreate'
+```
+
+Omitting the field, setting it to `null`, and setting it to an explicit value all
+fail identically. `--force` is not an acceptable workaround: it strips fields
+owned by other managers (e.g. `Reloader`'s `STAKATER_*` env vars).
+
+**The transition needs two applies:**
+
+1. First apply `type: RollingUpdate` with an explicit
+   `rollingUpdate: {maxSurge: 0, maxUnavailable: 1}`. This is itself a valid
+   delete-before-replace config, so it is safe to ship and it *also* unblocks any
+   rollout already stuck in the deadlock. Applying the block explicitly hands
+   ownership to `kustomize-controller`.
+2. Then apply `type: Recreate` with no `rollingUpdate`. Now the controller owns
+   the field, so dropping it is a legal removal.
+
+**Always validate a manifest that changes a live object's shape with
+`--dry-run=server` before opening the PR.** The alternative is merging a PR that
+Flux rejects every reconcile while the workload stays broken — which is what
+happened in PR #882.
 
 ### Validate Manifests
 

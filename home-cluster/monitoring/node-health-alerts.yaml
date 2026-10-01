@@ -1,0 +1,77 @@
+# Split out of prometheus-rules.yaml on 2026-09-30, one file per rule group, so that
+# review and ownership follow the group that changed. It buys reviewability and nothing
+# else: Prometheus reloads its rule set as a whole - LoadGroups aggregates errors across
+# every file and refuses the entire reload if any one rule is bad - so a file boundary is
+# not blast-radius isolation. The CI `promtool check rules` step is what makes a bad rule
+# fail the PR instead of the reload.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: node-health-alerts
+  namespace: monitoring
+  labels:
+    prometheus: kube-prometheus-stack-prometheus
+    app: kube-prometheus-stack-prometheus
+spec:
+  groups:
+  # A node can fail in ways the severity="critical" route never sees. The upstream node
+  # alerts (KubeNodeNotReady, KubeNodeUnreachable, KubeNodeReadinessFlapping) all ship as
+  # warning, and a deleted node drops its series rather than going false - so a count is the
+  # only signal that catches removal. Of the rules below, only the critical ones are in the
+  # alertmanager ntfy list; warnings fall through to the discord route and cost no page.
+  - name: node-health
+    rules:
+    # 3 is the current cluster size (thinkcentre01/02/03). Update it when the cluster grows:
+    # the point is to catch a node object disappearing, which no up{} or condition alert can
+    # see, so it has to be compared against a number that does not come from the cluster.
+    - alert: NodeMissingFromCluster
+      expr: count(kube_node_info) < 3
+      for: 20m
+      labels:
+        severity: critical
+      annotations:
+        summary: "A node has left the cluster ({{ $value }} present, 3 expected)"
+        description: "Fewer node objects than the known cluster size for 20 minutes. A deleted or rebuilt node vanishes from kube_node_info rather than reporting NotReady, so KubeNodeNotReady cannot see it. Check kubectl get nodes, and whether the node is mid-rebuild; if the cluster legitimately shrank, update the constant in this rule."
+        runbook_url: "https://headlamp.kube.stevearnett.com/c/in-cluster/nodes"
+    # node-exporter is a DaemonSet, one per node - the three thinkcentres, which are
+    # 24/7 and must alert the moment that changes - plus the NAS scraped as
+    # job=ugreen-dxp2800. A host whose exporter stops being scrapeable is the "not
+    # reporting" case: it can be perfectly healthy while blind, and while it is blind
+    # none of its disk, memory or filesystem alerts can fire.
+    #
+    # beast (job=beast) is deliberately NOT in this selector. It is the on-demand GPU
+    # box, powered off for days at a time, so "unscrapeable" is its normal state rather
+    # than a fault. No expression can tell "off on purpose" from "blind", so including
+    # it pages critical on every power-off. Coverage for it is the Grafana "Beast AI Box
+    # Overview" dashboard, read when someone deliberately wants to know.
+    - alert: NodeExporterDown
+      expr: up{job=~"node-exporter|ugreen-dxp2800"} == 0
+      for: 10m
+      labels:
+        severity: critical
+      annotations:
+        summary: "Node exporter not reporting on {{ $labels.instance }}"
+        description: "The exporter on {{ $labels.instance }} (job={{ $labels.job }}) has been unscrapeable for 10 minutes. Disk and memory alerts for this host cannot fire while it is blind, so this alert reports that the monitoring is broken rather than the host."
+        runbook_url: "https://prometheus.kube.stevearnett.com/targets"
+    # No reboot rule here on purpose: the thinkcentres reboot weekly for patching, so an alert would
+    # fire on a non-event. The Cluster Nodes dashboard marks reboots instead.
+    # PSI counts wall time tasks spent stalled, so unlike a load average it is not inflated by
+    # uninterruptible sleepers. Worst 7d on a cluster node: 2.2% io, 0.23% memory (measured 2026-10-01).
+    - alert: NodeIoPressureStalled
+      expr: rate(node_pressure_io_waiting_seconds_total{job="node-exporter"}[5m]) * 100 > 20
+      for: 15m
+      labels:
+        severity: warning
+      annotations:
+        summary: "I/O stalls on {{ $labels.instance }}"
+        description: "Tasks on {{ $labels.instance }} were stalled on I/O for {{ printf \"%.0f\" $value }}% of wall time over 15 minutes, against a 7-day cluster worst of 2.2%. iowait reports the CPU's view and can hide this, so judge the storage from device latency, utilisation and queue depth on the Cluster Nodes dashboard before blaming a workload."
+        runbook_url: "https://prometheus.kube.stevearnett.com/graph"
+    - alert: NodeMemoryPressureStalled
+      expr: rate(node_pressure_memory_waiting_seconds_total{job="node-exporter"}[5m]) * 100 > 10
+      for: 15m
+      labels:
+        severity: warning
+      annotations:
+        summary: "Memory stalls on {{ $labels.instance }}"
+        description: "Tasks on {{ $labels.instance }} were stalled on memory for {{ printf \"%.0f\" $value }}% of wall time over 15 minutes, against a 7-day cluster worst of 0.23%. This is reclaim or swap failing to keep up rather than a high used percentage, and it is the state the kernel starts killing processes from, so check for OOM kills and swap activity next."
+        runbook_url: "https://prometheus.kube.stevearnett.com/graph"

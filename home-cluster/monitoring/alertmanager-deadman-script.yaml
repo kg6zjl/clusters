@@ -32,7 +32,7 @@ data:
     the page itself could not be delivered, which is the one case where this Job
     failing is the whole signal.
 
-    Companion: CronJobStale in prometheus-rules.yaml notices within 48h if this Job
+    Companion: CronJobStale in cronjob-health-alerts.yaml notices within 48h if this Job
     stops running altogether.
     """
     import json

@@ -47,3 +47,14 @@ spec:
         summary: "Disk IO queue is high on {{ $labels.instance }}"
         description: "Queue depth (aqu-sq) on {{ $labels.device }} at {{ $labels.instance }} has been above 10 for 30 minutes, currently {{ printf \"%.2f\" $value }}."
         runbook_url: https://runbooks.prometheus-operator.dev/runbooks/node/nodediskiosaturation
+    # 40ms is ~2x the worst per-op NVMe write latency seen in 7d (tc01 21.1ms max, tc03 16.0ms p99),
+    # and the >10 writes/s guard keeps the near-idle-device ratio noise out of it.
+    - alert: NodeDiskWriteLatencyNvme
+      expr: (rate(node_disk_write_time_seconds_total{device=~"nvme.+",job="node-exporter"}[5m]) / rate(node_disk_writes_completed_total{device=~"nvme.+",job="node-exporter"}[5m]) * 1000 > 40) and (rate(node_disk_writes_completed_total{device=~"nvme.+",job="node-exporter"}[5m]) > 10)
+      for: 30m
+      labels:
+        severity: warning
+      annotations:
+        summary: "NVMe write latency is high on {{ $labels.instance }} ({{ $labels.device }})"
+        description: "Per-op write latency on {{ $labels.device }} at {{ $labels.instance }} has been above 40ms for 30 minutes, currently {{ printf \"%.1f\" $value }}ms. The cluster's NVMe baselines are ~1.5ms (tc01, tc02) and ~16ms (tc03), so this is a device or platform problem rather than load - check queue depth and utilisation on the Cluster Nodes dashboard, and the device's SMART data on the node."
+        runbook_url: https://runbooks.prometheus-operator.dev/runbooks/node/nodediskiosaturation

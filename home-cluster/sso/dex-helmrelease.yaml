@@ -24,7 +24,10 @@ spec:
       sourceRef:
         kind: HelmRepository
         name: dex
-        namespace: flux-system
+        # The sso Kustomization sets targetNamespace: sso, which rewrites every namespaced
+        # resource in this directory -- the HelmRepository included -- into ns sso. Naming
+        # flux-system here resolves to nothing and the release never gets its chart.
+        namespace: sso
   install:
     createNamespace: false
   upgrade:
@@ -38,6 +41,12 @@ spec:
     serviceAccount:
       create: false
 
+    # Deliberately NOT pinned to a node. A pin to a control-plane node looks protective but is a
+    # boot deadlock: if that node reboots, the pinned pod cannot reschedule (its nodeSelector only
+    # matches the down node), so Dex stays Pending and that node's apiserver cannot fetch the OIDC
+    # discovery document at startup. Left to the scheduler, the Deployment moves Dex to a healthy
+    # node instead. A kubelite restart on its own keeps containers running (containerd holds them),
+    # so colocation is not the hazard the pin assumed -- see PR #916/#919 for the history.
     config:
       # MUST be reachable by a browser (Headlamp redirects there) AND by the apiserver (which
       # fetches the discovery document). TLS terminates at Traefik with the cert-manager
@@ -57,19 +66,30 @@ spec:
         responseTypes: ["code"]
 
       staticClients:
-        # The apiserver's --oidc-client-id. It never sends a client secret, so this stays a
-        # public client with no secret.
+        # ONE client for BOTH the apiserver and Headlamp, on purpose. Dex sets the id_token's `aud`
+        # to the id of the client that requested it, and the apiserver only accepts a token whose
+        # `aud` contains its own --oidc-client-id ("kubernetes"). Headlamp therefore has to present
+        # this same client id: with a separate `headlamp` client it would mint aud=headlamp and the
+        # apiserver would reject every per-user token. Headlamp's own Dex guide says use a single
+        # client id for both. Each consumer registers its own redirectURI on this one client.
+        #
+        # Deliberately a PUBLIC client with no secret. `public: true` is not documentation here, it
+        # is the field Dex validates: cmd/dex/serve.go rejects any static client with no secret, no
+        # secretEnv and public != true ("invalid config: Secret or SecretEnv field is required for
+        # client"), which crash-looped the pod on its very first start after the chart resolved.
+        #
+        # No shared secret: kubectl never sends one, and Headlamp sends a PKCE code_challenge
+        # (`-oidc-use-pkce=true`), so the authorization code is useless without the verifier that
+        # only the client which started the flow holds. Net effect: no credential to create, rotate
+        # or leak, with no loss of security.
         - id: kubernetes
-          name: Kubernetes API
+          name: Kubernetes API and Headlamp
+          public: true
           redirectURIs:
+            # kubectl and other CLI OIDC clients use the out-of-band flow.
             - urn:ietf:wg:oauth:2.0:oob
-        # Headlamp's built-in OIDC client. Note `secretEnv` takes the env var NAME with no `$` --
-        # that is the documented form for staticClients, unlike connector config which uses `$VAR`.
-        - id: headlamp
-          name: Headlamp
-          redirectURIs:
+            # Headlamp's web callback; must match -oidc-callback-url exactly.
             - https://headlamp.kube.stevearnett.com/oidc-callback
-          secretEnv: DEX_HEADLAMP_CLIENT_SECRET
 
       connectors:
         - type: google
@@ -96,11 +116,6 @@ spec:
           secretKeyRef:
             name: dex-google-connector
             key: DEX_GOOGLE_CLIENT_SECRET
-      - name: DEX_HEADLAMP_CLIENT_SECRET
-        valueFrom:
-          secretKeyRef:
-            name: dex-headlamp-client
-            key: secret
 
     # sqlite3 needs a writable /data. emptyDir rather than a PVC: the only things Dex persists
     # are in-flight auth codes and refresh tokens, and losing them on restart just means the user

@@ -37,7 +37,7 @@ spec:
     # those reconciles recovered a minute later.
     #
     # kube-state-metrics reads the CRs directly and exports gotk_resource_info{ready=...},
-    # which prometheus-rules.yaml uses for FluxResourceNotReady (15m hysteresis).
+    # which flux-resource-alerts.yaml uses for FluxResourceNotReady (15m hysteresis).
     #
     # Deliberately NOT copied from the upstream example config
     # (fluxcd/flux2-monitoring-example/monitoring/controllers/kube-prometheus-stack/
@@ -159,6 +159,35 @@ spec:
                       suspended: [spec, suspend]
                       revision: [status, artifact, revision]
                       url: [spec, url]
+              # Kyverno records violations it finds in background scans as wgpolicyk8s
+              # ClusterPolicyReport objects. Reading the report (not Kyverno's /metrics) is
+              # what makes KyvernoPolicyViolation report-driven. A refusal at admission time
+              # never reaches a report, so that side is alerted from Kyverno's own result
+              # counter instead (KyvernoPolicyBlockedRequest).
+              #
+              # ClusterPolicyReport only; a namespaced Policy would need PolicyReport
+              # added here, and none exists in this cluster today.
+              - groupVersionKind:
+                  group: wgpolicyk8s.io
+                  version: v1alpha2
+                  kind: ClusterPolicyReport
+                metricNamePrefix: kyverno
+                metrics:
+                  - name: "policy_result"
+                    help: "One Kyverno policy result from a ClusterPolicyReport; the value is always 1 and the result is in the labels."
+                    each:
+                      type: Info
+                      info:
+                        # results is an array, so one series is emitted per element.
+                        path: [results]
+                        labelsFromPath:
+                          result: [result]
+                          policy: [policy]
+                          rule: [rule]
+                          severity: [severity]
+                          category: [category]
+                    labelsFromPath:
+                      policy_report: [metadata, name]
       rbac:
         # The chart's own roles cover core resources only; its values file is explicit that
         # the CRs named in customResourceState.config need list/watch granted here. Read
@@ -177,6 +206,13 @@ spec:
             verbs:
               - list
               - watch
+          - apiGroups:
+              - wgpolicyk8s.io
+            resources:
+              - clusterpolicyreports
+            verbs:
+              - list
+              - watch
     # NOTE: exposing the `alert-on-down` resource label needs the SUBCHART's values, i.e.
     # `kube-state-metrics:` - not `kubeStateMetrics:`, which at this level is only the
     # component toggle. Setting the allowlist under `kubeStateMetrics:` is accepted
@@ -187,7 +223,7 @@ spec:
     #       - deployments=[alert-on-down]
     #
     # Still not applied - that is a separate decision, and prod availability is already covered
-    # by the ProdServiceDown rule in prometheus-rules.yaml. What blocked it was the endless
+    # by the ProdServiceDown rule in service-down-alerts.yaml. What blocked it was the endless
     # upgrade loop described on spec.timeout above, which is now fixed.
     prometheus:
       serviceMonitorSelectorNilUsesHelmValues: false
@@ -256,6 +292,15 @@ spec:
           - source_labels: [alertname]
             regex: NodeDiskIOSaturation
             action: drop
+          # beast is powered off on demand and comes and goes, so both of its exporter targets
+          # (job=beast on :9100 node_exporter, job=beast-gpu on :9835 nvidia) are unreachable by
+          # design - and the chart's TargetDown ("100% of a job's targets are down") fires on every
+          # power-off. Scoped to the beast jobs on purpose: TargetDown is the only alert that
+          # catches a genuinely dead target for every other job, so dropping it by alertname alone
+          # would delete that coverage cluster-wide to silence one host.
+          - source_labels: [alertname, job]
+            regex: TargetDown;beast.*
+            action: drop
         additionalRules:
           - name: ingress-availability
             rules:
@@ -290,6 +335,10 @@ spec:
     grafana:
       enabled: true
       replicas: 1
+      # Reloader restarts Grafana when the admin secret changes so the env is never stale. A rotation
+      # still needs a database realign - see README.md "Grafana admin access".
+      deploymentAnnotations:
+        reloader.stakater.com/auto: "true"
       # Grafana peaked at 584Mi and its two sidecars add ~150Mi more, all with no
       # requests declared.
       resources:
@@ -325,6 +374,19 @@ spec:
       enabled: true
       alertmanagerSpec:
         configSecret: alertmanager-config
+        # Both mounts move text out of the config's own YAML string and into files:
+        #   configMaps -> /etc/alertmanager/configmaps/<name>/ (what the `templates:` list at the
+        #                 top of alertmanager.yaml names), so the message templates are a normal
+        #                 .tmpl file instead of Go template escaped inside an ExternalSecret.
+        #   secrets    -> /etc/alertmanager/secrets/<name>/<key> (what discord_configs'
+        #                 webhook_url_file names), so the Discord webhook URL never enters the
+        #                 rendered alertmanager.yaml at all.
+        # The paths are the operator's, not ours: each entry resolves under the directory above.
+        configMaps:
+          - alertmanager-templates
+        secrets:
+          - alertmanager-discord
+          - alertmanager-security
         # 28Mi peak against a 200Mi request and no declared limit: this one was
         # over-reserved rather than under.
         resources:

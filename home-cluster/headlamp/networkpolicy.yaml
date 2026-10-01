@@ -21,4 +21,45 @@ spec:
     - protocol: TCP
       port: 80
   egress:
-  - {}
+  # DNS.
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: kube-system
+    ports:
+    - protocol: UDP
+      port: 53
+    - protocol: TCP
+      port: 53
+  # The Kubernetes API. The apiserver is a HOST process, not a pod, so a namespaceSelector does NOT
+  # cover it: egress has to name BOTH the service CIDR (ClusterIP 10.152.183.1:443, pre-DNAT) and
+  # the node LAN subnet (the apiserver endpoints 192.168.1.121/144/146:16443, post-DNAT). Omitting
+  # the node-LAN half is the classic "Headlamp times out talking to the apiserver" bug this
+  # directory documents.
+  - to:
+    - ipBlock:
+        cidr: 10.152.183.0/16
+    - ipBlock:
+        cidr: 192.168.1.0/24
+    ports:
+    - protocol: TCP
+      port: 443
+    - protocol: TCP
+      port: 16443
+  # The OIDC issuer (https://sso.kube.stevearnett.com/dex), for the backend's discovery-document,
+  # token-exchange and JWKS fetches. The DNS name resolves to Traefik's MetalLB VIP
+  # 192.168.1.241:443 (verified with dig -- CoreDNS has no rewrite for it). Egress policy is
+  # evaluated AFTER DNAT, so the rule must match the BACKEND, not the VIP:
+  #   * destination address -> the backing Traefik POD (namespaceSelector below), not the VIP and
+  #     not the Service ClusterIP (the #922 ipBlocks do NOT cover this path);
+  #   * destination PORT -> the Service `targetPort`, which is the named port `websecure` =
+  #     containerPort 8443, NOT the published port 443 and NOT the nodePort 32195.
+  # Both are why login timed out (`dial tcp 192.168.1.241:443: i/o timeout`). Allow 8443 so it
+  # covers the VIP and the ClusterIP alike; a namespaceSelector also makes it replica-independent.
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: traefik
+    ports:
+    - protocol: TCP
+      port: 8443

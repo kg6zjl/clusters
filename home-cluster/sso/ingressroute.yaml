@@ -14,6 +14,11 @@ kind: IngressRoute
 metadata:
   name: dex
   namespace: sso
+  annotations:
+    # ingress-blackbox-reconciler defaults to https://<host>/ with module http_2xx, but this
+    # host serves nothing at the root -- only /dex does. Point the prober at the discovery
+    # document (200 JSON) or IngressDown fires forever on a healthy Dex.
+    blackbox.stevearnett.com/target: https://sso.kube.stevearnett.com/dex/.well-known/openid-configuration
 spec:
   entryPoints:
     - websecure

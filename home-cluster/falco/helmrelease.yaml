@@ -185,9 +185,144 @@ spec:
         - macro: k8s_api_server
           condition: (fd.sip.name="kubernetes.default.svc.cluster.local")
 
-        # from rules/main (macro)
+        # from rules/main (list) -- LOCALLY ADDED. Image repositories of every workload here that
+        # holds an explicit RBAC binding granting object-level API verbs, i.e. clients that exist
+        # to drive the API server rather than merely run in the cluster. Read from the live cluster
+        # on 2026-09-30 (all 166 pods present in the cluster - 138 running, the rest completed or
+        # pending - their ServiceAccounts and every binding), not copied
+        # from upstream. kube-system is deliberately absent: `k8s_containers` already excludes that
+        # whole namespace, so its controllers need no entry here.
+        #
+        # The longhorn entries are the ones measured firing. The rest are pre-emptive, because the
+        # rule fires on `evt.type=connect`: a client-go connection is long-lived and silent, but
+        # every pod start is a fresh burst, so any controller restart re-announces it.
+        #
+        # Deliberately NOT listed, with the reason:
+        #   longhornio/longhorn-engine, longhornio/longhorn-instance-manager,
+        #   longhornio/longhorn-share-manager, longhornio/livenessprobe,
+        #   longhornio/csi-node-driver-registrar
+        #     - the storage data path talks to longhorn-backend (10.152.183.60) and to the
+        #       kubelet, not to the API server, and none of them appeared in the sweep below
+        #   quay.io/prometheus/prometheus, docker.io/grafana/grafana
+        #     - not API clients themselves; their config-reloader and k8s-sidecar containers are,
+        #       and those images are listed (prometheus is also already in k8s_containers)
+        #   quay.io/jetstack/cert-manager-cainjector, quay.io/metallb/controller,
+        #   quay.io/metallb/speaker, quay.io/prometheus-operator/prometheus-operator
+        #     - already in k8s_containers
+        - list: known_k8s_api_clients
+          items:
+          # storage: longhorn-manager (its own container, plus the csi-plugin and
+          # driver-deployer containers, which run the same image) and the CSI sidecars
+          - longhornio/longhorn-manager
+          - docker.io/longhornio/longhorn-manager
+          - longhornio/csi-attacher
+          - docker.io/longhornio/csi-attacher
+          - longhornio/csi-provisioner
+          - docker.io/longhornio/csi-provisioner
+          - longhornio/csi-resizer
+          - docker.io/longhornio/csi-resizer
+          - longhornio/csi-snapshotter
+          - docker.io/longhornio/csi-snapshotter
+          # gitops
+          - ghcr.io/fluxcd/source-controller
+          - ghcr.io/fluxcd/kustomize-controller
+          - ghcr.io/fluxcd/helm-controller
+          - ghcr.io/fluxcd/notification-controller
+          - ghcr.io/controlplaneio-fluxcd/flux-operator
+          # policy
+          - reg.kyverno.io/kyverno/kyverno
+          - ghcr.io/kyverno/kyverno
+          - reg.kyverno.io/kyverno/background-controller
+          - reg.kyverno.io/kyverno/cleanup-controller
+          - reg.kyverno.io/kyverno/reports-controller
+          - reg.kyverno.io/kyverno/kyverno-cli
+          - ghcr.io/kyverno/kyverno-cli
+          # kyverno's init container ships as its own repository (kyvernopre, not kyverno)
+          - reg.kyverno.io/kyverno/kyvernopre
+          - ghcr.io/kyverno/kyvernopre
+          # certificates, secrets, cloud APIs
+          - quay.io/jetstack/cert-manager-controller
+          - quay.io/jetstack/cert-manager-webhook
+          - ghcr.io/external-secrets/external-secrets
+          - 1password/onepassword-operator
+          - xpkg.crossplane.io/crossplane/crossplane
+          - xpkg.upbound.io/crossplane-contrib/provider-upjet-github
+          # ingress, load balancing, registry, CI
+          - traefik
+          - docker.io/traefik
+          - quay.io/metallb/frr-k8s
+          - summerwind/actions-runner-controller
+          - quay.io/brancz/kube-rbac-proxy
+          - ghcr.io/project-zot/zot-linux-amd64
+          - ghcr.io/project-zot/zot
+          # monitoring
+          - quay.io/prometheus-operator/prometheus-config-reloader
+          - registry.k8s.io/kube-state-metrics/kube-state-metrics
+          - grafana/alloy
+          - docker.io/grafana/alloy
+          - quay.io/kiwigrid/k8s-sidecar
+          - docker.io/kiwigrid/k8s-sidecar
+          - ghcr.io/jkroepke/kube-webhook-certgen
+          - mirror.gcr.io/aquasec/trivy-operator
+          - mirror.gcr.io/aquasec/trivy
+          # the agent and its dashboard
+          - ghcr.io/headlamp-k8s/headlamp
+          - nousresearch/hermes-agent
+          - docker.io/nousresearch/hermes-agent
+
+        # from rules/main (macro) -- LOCALLY OVERRIDDEN with this cluster's measured API
+        # clients. `k8s_containers` cannot cover them: it excludes namespace kube-system and a
+        # list of upstream image repositories, and these are ordinary workloads. This is an
+        # allow-list, not the rule: an unlisted container talking to the API server still fires.
+        # Clients are matched on the image repository, not the process name, because a shell
+        # inside one of those pods keeps the image; `kubectl` as a name is exactly what the
+        # rule is for.
+        #
+        # Swept 2026-09-30 over the whole window Loki holds for this namespace (07:48Z-14:46Z -
+        # falco was created 07:47Z, so there is not yet 24h of data): 1453 events, every one of
+        # them this rule. Before #838 added the CRI socket the container plugin enriched
+        # nothing, so every client fired with k8s.pod.name and container.image.repository null
+        # and no allow-list could have matched - headlamp 302, the agent's own kubectl 405,
+        # grafana's k8s-sidecar 228, kyverno 208, zot 56 and the ingress-blackbox reconciler
+        # 253 (216 of those enriched). From 08:50Z, when enrichment started, exactly two
+        # sources still fired: the reconciler's Jobs (216) and one kyverno-migrate hook Job
+        # (1). Both are listed below; that is the whole set, not the first of a weekly drip.
+        #
+        # Swept again 2026-09-30 07:49Z-20:49Z (1626 events; enrichment still the only cut
+        # that matters). After 08:50Z the sources were the reconciler's Jobs (252, excluded
+        # since the last PR), longhorn's 1.13.0 rollout (176: csi-provisioner 36,
+        # csi-resizer 18, csi-attacher 3, csi-snapshotter 3, longhorn-manager and its
+        # csi-plugin/deployer containers 134, plus the post-upgrade Job), the
+        # kube-prometheus-stack admission hook (2, kube-webhook-certgen) and one
+        # kyverno-migrate Job (1). At the time of writing Alertmanager held 17 active alerts
+        # for this rule, every one of them from longhorn-system - that rollout is what
+        # prompted this list, and the 17 are exactly the longhorn entries below.
+        #
+        # The ingress-blackbox reconciler is matched on its namespace and pod name instead of
+        # its image: that image is docker.io/library/python, and allow-listing it would exempt
+        # every python container in the cluster. reconcile.py lists IngressRoutes and Ingresses
+        # and writes Probe CRs, backed by a deliberate ClusterRole/Role and egress policy.
+        # Same shape applies to any other generic base image if one starts firing: match
+        # namespace + pod name, never the repository.
+        #
+        # Because every entry is an infrastructure controller, what this rule still reports is a
+        # container that is NOT one of them - in practice the application namespaces (media,
+        # home-assistant, nodered, adsb, vpn, netalertx, meshtastic, speedtest, local-services,
+        # sso), none of which has any business dialling the API server. An unlisted container
+        # still fires; keep this list to things that exist to drive the API.
+        #
+        # Enumerate the images actually running before declaring this list complete, including
+        # initContainers: a vendor ships its init step as a separate repository (kyverno's
+        # kyvernopre, not kyverno), and it only connects on pod start, so a sweep window that
+        # contains no restart of that workload cannot see it. Missing kyvernopre fired on the
+        # 2026-10-01 02:58Z restart, 2h after both sweeps above had closed.
+        # registry-pull-rotator runs docker.io/library/python too, the same trap as the reconciler: it
+        # mints the registry-pull SA token via TokenRequest (registry/pull-rotator-rbac.yaml).
         - macro: user_known_contact_k8s_api_server_activities
-          condition: (never_true)
+          condition: >
+            (container.image.repository in (known_k8s_api_clients))
+            or (k8s.ns.name = "monitoring" and k8s.pod.name startswith "ingress-blackbox-reconciler-")
+            or (k8s.ns.name = "registry" and k8s.pod.name startswith "registry-pull-rotator-")
 
         # from rules/main (list)
         - list: grep_binaries
@@ -256,9 +391,12 @@ spec:
           condition: (evt.type in (open,openat,openat2) and evt.is_open_read=true and fd.typechar='d' and fd.num>=0)
 
         # from rules/incubating (list)
+        # OpenSSH >= 9.8 runs each connection as sshd-session, which reads authorized_keys; sshd
+        # alone misses every real login (measured 2026-10-01 00:32Z, /home/steve/.ssh/authorized_keys).
         - list: ssh_binaries
           items:
           - sshd
+          - sshd-session
           - sftp-server
           - ssh-agent
           - ssh
@@ -276,8 +414,11 @@ spec:
             '
 
         # from rules/incubating (macro)
+        # systemd-tmpfiles --clean opens /root/.ssh on its daily timer, parented by systemd: host
+        # maintenance, not a workload read (measured tc03 2026-10-01 04:47Z). Exempt by process only.
         - macro: user_known_read_ssh_information_activities
-          condition: (never_true)
+          condition: >
+            (proc.name startswith "systemd-tmpfile" and proc.pname = systemd and container.id = host)
 
         # from rules/incubating (macro)
         - macro: allowed_openshift_registry_root
@@ -373,9 +514,7 @@ spec:
             CAP_DAC_OVERRIDE) and thread.cap_effective contains CAP_SYS_ADMIN
 
             '
-          output: Detect an attempt to exploit a container escape using release_agent file | file=%fd.name cap_effective=%thread.cap_effective
-            evt_type=%evt.type user=%user.name user_uid=%user.uid user_loginuid=%user.loginuid process=%proc.name proc_exepath=%proc.exepath
-            parent=%proc.pname command=%proc.cmdline terminal=%proc.tty
+          output: Detect an attempt to exploit a container escape using release_agent file | file=%fd.name cap_effective=%thread.cap_effective evt_type=%evt.type process=%proc.name command=%proc.cmdline parent=%proc.pname
           priority: CRITICAL
           tags:
           - maturity_stable
@@ -393,8 +532,7 @@ spec:
             '
           condition: "spawned_process and (proc.cmdline contains \"stratum+tcp\" or\n     proc.cmdline contains \"stratum2+tcp\" or\n\
             \     proc.cmdline contains \"stratum+ssl\" or\n     proc.cmdline contains \"stratum2+ssl\")\n"
-          output: Possible miner running | evt_type=%evt.type user=%user.name user_uid=%user.uid user_loginuid=%user.loginuid process=%proc.name
-            proc_exepath=%proc.exepath parent=%proc.pname command=%proc.cmdline terminal=%proc.tty exe_flags=%evt.arg.flags
+          output: Possible miner running | evt_type=%evt.type process=%proc.name command=%proc.cmdline parent=%proc.pname
           priority: CRITICAL
           tags:
           - maturity_sandbox
@@ -417,9 +555,7 @@ spec:
           condition: 'spawned_process and container and shell_procs and proc.tty != 0 and container_entrypoint and not user_expected_terminal_shell_in_container_conditions
 
             '
-          output: A shell was spawned in a container with an attached terminal | evt_type=%evt.type user=%user.name user_uid=%user.uid
-            user_loginuid=%user.loginuid process=%proc.name proc_exepath=%proc.exepath parent=%proc.pname command=%proc.cmdline terminal=%proc.tty
-            exe_flags=%evt.arg.flags
+          output: A shell was spawned in a container with an attached terminal | evt_type=%evt.type process=%proc.name command=%proc.cmdline parent=%proc.pname terminal=%proc.tty
           priority: WARNING
           tags:
           - maturity_stable
@@ -441,8 +577,7 @@ spec:
             and not redhat_image
 
             '
-          output: Privileged container started | evt_type=%evt.type user=%user.name user_uid=%user.uid user_loginuid=%user.loginuid
-            process=%proc.name proc_exepath=%proc.exepath parent=%proc.pname command=%proc.cmdline terminal=%proc.tty
+          output: Privileged container started | evt_type=%evt.type process=%proc.name command=%proc.cmdline parent=%proc.pname
           priority: WARNING
           tags:
           - maturity_incubating
@@ -467,9 +602,7 @@ spec:
             and not user_known_contact_k8s_api_server_activities
 
             '
-          output: Unexpected connection to K8s API Server from container | connection=%fd.name lport=%fd.lport rport=%fd.rport fd_type=%fd.type
-            fd_proto=%fd.l4proto evt_type=%evt.type user=%user.name user_uid=%user.uid user_loginuid=%user.loginuid process=%proc.name
-            proc_exepath=%proc.exepath parent=%proc.pname command=%proc.cmdline terminal=%proc.tty
+          output: Unexpected connection to K8s API Server from container | connection=%fd.name evt_type=%evt.type process=%proc.name command=%proc.cmdline parent=%proc.pname
           priority: WARNING
           tags:
           - maturity_stable
@@ -490,9 +623,7 @@ spec:
 
             '
           enabled: true
-          output: Outbound connection to cloud instance metadata service | connection=%fd.name lport=%fd.lport rport=%fd.rport fd_type=%fd.type
-            fd_proto=%fd.l4proto evt_type=%evt.type user=%user.name user_uid=%user.uid user_loginuid=%user.loginuid process=%proc.name
-            proc_exepath=%proc.exepath parent=%proc.pname command=%proc.cmdline terminal=%proc.tty
+          output: Outbound connection to cloud instance metadata service | connection=%fd.name evt_type=%evt.type process=%proc.name command=%proc.cmdline parent=%proc.pname
           priority: WARNING
           tags:
           - maturity_incubating
@@ -514,10 +645,7 @@ spec:
           condition: 'dup and container and evt.rawres in (0, 1, 2) and fd.type in ("ipv4", "ipv6") and not user_known_stand_streams_redirect_activities
 
             '
-          output: Redirect stdout/stdin to network connection | gparent=%proc.aname[2] ggparent=%proc.aname[3] gggparent=%proc.aname[4]
-            fd.sip=%fd.sip connection=%fd.name lport=%fd.lport rport=%fd.rport fd_type=%fd.type fd_proto=%fd.l4proto evt_type=%evt.type
-            user=%user.name user_uid=%user.uid user_loginuid=%user.loginuid process=%proc.name proc_exepath=%proc.exepath parent=%proc.pname
-            command=%proc.cmdline terminal=%proc.tty
+          output: Redirect stdout/stdin to network connection | connection=%fd.name fd_sip=%fd.sip evt_type=%evt.type process=%proc.name command=%proc.cmdline parent=%proc.pname
           priority: WARNING
           tags:
           - maturity_stable
@@ -540,9 +668,7 @@ spec:
             \               proc.cmdline contains \" -c\")) or\n     (proc.name = \"ncat\" and (proc.args contains \"--sh-exec\" or\n\
             \                              proc.args contains \"--exec\" or proc.args contains \"-e \" or\n                      \
             \        proc.args contains \"-c \" or proc.args contains \"--lua-exec\"))\n     )\n"
-          output: Netcat runs inside container that allows remote code execution | evt_type=%evt.type user=%user.name user_uid=%user.uid
-            user_loginuid=%user.loginuid process=%proc.name proc_exepath=%proc.exepath parent=%proc.pname command=%proc.cmdline terminal=%proc.tty
-            exe_flags=%evt.arg.flags
+          output: Netcat runs inside container that allows remote code execution | evt_type=%evt.type process=%proc.name command=%proc.cmdline parent=%proc.pname
           priority: WARNING
           tags:
           - maturity_stable
@@ -565,10 +691,7 @@ spec:
             \ startswith \"./\" ) or\n    (shell_procs and proc.args startswith \"-c /dev/shm\") or\n    (shell_procs and proc.args\
             \ startswith \"-i /dev/shm\") or\n    (shell_procs and proc.args startswith \"/dev/shm\") or\n    (proc.cwd startswith\
             \ \"/dev/shm/\" and proc.args startswith \"./\" ))\nand not container.image.repository in (falco_privileged_images, trusted_images)\n"
-          output: File execution detected from /dev/shm | evt_res=%evt.res file=%fd.name proc_cwd=%proc.cwd proc_pcmdline=%proc.pcmdline
-            user_loginname=%user.loginname group_gid=%group.gid group_name=%group.name evt_type=%evt.type user=%user.name user_uid=%user.uid
-            user_loginuid=%user.loginuid process=%proc.name proc_exepath=%proc.exepath parent=%proc.pname command=%proc.cmdline terminal=%proc.tty
-            exe_flags=%evt.arg.flags
+          output: File execution detected from /dev/shm | file=%fd.name proc_cwd=%proc.cwd evt_type=%evt.type process=%proc.name command=%proc.cmdline parent=%proc.pname
           priority: WARNING
           tags:
           - maturity_stable
@@ -589,9 +712,7 @@ spec:
           condition: 'spawned_process and proc.is_exe_from_memfd=true and not known_memfd_execution_processes
 
             '
-          output: Fileless execution via memfd_create | container_start_ts=%container.start_ts proc_cwd=%proc.cwd evt_res=%evt.res
-            proc_sname=%proc.sname gparent=%proc.aname[2] evt_type=%evt.type user=%user.name user_uid=%user.uid user_loginuid=%user.loginuid
-            process=%proc.name proc_exepath=%proc.exepath parent=%proc.pname command=%proc.cmdline terminal=%proc.tty exe_flags=%evt.arg.flags
+          output: Fileless execution via memfd_create | proc_cwd=%proc.cwd evt_res=%evt.res evt_type=%evt.type process=%proc.name command=%proc.cmdline parent=%proc.pname
           priority: WARNING
           tags:
           - maturity_stable
@@ -613,9 +734,7 @@ spec:
             in (allowed_container_images_loading_kernel_module)
 
             '
-          output: Linux Kernel Module injection from container | parent_exepath=%proc.pexepath gparent=%proc.aname[2] gexepath=%proc.aexepath[2]
-            module=%proc.args res=%evt.res evt_type=%evt.type user=%user.name user_uid=%user.uid user_loginuid=%user.loginuid process=%proc.name
-            proc_exepath=%proc.exepath parent=%proc.pname command=%proc.cmdline terminal=%proc.tty
+          output: Linux Kernel Module injection from container | module=%proc.args res=%evt.res evt_type=%evt.type process=%proc.name command=%proc.cmdline parent=%proc.pname
           priority: WARNING
           tags:
           - maturity_stable
@@ -638,9 +757,7 @@ spec:
             '
           condition: "(open_read or open_directory)\n and (user_ssh_directory or fd.name startswith /root/.ssh)\n and not user_known_read_ssh_information_activities\n\
             \ and not proc.name in (ssh_binaries)\n"
-          output: ssh-related file/directory read by non-ssh program | file=%fd.name pcmdline=%proc.pcmdline evt_type=%evt.type user=%user.name
-            user_uid=%user.uid user_loginuid=%user.loginuid process=%proc.name proc_exepath=%proc.exepath parent=%proc.pname command=%proc.cmdline
-            terminal=%proc.tty
+          output: ssh-related file/directory read by non-ssh program | file=%fd.name evt_type=%evt.type process=%proc.name command=%proc.cmdline parent=%proc.pname
           priority: WARNING
           tags:
           - maturity_incubating
@@ -661,9 +778,7 @@ spec:
             '
           condition: "spawned_process and ((grep_commands and private_aws_credentials) or\n     (proc.name = \"find\" and proc.args\
             \ endswith \".aws/credentials\"))\n"
-          output: Detected AWS credentials search activity | proc_pcmdline=%proc.pcmdline proc_cwd=%proc.cwd group_gid=%group.gid
-            group_name=%group.name user_loginname=%user.loginname evt_type=%evt.type user=%user.name user_uid=%user.uid user_loginuid=%user.loginuid
-            process=%proc.name proc_exepath=%proc.exepath parent=%proc.pname command=%proc.cmdline terminal=%proc.tty exe_flags=%evt.arg.flags
+          output: Detected AWS credentials search activity | proc_cwd=%proc.cwd evt_type=%evt.type process=%proc.name command=%proc.cmdline parent=%proc.pname
           priority: WARNING
           tags:
           - maturity_stable
@@ -686,8 +801,7 @@ spec:
             \ contains \"id_rsa\" or\n                              proc.args contains \"id_dsa\" or\n                           \
             \   proc.args contains \"id_ed25519\" or\n                              proc.args contains \"id_ecdsa\"\n      )\n   \
             \ ))\n"
-          output: Grep private keys or passwords activities found | evt_type=%evt.type user=%user.name user_uid=%user.uid user_loginuid=%user.loginuid
-            process=%proc.name proc_exepath=%proc.exepath parent=%proc.pname command=%proc.cmdline terminal=%proc.tty exe_flags=%evt.arg.flags
+          output: Grep private keys or passwords activities found | evt_type=%evt.type process=%proc.name command=%proc.cmdline parent=%proc.pname
           priority: WARNING
           tags:
           - maturity_stable
@@ -698,6 +812,21 @@ spec:
           - mitre_credential_access
           - T1552.001
           - curated_home_cluster
+    collectors:
+      containerEngine:
+        engines:
+          cri:
+            # MicroK8s keeps its CRI socket under the snap, not at /run/containerd, so none
+            # of the chart's default paths exist here and the plugin enriched nothing: on
+            # 2026-09-30 all 620 events in a 25-minute sample carried k8s.ns.name,
+            # k8s.pod.name and container.image.repository as null. The chart mounts the
+            # directory holding the socket at /host<dir> and the plugin resolves the socket
+            # as /host + this path (confirmed in the pod log: "enabled container runtime
+            # socket at '/host/run/podman/podman.sock'"), so the MicroK8s path is given as
+            # the host path it is. Without this, `k8s_containers` can exclude nothing and
+            # `Launch Privileged Container` cannot fire (container.privileged is unset).
+            sockets:
+            - /var/snap/microk8s/common/run/containerd.sock
     # The container plugin (libcontainer.so) is bundled in the falcosecurity/falco
     # image, so no artifact has to be downloaded at pod start: no falcoctl init
     # container, no follow sidecar, and no egress from this namespace to ghcr.io.
@@ -716,6 +845,13 @@ spec:
         memory: 1024Mi
     falcosidekick:
       enabled: true
+      # 2.32.0 (the chart default) does not set the `alertname` label on the Alertmanager
+      # payload, so every Falco alert grouped under alertname="" - empty Discord/ntfy titles,
+      # the severity inhibit rule matching every Falco alert against every other, and
+      # "unknown" in the alert-detector. 2.33.0 added it (outputs/alertmanager.go line 122);
+      # the tag is pinned rather than left to the chart so the version is explicit.
+      image:
+        tag: "2.35.0"
       replicaCount: 1
       resources:
         requests:
@@ -730,9 +866,14 @@ spec:
           endpoint: "/api/v2/alerts"
           # warning is the floor because every curated rule is WARNING or CRITICAL.
           minimumpriority: "warning"
-          # Falco events have no end, so without this every alert stays active forever
-          # in Alertmanager. 5 minutes matches Alertmanager's own resolve_timeout.
-          expireafter: "300"
+          # expireafter is deliberately NOT set. Falcosidekick never sends startsAt, and
+          # Alertmanager v0.34.1 api/v2/api.go:370-377 sets StartsAt = EndsAt when a payload
+          # has an end but no start. With expireafter: 300 every Falco alert therefore ended
+          # up with starts_at = ends_at = evt.time + 300s (measured: 8 of 8 alerts, e.g. Falco
+          # 08:10:24.676 -> startsAt/endsAt 08:15:24.676), i.e. a start time five minutes after
+          # the event and an instantaneous window. Left unset, Alertmanager stamps startsAt =
+          # now and endsAt = now + resolve_timeout (5m, Timeout=true), so the alert is fresh
+          # from receipt and still resolves on its own.
           # Upstream defaults turn *any* dropped-syscall event into a critical alert;
           # that would page on a busy node. Only a five-figure drop count is critical.
           dropeventdefaultpriority: "warning"

@@ -1,0 +1,83 @@
+# Split out of prometheus-rules.yaml on 2026-09-30, one file per rule group, so that
+# review and ownership follow the group that changed. It buys reviewability and nothing
+# else: Prometheus reloads its rule set as a whole - LoadGroups aggregates errors across
+# every file and refuses the entire reload if any one rule is bad - so a file boundary is
+# not blast-radius isolation. The CI `promtool check rules` step is what makes a bad rule
+# fail the PR instead of the reload.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: cronjob-health-alerts
+  namespace: monitoring
+  labels:
+    prometheus: kube-prometheus-stack-prometheus
+    app: kube-prometheus-stack-prometheus
+spec:
+  groups:
+  # Failed Jobs already have coverage from the chart's own KubeJobFailed
+  # (kubernetes-apps, warning, for 15m) and KubeJobNotCompleted (a job still active
+  # after 12h). What neither sees is a CronJob that stops producing runs without any
+  # Job failing: a wedged concurrencyPolicy: Forbid, a schedule that no longer
+  # matches, a scheduler that never creates the Job. Nothing fails, so nothing
+  # reports - the only visible symptom is the absence of successes.
+  #
+  # Per-service freshness rules exist for the two backups (ProdBackupStale) and the
+  # blackbox reconciler (IngressProbeReconcilerStale), but nothing generic. This is
+  # that backstop, so a new CronJob is covered the day it is added rather than the
+  # day someone remembers to hand-write a rule for it.
+  #
+  # 48h, deliberately loose: every CronJob in this cluster runs at least daily, so
+  # two days means at least one whole cycle was missed. It is a backstop, not the
+  # first line - ProdBackupStale already speaks at 30h for the backups that matter.
+  # A CronJob added with a weekly schedule would need this threshold raised.
+  #
+  # Two branches, because a CronJob that has never succeeded has no
+  # kube_cronjob_status_last_successful_time series at all: the first handles a
+  # series that is stale, the second a series that never existed. The `unless` keeps
+  # a freshly created CronJob (registry-pull-rotator spent its first hours that way)
+  # from alerting before its first run is even due.
+  - name: cronjob-health
+    rules:
+    - alert: CronJobStale
+      expr: |
+        (
+          (time() - kube_cronjob_status_last_successful_time > 172800)
+          or (time() - kube_cronjob_created > 172800 unless on (namespace, cronjob) kube_cronjob_status_last_successful_time)
+        )
+        unless on (namespace, cronjob) kube_cronjob_spec_suspend == 1
+      for: 15m
+      labels:
+        severity: warning
+      annotations:
+        summary: "CronJob {{ $labels.cronjob }} in {{ $labels.namespace }} has not succeeded in 2 days"
+        description: "No successful run for over 48 hours, or a CronJob that has existed that long without ever succeeding. Check `kubectl -n {{ $labels.namespace }} get cronjob {{ $labels.cronjob }} -o yaml` for a suspend flag and `kubectl -n {{ $labels.namespace }} get jobs` for runs that were created but never completed - a pod stuck Pending blocks every later run when concurrencyPolicy is Forbid, and PodPendingTooLong reports that end of it. A CronJob whose runs never start at all leaves no Job behind to inspect."
+    # Tighter than the 48h backstop above, because this job is the only thing that wakes the
+    # agent: at a 5m schedule an hour of silence means at least eleven missed runs.
+    #
+    # warning, not critical, and deliberately so. If the detector dies, the alerts it would
+    # have reported still reach the notification channel through Alertmanager's own routes -
+    # what is lost is the agent's investigation, not the page. Paging hard here would make
+    # the paging path noisier than the thing it protects.
+    #
+    # Second branch for the same reason as above: a detector that has never once succeeded
+    # has no last-successful series at all, so a plain staleness comparison goes quiet.
+    #
+    # Suspend-aware, as is the 48h backstop above: a deliberately suspended CronJob is not a
+    # stale one, and without the guard a cost decision (suspend: true on the CronJob, 2026-09-30)
+    # converts into a permanent page. Do not remove the trailing `unless` - a runtime Alertmanager
+    # silence would hide the alarm without fixing the rule, expire on its own, and die with the
+    # Alertmanager volume. The guard is a no-op for a running CronJob, so resuming the detector
+    # brings this alert back by itself after the staleness window.
+    - alert: AlertDetectorStale
+      expr: |
+        (
+          (time() - kube_cronjob_status_last_successful_time{namespace="ai-services",cronjob="alert-detector"} > 3600)
+          or (time() - kube_cronjob_created{namespace="ai-services",cronjob="alert-detector"} > 3600 unless on (namespace, cronjob) kube_cronjob_status_last_successful_time)
+        )
+        unless on (namespace, cronjob) kube_cronjob_spec_suspend{namespace="ai-services",cronjob="alert-detector"} == 1
+      for: 15m
+      labels:
+        severity: warning
+      annotations:
+        summary: "alert-detector has not succeeded in an hour - the agent is not being woken by alerts"
+        description: "The cluster can no longer start the agent on its own. Alerts still notify through Alertmanager, so this is a loss of investigation rather than of paging. Check `kubectl -n ai-services get jobs` and the detector's logs: a webhook rejection shows as an HTTP error, a rejected HMAC or a 429 from the route's rate limit, and an Alertmanager read failure shows as a connection error."
