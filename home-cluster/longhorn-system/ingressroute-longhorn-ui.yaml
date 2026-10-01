@@ -1,0 +1,23 @@
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: longhorn-ui
+  namespace: longhorn-system
+  annotations:
+    external-dns.alpha.kubernetes.io/hostname: longhorn.kube.stevearnett.com
+    external-dns.alpha.kubernetes.io/target: kube.stevearnett.com
+    # Unauthenticated the UI is cluster storage admin; basic auth means a probe only ever
+    # gets 401, and an IngressDown that cannot pass is an alert nobody can act on.
+    blackbox.stevearnett.com/probe: "false"
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - match: Host(`longhorn.kube.stevearnett.com`)
+      kind: Rule
+      middlewares:
+        - name: longhorn-ui-basic-auth
+      services:
+        - name: longhorn-frontend
+          port: 80
+          scheme: http
