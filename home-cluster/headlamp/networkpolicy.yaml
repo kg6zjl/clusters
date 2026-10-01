@@ -31,17 +31,11 @@ spec:
       port: 53
     - protocol: TCP
       port: 53
-  # The Kubernetes API, plus Traefik for the OIDC back-channel.
-  #
-  # The apiserver is a HOST process, not a pod, so a namespaceSelector does NOT cover it: egress has
-  # to name BOTH the service CIDR (ClusterIP 10.152.183.1:443, pre-DNAT) and the node LAN subnet
-  # (the apiserver endpoints 192.168.1.121/144/146:16443, post-DNAT). Omitting the node-LAN half is
-  # the classic "Headlamp times out talking to the apiserver" bug this directory documents.
-  #
-  # 192.168.1.0/24 also covers Traefik's MetalLB VIP (192.168.1.241:443). That is where the OIDC
-  # issuer https://sso.kube.stevearnett.com/dex resolves (verified with dig -- CoreDNS has no
-  # rewrite for it), so the backend's discovery document, token exchange and JWKS fetches have a
-  # path. This is why egress is no longer a blanket `- {}`.
+  # The Kubernetes API. The apiserver is a HOST process, not a pod, so a namespaceSelector does NOT
+  # cover it: egress has to name BOTH the service CIDR (ClusterIP 10.152.183.1:443, pre-DNAT) and
+  # the node LAN subnet (the apiserver endpoints 192.168.1.121/144/146:16443, post-DNAT). Omitting
+  # the node-LAN half is the classic "Headlamp times out talking to the apiserver" bug this
+  # directory documents.
   - to:
     - ipBlock:
         cidr: 10.152.183.0/16
@@ -52,3 +46,18 @@ spec:
       port: 443
     - protocol: TCP
       port: 16443
+  # The OIDC issuer (https://sso.kube.stevearnett.com/dex), for the backend's discovery-document,
+  # token-exchange and JWKS fetches. The DNS name resolves to Traefik's MetalLB VIP
+  # 192.168.1.241:443 (verified with dig -- CoreDNS has no rewrite for it), and egress policy is
+  # evaluated AFTER DNAT, so the destination the policy actually sees is the backing Traefik POD
+  # (10.1.162.52), not the VIP and not the ClusterIP. The ipBlocks above therefore do NOT cover
+  # this path -- that is why login timed out on `dial tcp 192.168.1.241:443: i/o timeout` after
+  # egress was tightened in #922. Select the Traefik pods by namespace instead; a namespaceSelector
+  # matches the post-DNAT destination pod regardless of which replica or VIP is fronted.
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: traefik
+    ports:
+    - protocol: TCP
+      port: 443
