@@ -22,8 +22,8 @@
   <p class="eyebrow">Alerting</p>
   <h1>An alerting pipeline is only worth having if you still read it</h1>
   <p class="lede">
-    The hard part isn't sending an alert. It's making sure the one that arrives at 1am is worth
-    getting out of bed for. Everything below is a decision about what stays quiet.
+    The hard part isn't sending an alert. It's making sure the one that arrives at 1am is worth getting
+    out of bed for.
   </p>
 </header>
 
@@ -61,8 +61,7 @@
   <div class="note">
     <span class="label">Severity decides who hears it</span>
     <p>
-      Warnings group. Criticals page. If everything pages, nothing does — that's not a slogan, it's the
-      single fastest way to make an alerting system worthless.
+      Warnings group. Criticals page. If everything pages, nothing does.
     </p>
   </div>
 </section>
@@ -72,7 +71,7 @@
   <p>
     There's an alert that always fires. It isn't noise, it's a dead man's switch: its <em>absence</em>
     is the signal that the rules stopped loading, the scrape died, or the pipeline can't deliver. Any
-    alerting system should have one, routed to a receiver you've deliberately proven works.
+    alerting system should have one, routed to a receiver you've proven works.
   </p>
   <p>
     Silences follow the same rule. A mute that lives only in the alerting API doesn't survive a
@@ -90,7 +89,7 @@
     change, it opens a pull request and stops.
   </p>
   <p>
-    The controls on that path are the interesting part, because this is the thing that spends money:
+    The controls on that path matter because this is the thing that spends money:
   </p>
   <ul>
     <li>
@@ -104,9 +103,9 @@
       afford to be up to an hour behind.
     </li>
     <li>
-      <strong>A gate so a standing alert wakes it once.</strong> The lookback window is deliberately
-      longer than the schedule, which means the same standing alert is visible to several polls in a
-      row. Without a dedupe gate, one broken thing costs a run an hour, forever.
+      <strong>A gate so a standing alert wakes it once.</strong> The lookback window is longer than the
+      schedule, so the same standing alert shows up in several polls in a row. Without a dedupe gate,
+      one broken thing costs a run an hour, forever.
     </li>
     <li>
       <strong>A hard ceiling.</strong> At most one run per poll: twenty-four a day, by construction.
@@ -115,7 +114,7 @@
   <p class="small">
     When that path first ran, it was the dominant cost, so it was turned off and rebuilt narrower
     before being turned back on. The measurement that stopped it was the whole provider account for
-    24 hours, not this path — worth knowing before you turn off the wrong thing.
+    24 hours, not this path.
   </p>
 </section>
 

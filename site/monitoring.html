@@ -22,9 +22,8 @@
   <p class="eyebrow">Monitoring</p>
   <h1>Measure the thing that actually moves</h1>
   <p class="lede">
-    Everything here exists to answer a question I've actually asked. The metric list is short because
-    most metrics answer nothing, and a dashboard full of them is worse than no dashboard: you stop
-    looking.
+    Every metric I keep answers a question I've actually asked. The list is short because most metrics
+    answer nothing, and a dashboard full of them is worse than no dashboard: you stop looking.
   </p>
 </header>
 
@@ -37,9 +36,9 @@
      │                 └──▶ alert rules (in git) ──▶ alerting pipeline
      └──▶ logs  (short retention, on purpose for now)</code></pre>
   <p>
-    One metrics store, one log store, one dashboard tool. Metrics are scraped; logs are shipped from
-    every pod by a collector. Nothing is sampled down and nothing is thrown away early — except logs,
-    which I keep hours of rather than weeks, and that's a listed weakness rather than a plan.
+    One metrics store, one log store, one dashboard tool. Metrics are scraped, logs are shipped from
+    every pod by a collector. Nothing is sampled down and nothing is thrown away early, except logs,
+    which I keep hours of rather than weeks. That's a known weakness, not a plan.
   </p>
 </section>
 
@@ -137,8 +136,8 @@
   </p>
   <p>
     Dashboards are files in the repository next to the alert rules, so a panel is reviewed the same way
-    a rule is. That matters more than it sounds: the first version of the node dashboard had panels
-    that looked right and queried the wrong label, and the review is what caught it.
+    a rule is. The first version of the node dashboard had panels that looked right and queried the
+    wrong label, and the review caught it.
   </p>
   <div class="note">
     <span class="label">Every panel is checked against real data before it ships</span>
@@ -156,8 +155,8 @@
     <li><strong>Log retention is hours, not weeks.</strong> Enough to answer "what happened last
       night". Not enough to answer "what changed three weeks ago".</li>
     <li><strong>No tracing.</strong> A slow request across three services can't be followed end to
-      end. For a home cluster I've decided that's acceptable; if something gets slow enough to matter,
-      that decision expires.</li>
+      end. For a home cluster I've decided that's acceptable, and if something gets slow enough to
+      matter, that decision expires.</li>
     <li><strong>Nothing measures the house.</strong> Power, temperature and the network gear are a
       separate system. If the cluster loses a node because a breaker tripped, the cluster is the last
       thing to know.</li>

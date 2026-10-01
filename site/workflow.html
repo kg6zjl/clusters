@@ -42,10 +42,9 @@
     controller that retries is working, not broken.
   </p>
   <p>
-    The runners that test the repository are pods in the cluster the repository describes. That's a
-    deliberate choice and it has a cost: a bad change can break the thing that validates the next
-    change. It's also honest — the pipeline is tested against reality, not a hosted runner that has
-    different network rules than production.
+    The runners that test the repository are pods in the cluster the repository describes. A bad
+    change can break the thing that validates the next change. The pipeline is tested against reality,
+    not a hosted runner with different network rules than production.
   </p>
 </section>
 
@@ -81,8 +80,8 @@
     do is investigate and talk. The merge waits for the human who was asleep.
   </p>
   <p>
-    The prompt says so, and the credential can't do it anyway. Both, deliberately: a rule the model can
-    be talked out of is not a control.
+    The prompt says so, and the credential can't do it anyway. A rule the model can be talked out of is
+    not a control.
   </p>
 </section>
 
@@ -105,9 +104,9 @@
       whoever is reading to approve without reading. Splitting them is slower and that's the point.
     </li>
     <li>
-      <strong>Read the manifests, not the memory.</strong> Half the wrong statements on a page like
-      this come from describing what something did last month. The repository is what's true; a
-      checkout that's a week behind is a source of confident nonsense.
+      <strong>Read the manifests, not the memory.</strong> Half the wrong statements in a document come
+      from describing what something did last month. The repository is what's true. A checkout that's
+      a week behind is a source of confident nonsense.
     </li>
   </ul>
 </section>

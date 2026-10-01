@@ -10,7 +10,7 @@ site/
   index.html        why this exists, what the agent has done, what it costs, what's still broken
   guardrails.html   permissions, secrets, networking, admission, disposable state
   monitoring.html   what's measured and why that list is short
-  alerting.html     the pipeline, the receivers, and what's deliberately not an alert
+  alerting.html     the pipeline, the receivers, and what's not an alert
   workflow.html     how a change actually reaches the cluster
   assets/style.css  one stylesheet, dark only
   .nojekyll         serve the files as-is; no Jekyll processing

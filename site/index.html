@@ -24,11 +24,11 @@
   <p class="lede">
     Hermes runs as a pod in a three node Kubernetes cluster at home. It has read-only RBAC, no access
     to any secret, and no way to reach the outside world except a short list of things I approved. To
-    change anything it opens a pull request, and I review and merge it. That's the whole design.
+    change anything it opens a pull request, and I review and merge it.
   </p>
   <p class="small">
-    This is what that looks like in practice: the guardrails, what it monitors, how it alerts, and
-    what's still broken. No addresses, no hostnames, no credentials.
+    The guardrails, what it monitors, how it alerts, and what's still broken. No addresses, no
+    hostnames, no credentials.
   </p>
 </header>
 
@@ -43,21 +43,21 @@
   </p>
   <p>
     So I split reach from authority. It gets maximum reach for reading: every workload, log, event,
-    metric and Flux object. It gets zero authority to mutate. It can see the world; the only way it
-    interacts with the cluster is a pull request that a human gates. The cluster is still its to fix,
-    it just has to write the fix down and get it reviewed first.
+    metric and Flux object. It gets zero authority to mutate. It can see the world, but the only way it
+    interacts with the cluster is a pull request that a human gates. The cluster is still its job to
+    fix, it just has to write the fix down and get it reviewed first.
   </p>
   <p>
-    The reason that's safe is boring, and it's the whole trick: the cluster is reconciled from git.
-    Anything not in a merged commit gets reverted on the next reconcile. A bad idea from the agent
-    costs a rejected pull request, not an outage.
+    It's safe because the cluster is reconciled from git. Anything not in a merged commit gets
+    reverted on the next reconcile. A bad idea from the agent costs a rejected pull request, not an
+    outage.
   </p>
   <div class="note">
     <span class="label">The part I didn't expect</span>
     <p>
-      Reviewing every change is nowhere near the tax I thought it would be. It's the feature. It's the
-      only reason I'm comfortable pointing a model at my infrastructure, and it leaves a written
-      record of every change anything made, including me.
+      Reviewing every change is nowhere near the tax I thought it would be. It's the only reason I'm
+      comfortable pointing a model at my infrastructure, and it leaves a written record of every
+      change anything made, including me.
     </p>
   </div>
 </section>
@@ -65,7 +65,7 @@
 <section aria-labelledby="wins">
   <h2 id="wins">What it has actually done</h2>
   <p>
-    Not "it could". These are from the last while, and most of them are boring on purpose.
+    These are from the last while, and most of them are boring on purpose.
   </p>
   <ul>
     <li>
@@ -117,9 +117,8 @@
 <section aria-labelledby="cost">
   <h2 id="cost">What it costs</h2>
   <p>
-    The agent's budget is about twelve dollars a month and it holds itself to it. That number isn't
-    arbitrary: every wake costs real money, so cost control is a design constraint, not an
-    afterthought.
+    The agent's budget is about twelve dollars a month and it holds itself to it. Every wake costs real
+    money, so the budget is part of the design.
   </p>
   <p>
     Alert-driven wakes were the dominant cost at first, so I turned that path off and rebuilt it
@@ -140,13 +139,13 @@
 <section aria-labelledby="weak">
   <h2 id="weak">What's weak right now</h2>
   <p>
-    A page that only lists strengths is a brochure. These are open today.
+    These are open today.
   </p>
   <ul>
     <li>
       <strong>Admission reports, it doesn't block.</strong> The policy that keeps the agent's identity
       read-only runs in audit mode. It produces a report and stops nothing. Flipping it to enforce is a
-      deliberate one-way change, taken once the report shows the expected zero.
+      one-way change, taken once the report shows the expected zero.
     </li>
     <li>
       <strong>Scan triage is behind the findings.</strong> The scanner works and the alerts are live.

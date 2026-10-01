@@ -24,11 +24,11 @@
   <p class="lede">
     Five things stop this going wrong: permissions, secret access, networking, admission, and the
     fact that the agent can't merge its own changes to the cluster. Each one covers a different
-    failure, and none of them is redundant.
+    failure.
   </p>
   <p>
     The default everywhere is deny. It has what it has because the grant was written down and
-    reviewed, not because nothing was watching. Every access decision on this page is a file in the
+    reviewed, not because nothing was watching. Every access decision here is a file in the
     repository with a diff and a history.
   </p>
 </header>
@@ -60,9 +60,8 @@
     </tbody>
   </table>
   <p class="small">
-    That third row on the right is the one that matters. When the agent needs something it can't read,
-    the answer is a reviewed job in the repository that reads it and logs a sanitised result — never a
-    wider role.
+    When the agent needs something it can't read, the answer is a reviewed job in the repository that
+    reads it and logs a sanitised result, never a wider role.
   </p>
 </section>
 
@@ -70,8 +69,7 @@
   <h2 id="rbac">Permissions: get, list, watch, and nothing else</h2>
   <p>
     The cluster role behind the agent has <code>get</code>, <code>list</code> and <code>watch</code>
-    on the resources it needs and no write verb anywhere. The deliberate omissions are the
-    interesting part:
+    on the resources it needs and no write verb anywhere.
   </p>
   <ul>
     <li><strong>No secrets.</strong> It can see that a secret exists and what refers to it. It can't
@@ -88,8 +86,8 @@
     ssh path at all.
   </p>
   <p>
-    That role is only half of it. Two admission policies watch the agent's own identity, and they're
-    the part I care about most, because they cover the case where the agent talks me into a bad change.
+    That role is only half of it. Two admission policies watch the agent's own identity, because they
+    cover the case where the agent talks me into a bad change.
   </p>
   <ul>
     <li>
@@ -108,15 +106,14 @@
     <p>
       RBAC says what is allowed. The policy says what stays allowed. A pull request that quietly adds
       <code>pods/exec</code> to the agent's role is a plausible change to make at the end of a long
-      day, and it's exactly the change that would undo the rest of this page.
+      day, and it's the one that undoes everything else.
     </p>
   </div>
   <p class="small">
-    Both policies run in audit mode today, so they report violations and block nothing. That's the
-    honest current state and it's listed with the other weak points on <a href="index.html">Why</a>.
-    The policies have tests that run in CI: fixtures for a widened role, a widened binding, and a
-    cluster-admin binding, which must be reported as violations, plus the read-only shape, which must
-    pass clean.
+    Both policies run in audit mode today, so they report violations and block nothing. It's listed
+    with the other weak points on <a href="index.html">Why</a>. The policies have tests that run in
+    CI: fixtures for a widened role, a widened binding, and a cluster-admin binding, which must be
+    reported as violations, plus the read-only shape, which must pass clean.
   </p>
 </section>
 
@@ -215,13 +212,12 @@
   <p>
     Nothing in the cluster floats on <code>latest</code>. Chart versions, image tags, GitHub Action
     versions and the CLI tools the pipeline pins are all pinned in the repository, and a bot checks
-    hourly for newer versions and opens a pull request when it finds one — one at a time, deliberately.
+    hourly for newer versions and opens a pull request when it finds one, one at a time.
   </p>
   <p>
     So a version changes the way everything else changes: a reviewed merge, with the checks run against
-    the new version first. The cost is worth stating plainly — a pin nobody merges stays pinned, so the
-    bot's pull requests are a to-do list that can rot. That's the price of nothing silently upgrading
-    itself underneath me.
+    the new version first. A pin nobody merges stays pinned, so the bot's pull requests are a to-do
+    list that can rot. That's the price of nothing silently upgrading itself underneath me.
   </p>
 </section>
 
