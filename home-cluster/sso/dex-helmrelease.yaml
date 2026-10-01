@@ -44,15 +44,15 @@ spec:
     # PINNED OFF THE NODE BEING ROLLED. Every node runs its own embedded kube-apiserver inside
     # kubelite, and restarting kubelite also restarts kubelet on that node -- so a Dex pod on
     # the node being rolled dies with it, and the apiserver then cannot fetch the OIDC discovery
-    # document at STARTUP and exits. That deadlock took thinkcentre01's control plane down on
-    # 2026-10-01. node-config/oidc-apiserver.yaml therefore refuses to roll a node that hosts
-    # Dex, so Dex must sit on a node we are NOT restarting.
+    # document at STARTUP and exits. node-config/oidc-apiserver.yaml therefore refuses to roll
+    # a node that hosts Dex, so Dex must sit on a node we are NOT restarting.
     #
-    # thinkcentre02 is that node for the current rollout (putting --oidc-* flags onto all three
-    # apiservers). BEFORE rolling thinkcentre02, move this pin to thinkcentre01 or
-    # thinkcentre03 first -- otherwise the playbook will refuse, by design.
+    # tc01 and tc03 already carry the --oidc-* flags; tc02 is the last apiserver left, and Dex
+    # was on tc02, so the pin moves to thinkcentre03 to let tc02 be rolled. Leave Dex pinned
+    # afterward: every future kubelite restart (reboot, snap refresh) has the same hazard, so
+    # move this pin before touching whichever node hosts Dex.
     nodeSelector:
-      kubernetes.io/hostname: thinkcentre02
+      kubernetes.io/hostname: thinkcentre03
 
     config:
       # MUST be reachable by a browser (Headlamp redirects there) AND by the apiserver (which
