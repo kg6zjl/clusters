@@ -53,17 +53,8 @@ spec:
         summary: "Node exporter not reporting on {{ $labels.instance }}"
         description: "The exporter on {{ $labels.instance }} (job={{ $labels.job }}) has been unscrapeable for 10 minutes. Disk and memory alerts for this host cannot fire while it is blind, so this alert reports that the monitoring is broken rather than the host."
         runbook_url: "https://prometheus.kube.stevearnett.com/targets"
-    # A reboot between scrapes never reaches NodeExporterDown: that rule needs 10 minutes of a blind
-    # exporter and a thinkcentre comes back in about two. Measured 2026-10-01: tc02 rebooted 00:42:30Z.
-    - alert: NodeRebooted
-      expr: changes(node_boot_time_seconds{job="node-exporter"}[15m]) > 0
-      for: 5m
-      labels:
-        severity: warning
-      annotations:
-        summary: "{{ $labels.instance }} rebooted"
-        description: "Boot time changed on {{ $labels.instance }} within the last 15 minutes, so the host restarted rather than its exporter. Every pod on the node was killed by the host, including ones that would never restart themselves, and the evidence stayed in the node's journal instead of in Prometheus. Check journalctl -b -1 -p err, dmesg and last -x reboot on the node; finding no metric that explains a reboot is the normal result, not a dead end."
-        runbook_url: "https://prometheus.kube.stevearnett.com/targets"
+    # No reboot rule here on purpose: the thinkcentres reboot weekly for patching, so an alert would
+    # fire on a non-event. The Cluster Nodes dashboard marks reboots instead.
     # PSI counts wall time tasks spent stalled, so unlike a load average it is not inflated by
     # uninterruptible sleepers. Worst 7d on a cluster node: 2.2% io, 0.23% memory (measured 2026-10-01).
     - alert: NodeIoPressureStalled
