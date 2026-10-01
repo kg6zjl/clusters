@@ -59,8 +59,11 @@ Per-host overrides live in `inventory/host_vars/`. Shared defaults in
   umount and changes nothing. Flip `csi_mount_janitor_mode` to `enforce` once
   `journalctl -t kubelet-csi-mount-janitor` has shown it identifying real leaks
 - Only ever matches `<kubelet plugin dir>/kubernetes.io/csi/driver.longhorn.io/<64-hex>/globalmount`,
-  and only when `fuser -m` shows no process holding that filesystem — so a volume
-  that is genuinely in use is never touched
+  and only when the kubelet has **no** bind mount for that device under `kubelet/pods/` — so a
+  volume that is genuinely published to a pod is never touched. Deliberately *not* gated on
+  `fuser -m`: that counts open handles at one instant, and was measured flipping between
+  0 and 1 pid for a single healthy `media/prowlarr` volume, which would misread a running
+  pod's volume as leaked
 
 **`roles/ansible-user`**
 - One-time bootstrap: creates a dedicated `ansible` user on every node

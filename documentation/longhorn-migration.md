@@ -519,7 +519,8 @@ journalctl -t kubelet-csi-mount-janitor --since "-1 day"
 ```
 
 It matches only `.../plugins/kubernetes.io/csi/driver.longhorn.io/<64-hex>/globalmount` and skips
-any mount `fuser -m` reports as in use, so a live volume is never touched. Cleared, the kubelet's
+any volume the kubelet still has a bind mount for under `kubelet/pods/` — the kubelet's own record
+that the volume is published — so a live volume is never touched. Cleared, the kubelet's
 own retry succeeds within about two minutes and the pod starts.
 
 **The upgrade is the trigger, so upgrades get a gate.** A Longhorn chart bump rolls the manager
