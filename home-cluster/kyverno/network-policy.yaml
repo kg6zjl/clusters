@@ -22,18 +22,25 @@ spec:
     - Egress
   ingress:
     # kube-apiserver -> admission webhook (Service kyverno-svc:443 -> pod:9443).
-    # The apiserver is a HOST process on a node, not a pod: its source address is
-    # the node's LAN IP, so a namespaceSelector can never match it and an ipBlock
-    # is required. 192.168.1.0/24 is the real source (all three nodes are
-    # apiserver endpoints, per the default/kubernetes EndpointSlice); the service
-    # CIDR is included defensively for a CNI that preserves the original ClusterIP
-    # as the source address. No pod has an address in the service CIDR, so this
-    # second block grants nothing in practice.
+    # The apiserver is a HOST process on a node, not a pod, so a namespaceSelector
+    # can never match it and an ipBlock is required. Its source address depends on
+    # where the DNAT lands:
+    #   - same node as the Kyverno replica -> the node's LAN IP (192.168.1.0/24);
+    #   - a different node -> Calico SNATs the packet to the node's VXLAN address
+    #     out of the pod pool (10.1.0.0/16), so the receiving pod sees 10.1.x, NOT
+    #     192.168.1.x.
+    # Both blocks are therefore required: without the pod CIDR, every webhook call
+    # from a node that hosts no Kyverno replica is dropped (timeouts, then
+    # failurePolicy: Fail denies the admission). The service CIDR is included
+    # defensively for a CNI that preserves the original ClusterIP as the source;
+    # no pod has an address there, so it grants nothing in practice.
     - from:
         - ipBlock:
             cidr: 192.168.1.0/24
         - ipBlock:
             cidr: 10.152.183.0/16
+        - ipBlock:
+            cidr: 10.1.0.0/16
       ports:
         - protocol: TCP
           port: 9443
