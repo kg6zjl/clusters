@@ -214,7 +214,11 @@
         # non-destructive here.
         owner: "{{ apiserver_args_stat.stat.pw_name | default('root') }}"
         group: "{{ apiserver_args_stat.stat.gr_name | default('root') }}"
-        mode: "{{ '%04o' | format(apiserver_args_stat.stat.mode | default(384)) }}"
+        # ansible.builtin.stat returns `mode` as a 4-char octal STRING (its own
+        # output is `"%04o" % stat.S_IMODE(...)`, e.g. "0660"), so it must be
+        # parsed as base-8 before feeding `%o` -- a bare `| int` would read
+        # "0660" as decimal 660 (0o1224) and silently corrupt the permissions.
+        mode: "{{ '%04o' | format(apiserver_args_stat.stat.mode | default('0600') | int(base=8)) }}"
         backup: true
       when: fix | default(false) | bool
       notify: Restart kubelite, the microk8s daemon that owns the apiserver
