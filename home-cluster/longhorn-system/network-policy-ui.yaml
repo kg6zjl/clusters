@@ -17,5 +17,6 @@ spec:
             matchLabels:
               kubernetes.io/metadata.name: traefik
       ports:
-        - port: 80
+        # Pod port, post-DNAT: the Service's port 80 lands on the container's 8000.
+        - port: 8000
           protocol: TCP
