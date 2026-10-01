@@ -13,12 +13,16 @@
 # RBAC decides what that person may do and the audit log names them. This playbook adds the
 # OIDC flags; headlamp/ then sends real OIDC tokens and per-user ClusterRoleBindings decide.
 #
-# ADDITIVE, NOT A SWITCH
-# ----------------------
+# ADDITIVE FOR AUTHENTICATION, BUT NOT FAIL-SAFE AT STARTUP
+# ---------------------------------------------------------
 # Adding an OIDC provider does not disable any other authenticator. ServiceAccount tokens,
-# client certificates and the admin token file all keep working exactly as before. If Dex is
-# unreachable or misconfigured, the worst outcome is that OIDC logins fail and everyone else
-# carries on. That property is what makes this safe to apply first and verify later.
+# client certificates and the admin token file all keep working exactly as before. Once the
+# apiserver is RUNNING, an unreachable Dex only makes OIDC logins fail while everything else
+# carries on.
+#
+# STARTUP IS DIFFERENT, AND THIS IS THE TRAP: the apiserver fetches the issuer's discovery
+# document while it boots and EXITS if that fetch fails. An unreachable issuer at restart time
+# is a control-plane outage, not a degraded login. See PREREQUISITE below.
 #
 # READ-ONLY BY DEFAULT -- nothing on the host is written unless you pass `-e fix=true`.
 # Either way it prints the OIDC flags currently present, the exact rewrite it would perform,
@@ -30,9 +34,17 @@
 # mode, their stdout comes back empty, and the unit-detection assert below fails on a
 # perfectly healthy host -- a false alarm that makes the playbook unreviewable.
 #
-# PREREQUISITE: merge and verify the Dex deployment (sso namespace) BEFORE running this. The
-# apiserver does not contact the issuer at startup, so a missing Dex cannot crash the control
-# plane, but OIDC logins will simply fail until Dex is live.
+# PREREQUISITE: merge and verify the Dex deployment (sso namespace) BEFORE running this.
+#
+# ⚠️ THE APISERVER CONTACTS THE ISSUER AT STARTUP. Kubernetes fetches the OIDC discovery
+# document while building the authenticator; if that fetch fails the apiserver EXITS instead of
+# starting without OIDC. An earlier revision of this file claimed the opposite. That was wrong
+# and caused a real control-plane outage on thinkcentre01 on 2026-10-01.
+#
+# A restart here is a restart of kubelite, which on this MicroK8s layout is ALSO kubelet on the
+# same node, so every pod scheduled here -- Dex included -- goes down with it. If Dex lives on
+# the node being rolled, the apiserver cannot reach its own issuer and will not come back. The
+# preflight tasks below refuse to run in precisely that case: keep Dex OFF the node you roll.
 #
 # USAGE
 #   # review only, touches nothing:
@@ -201,90 +213,209 @@
           cannot confirm it restarted the apiserver. Expected kubelite to hold port 16443 --
           run `ss -ltnp | grep 16443` by hand and stop; do not merge or apply until you know
           which unit owns the apiserver on this MicroK8s layout.
+      # SKIPPED ON ROLLBACK. -e oidc_remove=true exists to be run precisely when a bad apply has
+      # left kubelite failed; demanding a live MainPID first would block the one action that
+      # restores service. The post-restart PID check further down still proves the restart
+      # happened.
+      when: not (oidc_remove | default(false) | bool)
+
+    # PREFLIGHT. The apiserver fetches the issuer's discovery document at STARTUP and exits if
+    # the fetch fails, and restarting kubelite also restarts kubelet on this node -- so any Dex
+    # pod scheduled HERE dies with it and the apiserver then cannot reach its own issuer. That
+    # is a self-inflicted control-plane outage (seen on thinkcentre01, 2026-10-01), so refuse
+    # before writing anything.
+    - name: Preflight - ask the cluster where Dex is running
+      ansible.builtin.command:
+        argv:
+          - microk8s
+          - kubectl
+          - get
+          - pods
+          - -n
+          - sso
+          - -l
+          - app.kubernetes.io/name=dex
+          - -o
+          - jsonpath={.items[*].spec.nodeName}
+      environment:
+        PATH: "{{ snap_bin }}:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+      changed_when: false
+      failed_when: false
+      register: dex_nodes
+      when:
+        - fix | default(false) | bool
+        - not (oidc_remove | default(false) | bool)
+
+    - name: Preflight - refuse if Dex runs on the node we are about to restart
+      ansible.builtin.assert:
+        that: inventory_hostname not in (dex_nodes.stdout | default('')).split()
+        fail_msg: >-
+          Dex is scheduled on {{ inventory_hostname }}. Restarting kubelite here also restarts
+          kubelet, taking Dex down with it; the apiserver then cannot fetch the OIDC discovery
+          document at startup and will NOT come back. Move Dex off this node (nodeSelector or
+          affinity) or roll a different node first. See this file's header.
+      when:
+        - fix | default(false) | bool
+        - not (oidc_remove | default(false) | bool)
+
+    - name: Preflight - confirm the issuer discovery document answers from this host
+      ansible.builtin.uri:
+        url: "{{ oidc_issuer_url }}/.well-known/openid-configuration"
+        status_code: 200
+        validate_certs: true
+      register: discovery_preflight
+      until: discovery_preflight.status == 200
+      retries: 3
+      delay: 2
+      changed_when: false
+      when:
+        - fix | default(false) | bool
+        - not (oidc_remove | default(false) | bool)
 
     # Both the apply and the rollback pass through here; -e oidc_remove=true simply computes an
     # args file with no --oidc-* lines, which is a pure restore of the pre-OIDC state.
-    - name: Apply the OIDC args
-      ansible.builtin.copy:
-        dest: "{{ apiserver_args }}"
-        content: "{{ (args_preserved + args_desired) | join('\n') + '\n' }}"
-        # Preserve the existing mode/owner when possible. On MicroK8s the args file is
-        # typically 660 root:microk8s, and some snap refresh flows regenerate files with
-        # that ownership. Overwriting to 0600 root:root is a small regression; be
-        # non-destructive here.
-        owner: "{{ apiserver_args_stat.stat.pw_name | default('root') }}"
-        group: "{{ apiserver_args_stat.stat.gr_name | default('root') }}"
-        mode: "{{ '%04o' | format(apiserver_args_stat.stat.mode | default(384)) }}"
-        backup: true
-      when: fix | default(false) | bool
-      notify: Restart kubelite, the microk8s daemon that owns the apiserver
-
-    - name: Apply the restart before verifying
-      ansible.builtin.meta: flush_handlers
-      when: fix | default(false) | bool
-
-    - name: Wait for the local apiserver to answer again
-      ansible.builtin.uri:
-        url: "{{ microk8s_apiserver_healthz }}"
-        validate_certs: false
-        status_code: 200
-      register: apiserver_healthz
-      until: apiserver_healthz.status == 200
-      retries: 36
-      delay: 5
-      when: fix | default(false) | bool
-      changed_when: false
-
-    - name: Read the args file back
-      ansible.builtin.slurp:
-        src: "{{ apiserver_args }}"
-      register: apiserver_args_after
-      when: fix | default(false) | bool
-
-    # THE DISCRIMINATOR. Everything above can pass while the apiserver is still running the
-    # old flags: /healthz answers 200 whether or not the process ever restarted, and the file
-    # on disk contains the flags the moment `copy` writes them. Both facts are true
-    # independently of whether kubelite re-read them.
     #
-    # The one thing that can only be true if the restart actually reached the apiserver
-    # process is that kubelite's MainPID changed. If the handler restarted the wrong unit --
-    # or the restart silently no-op'd -- the PID is unchanged and this fails loudly, which is
-    # the difference between "SSO is on" and "SSO looks like it is on".
-    - name: Read kubelite's MainPID after the restart
-      ansible.builtin.command:
-        cmd: systemctl show --property MainPID --value "{{ microk8s_apiserver_unit }}"
-      changed_when: false
-      check_mode: false
-      register: kubelite_pid_after
+    # Wrapped in a block/rescue on purpose. The dangerous failure mode is an apiserver that
+    # takes the new flags on disk but never comes back (see the header): the old shape just
+    # failed and left the node with a dead control plane, which is exactly what happened on
+    # thinkcentre01. On ANY failure inside the block -- the healthz wait, the PID discriminator,
+    # or the flag check -- the rescue restores the pre-change args file from this run's own
+    # `backup: true` file and brings the apiserver back on the pre-OIDC config before failing.
+    - name: Apply OIDC and verify (auto-rolls back if the control plane does not return)
       when: fix | default(false) | bool
+      block:
+        - name: Apply the OIDC args
+          ansible.builtin.copy:
+            dest: "{{ apiserver_args }}"
+            content: "{{ (args_preserved + args_desired) | join('\n') + '\n' }}"
+            # Preserve the existing mode/owner when possible. On MicroK8s the args file is
+            # typically 660 root:microk8s, and some snap refresh flows regenerate files with
+            # that ownership. Overwriting to 0600 root:root is a small regression; be
+            # non-destructive here.
+            owner: "{{ apiserver_args_stat.stat.pw_name | default('root') }}"
+            group: "{{ apiserver_args_stat.stat.gr_name | default('root') }}"
+            # ansible.builtin.stat returns `mode` as a 4-char octal STRING (its own
+            # output is `"%04o" % stat.S_IMODE(...)`, e.g. "0660"), so it must be
+            # parsed as base-8 before feeding `%o` -- a bare `| int` would read
+            # "0660" as decimal 660 (0o1224) and silently corrupt the permissions.
+            mode: "{{ '%04o' | format(apiserver_args_stat.stat.mode | default('0600') | int(base=8)) }}"
+            backup: true
+          register: oidc_apply
+          notify: Restart kubelite, the microk8s daemon that owns the apiserver
 
-    - name: Confirm the apiserver process actually restarted
-      ansible.builtin.assert:
-        that:
-          - kubelite_pid_after.rc == 0
-          - kubelite_pid_after.stdout | trim | int > 0
-          - kubelite_pid_after.stdout | trim != kubelite_pid_before.stdout | trim
-        fail_msg: >-
-          {{ microk8s_apiserver_unit }} still has the same MainPID
-          ({{ kubelite_pid_before.stdout | trim }}) after the restart, so the apiserver process
-          did NOT pick up the new flags. The args file on disk is correct but the running
-          apiserver is still serving the old configuration -- the OIDC flags below are NOT
-          live. Do not merge, do not remove the Headlamp fallback. Investigate the unit
-          relationship with `systemctl list-units 'snap.microk8s.*'` first.
-      when: fix | default(false) | bool
+        - name: Apply the restart before verifying
+          ansible.builtin.meta: flush_handlers
 
-    - name: Confirm the OIDC flags landed
-      vars:
-        oidc_lines_after: >-
-          {{ (apiserver_args_after.content | b64decode).splitlines()
-             | select('match', '^--oidc-') | list }}
-      ansible.builtin.assert:
-        that: oidc_lines_after | list | sort == (oidc_flags if not (oidc_remove | default(false) | bool) else []) | sort
-        fail_msg: >-
-          The apiserver restarted but its OIDC flags are not what this playbook intended
-          (found: {{ oidc_lines_after | list | sort }}). Roll back using the backup file next
-          to {{ apiserver_args }} and investigate.
-      when: fix | default(false) | bool
+        - name: Wait for the local apiserver to answer again
+          ansible.builtin.uri:
+            url: "{{ microk8s_apiserver_healthz }}"
+            validate_certs: false
+            status_code: 200
+          register: apiserver_healthz
+          until: apiserver_healthz.status == 200
+          retries: 36
+          delay: 5
+          changed_when: false
+
+        - name: Read the args file back
+          ansible.builtin.slurp:
+            src: "{{ apiserver_args }}"
+          register: apiserver_args_after
+
+        # THE DISCRIMINATOR. Everything above can pass while the apiserver is still running the
+        # old flags: /healthz answers 200 whether or not the process ever restarted, and the file
+        # on disk contains the flags the moment `copy` writes them. Both facts are true
+        # independently of whether kubelite re-read them.
+        #
+        # The one thing that can only be true if the restart actually reached the apiserver
+        # process is that kubelite's MainPID changed. If the handler restarted the wrong unit --
+        # or the restart silently no-op'd -- the PID is unchanged and this fails loudly, which is
+        # the difference between "SSO is on" and "SSO looks like it is on".
+        - name: Read kubelite's MainPID after the restart
+          ansible.builtin.command:
+            cmd: systemctl show --property MainPID --value "{{ microk8s_apiserver_unit }}"
+          changed_when: false
+          check_mode: false
+          register: kubelite_pid_after
+
+        - name: Confirm the apiserver process actually restarted
+          ansible.builtin.assert:
+            that:
+              - kubelite_pid_after.rc == 0
+              - kubelite_pid_after.stdout | trim | int > 0
+              - kubelite_pid_after.stdout | trim != kubelite_pid_before.stdout | trim
+            fail_msg: >-
+              {{ microk8s_apiserver_unit }} still has the same MainPID
+              ({{ kubelite_pid_before.stdout | trim }}) after the restart, so the apiserver process
+              did NOT pick up the new flags. The args file on disk is correct but the running
+              apiserver is still serving the old configuration -- the OIDC flags below are NOT
+              live. Do not merge, do not remove the Headlamp fallback. Investigate the unit
+              relationship with `systemctl list-units 'snap.microk8s.*'` first.
+
+        - name: Confirm the OIDC flags landed
+          vars:
+            oidc_lines_after: >-
+              {{ (apiserver_args_after.content | b64decode).splitlines()
+                 | select('match', '^--oidc-') | list }}
+          ansible.builtin.assert:
+            that: oidc_lines_after | list | sort == (oidc_flags if not (oidc_remove | default(false) | bool) else []) | sort
+            fail_msg: >-
+              The apiserver restarted but its OIDC flags are not what this playbook intended
+              (found: {{ oidc_lines_after | list | sort }}).
+
+      rescue:
+        # Restore ONLY on an apply. On a rollback run the "backup" is the file WITH the OIDC
+        # flags, so restoring it would re-break the node; there we only report.
+        - name: Auto-rollback - restore the pre-change args file
+          ansible.builtin.copy:
+            remote_src: true
+            src: "{{ oidc_apply.backup_file }}"
+            dest: "{{ apiserver_args }}"
+            owner: "{{ apiserver_args_stat.stat.pw_name | default('root') }}"
+            group: "{{ apiserver_args_stat.stat.gr_name | default('root') }}"
+            mode: "{{ '%04o' | format(apiserver_args_stat.stat.mode | default('0600') | int(base=8)) }}"
+          when:
+            - not (oidc_remove | default(false) | bool)
+            - oidc_apply is defined
+            - oidc_apply.backup_file is defined
+          register: oidc_rollback
+
+        - name: Auto-rollback - restart kubelite on the restored args
+          ansible.builtin.systemd_service:
+            name: "{{ microk8s_apiserver_unit }}"
+            state: restarted
+          when: oidc_rollback is defined and oidc_rollback is changed
+
+        - name: Auto-rollback - wait for the apiserver to come back
+          ansible.builtin.uri:
+            url: "{{ microk8s_apiserver_healthz }}"
+            validate_certs: false
+            status_code: 200
+          register: rollback_healthz
+          until: rollback_healthz.status == 200
+          retries: 36
+          delay: 5
+          changed_when: false
+          when: oidc_rollback is defined and oidc_rollback is changed
+
+        - name: Explain the auto-rollback and stop (apply)
+          ansible.builtin.fail:
+            msg: >-
+              OIDC flags were applied but the apiserver did not return. The pre-change args file
+              was restored from {{ oidc_apply.backup_file | default('(no backup)') }} and kubelite
+              restarted, so the control plane is back on the pre-OIDC config. Usual cause: the
+              apiserver fetches the issuer discovery document at STARTUP and exits if it is
+              unreachable, and restarting kubelite also restarts kubelet here (taking any Dex pod
+              on this node with it). Check `microk8s kubectl get pods -n sso -o wide` and keep Dex
+              off the node you roll.
+          when: not (oidc_remove | default(false) | bool)
+
+        - name: Explain the failed rollback and stop
+          ansible.builtin.fail:
+            msg: >-
+              Rollback run failed: kubelite did not come back after removing the OIDC flags.
+              Inspect `journalctl -u {{ microk8s_apiserver_unit }}` on this host by hand.
+          when: oidc_remove | default(false) | bool
 
     - name: Confirm every node is still reachable after the restart
       ansible.builtin.command:

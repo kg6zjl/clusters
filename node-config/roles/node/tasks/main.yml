@@ -24,6 +24,46 @@
       - open-iscsi
     state: present
 
+# Longhorn iSCSI LUNs must not be claimed by multipathd, or the CSI mount fails with
+# EBUSY and the pod wedges in ContainerCreating. See templates/multipath.conf.j2 and
+# https://longhorn.io/kb/troubleshooting-volume-with-multipath/
+- name: Blacklist Longhorn volumes from multipathd
+  ansible.builtin.template:
+    src: multipath.conf.j2
+    dest: /etc/multipath.conf
+    owner: root
+    group: root
+    mode: "0644"
+  register: multipath_conf
+  tags: [multipath]
+
+# multipathd only re-evaluates its map set on (re)start: a config write does not
+# release a map it has already built, and a stop leaves the map in place too.
+- name: Restart multipathd to apply the Longhorn blacklist
+  ansible.builtin.systemd_service:
+    name: multipathd
+    state: restarted
+  when: multipath_conf.changed
+  tags: [multipath]
+
+# Safety net. If multipathd did not release a map it had already built for a Longhorn
+# volume, flush it so the kubelet's next NodeStageVolume succeeds without a reboot.
+- name: List multipath maps claiming a Longhorn volume
+  ansible.builtin.shell: |
+    multipath -ll 2>/dev/null | awk '/IET,VIRTUAL-DISK/ {print $1}' | sort -u
+  register: multipath_maps
+  changed_when: false
+  when: multipath_conf.changed
+  tags: [multipath]
+
+- name: Flush each stale Longhorn multipath map
+  ansible.builtin.command: "multipath -f {{ item }}"
+  loop: "{{ multipath_maps.stdout_lines | default([]) }}"
+  changed_when: true
+  failed_when: false
+  when: multipath_conf.changed
+  tags: [multipath]
+
 - name: Turn off swap now
   ansible.builtin.command: swapoff --all
   changed_when: false

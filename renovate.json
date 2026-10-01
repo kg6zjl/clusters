@@ -152,6 +152,28 @@
         "home-cluster/flux-system/gotk-components.yaml"
       ],
       "enabled": false
+    },
+    {
+      "description": "Longhorn is the storage engine. A chart bump rolls longhorn-manager and recreates volume engines, so it is the one dependency whose rollout can touch every mounted volume. It waits for an explicit tick on the dashboard instead of arriving as routine PR noise.",
+      "matchManagers": [
+        "flux"
+      ],
+      "matchFileNames": [
+        "home-cluster/longhorn-system/longhorn-helmrelease.yaml"
+      ],
+      "dependencyDashboardApproval": true,
+      "minimumReleaseAge": "7 days",
+      "addLabels": [
+        "maintenance-window"
+      ],
+      "prBodyNotes": [
+        "### Storage engine - merge inside a maintenance window",
+        "This rolls `longhorn-manager` and recreates volume engines. Merge it when you can watch the result, then confirm nothing got stuck:",
+        "```",
+        "kubectl get pods -A --field-selector=status.phase=Pending",
+        "kubectl -n longhorn-system get volumes.longhorn.io -o custom-columns=NAME:.metadata.name,STATE:.status.state,ROBUST:.status.robustness,NODE:.status.currentNodeID",
+        "```"
+      ]
     }
   ]
 }
