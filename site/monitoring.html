@@ -34,11 +34,11 @@
 <pre><code>exporters ──▶ metrics store ──▶ dashboards  (a question per panel)
      │                 │
      │                 └──▶ alert rules (in git) ──▶ alerting pipeline
-     └──▶ logs  (short retention, on purpose for now)</code></pre>
+     └──▶ logs  (seven days, then the compactor deletes them)</code></pre>
   <p>
     One metrics store, one log store, one dashboard tool. Metrics are scraped, logs are shipped from
-    every pod by a collector. Nothing is sampled down and nothing is thrown away early, except logs,
-    which I keep hours of rather than weeks. That's a known weakness, not a plan.
+    every pod by a collector. Nothing is sampled down. Logs are the exception: seven days, then they
+    are deleted, because they live on a 10Gi volume and a longer window needs a bigger disk.
   </p>
 </section>
 
@@ -152,8 +152,8 @@
 <section aria-labelledby="gaps">
   <h2 id="gaps">What isn't measured</h2>
   <ul>
-    <li><strong>Log retention is hours, not weeks.</strong> Enough to answer "what happened last
-      night". Not enough to answer "what changed three weeks ago".</li>
+    <li><strong>Log retention is seven days.</strong> Enough to answer "what happened last
+      week". Not enough to answer "what changed three weeks ago".</li>
     <li><strong>No tracing.</strong> A slow request across three services can't be followed end to
       end. For a home cluster I've decided that's acceptable, and if something gets slow enough to
       matter, that decision expires.</li>
