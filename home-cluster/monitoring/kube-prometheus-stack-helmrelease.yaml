@@ -335,6 +335,10 @@ spec:
     grafana:
       enabled: true
       replicas: 1
+      # Reloader restarts Grafana when the admin secret changes so the env is never stale. A rotation
+      # still needs a database realign - see README.md "Grafana admin access".
+      deploymentAnnotations:
+        reloader.stakater.com/auto: "true"
       # Grafana peaked at 584Mi and its two sidecars add ~150Mi more, all with no
       # requests declared.
       resources:

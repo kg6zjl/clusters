@@ -40,3 +40,39 @@ one class (all values of that label); a second class needs its own sentinel and 
 class whose identity labels change - a renamed alertname, a re-labelled metric - silently stops
 being inhibited, and the sentinel then inhibits nothing while still showing as firing, which is
 the visible half of the failure.
+
+# Grafana admin access
+
+The admin credential is the 1Password item `grafana-admin-password` (fields `username` and
+`password`), synced by ESO into the secret `grafana-admin-secret`. Grafana reads that secret via
+`admin.existingSecret`, and both sidecars read the same keys for their reload calls. Nothing else is
+authoritative: if the item and the secret ever disagree, the secret is stale and ESO has not
+reconciled it.
+
+**A rotation is two steps, because Grafana applies `admin_password` when it creates the admin user,
+not when it starts against an existing database:**
+
+1. Change the password in 1Password. ESO refreshes within `refreshInterval` and Reloader restarts
+   Grafana (`reloader.stakater.com/auto`), so the container env and the sidecars get the new value.
+2. Realign the stored credential. Without this, every sidecar reload is rejected and Grafana's
+   brute-force protection keeps the admin user locked:
+
+   ```bash
+   kubectl -n monitoring exec deploy/kube-prometheus-stack-grafana -c grafana -- \
+     grafana cli admin reset-admin-password --password-from-env
+   ```
+
+   `--password-from-env` uses the value already in the container (`GF_SECURITY_ADMIN_PASSWORD`), so it
+   aligns the database with the secret instead of inventing a third password.
+
+A mismatch looks like this in `kubectl -n monitoring logs … -c grafana`:
+
+```
+msg="Failed to authenticate request" client=auth.client.basic error="[password-auth.failed] invalid password"
+path=/api/admin/provisioning/dashboards/reload remote_addr=[::1]
+error="too many consecutive incorrect login attempts for user - login for user temporarily blocked"
+```
+
+A sidecar retrying with a wrong password once a minute re-arms that lock, so logins fail even with the
+correct password and the lock looks random. Fix the credential, never the lockout — do not disable
+brute-force protection to work around it.
