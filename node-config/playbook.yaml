@@ -12,7 +12,6 @@
     - role: nas-mount
     - role: sdr
     - role: security-updates
-    - role: kubelet-csi-mount-janitor
 
   post_tasks:
     - name: Join cluster (control-plane)

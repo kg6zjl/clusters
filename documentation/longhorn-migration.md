@@ -471,31 +471,6 @@ sudo umount -l <...>/globalmount       # last resort: lazy unmount
 kubectl get pod <pod> -n <ns> -o wide   # expect an IP and 1/1
 ```
 
-**First confirm that a mount is actually visible — otherwise it is a different failure.** Search by
-*device*, not by path, because `mount` reports "already mounted" for the device being in use, not
-only for a busy target:
-
-```bash
-sudo findmnt -rn -S /dev/longhorn/pvc-<uuid>          # any host-side mount of that device
-sudo grep -rlE ' 8:(<minor>) ' /proc/[0-9]*/mountinfo  # any process's namespace holding it
-```
-
-If both come back empty while `mount` still fails, there is **no mount to umount** and the steps
-above do not apply. The symptom is the CSI plugin's own log saying `/dev/longhorn/pvc-<uuid> is in
-use.` right before the failed `mount`, with nothing holding it in any live mount namespace — a
-device released by nothing that is still visible. That is a Longhorn-side release, not a filesystem
-fix: **detach and reattach the volume in the Longhorn UI** (tears down engine, target and device) or
-reboot the node. The check matters because the path in the kubelet's event is where it *tried* to
-mount, and that directory is often absent by the time anyone looks.
-
-Do not read an engine-image difference as the cause: engines legitimately stay on the previous image
-across a manager upgrade (Longhorn's engine upgrade is per volume, off by default), and volumes on
-the same node with the older engine image mount normally. Confirm the image mix before invoking it:
-
-```bash
-kubectl -n longhorn-system get engines.longhorn.io -o custom-columns=NAME:.metadata.name,IMAGE:.spec.image,STATE:.status.currentState,NODE:.spec.nodeID
-```
-
 **Prefer the cleaner path when you can:** restarting the `longhorn-manager`
 DaemonSet pod on the affected node (or the volume's `instance-manager` pod)
 stops the engine, which releases the device and lets Longhorn recreate it —
@@ -505,29 +480,6 @@ without hand-editing the mount table:
 # [OPERATOR] only safe when no live pod is using the volume on that node:
 kubectl -n longhorn-system delete pod -l app=longhorn-manager --field-selector spec.nodeName=<node>
 ```
-
-**Automated cleanup, in place and in `report` mode first.** Manual recovery is the right
-answer once and the wrong answer every time. `node-config/roles/kubelet-csi-mount-janitor`
-installs a systemd timer on every node that finds exactly this leak:
-
-```bash
-# roll out (report mode - logs what it would clear, changes nothing)
-cd node-config && ANSIBLE_SSH_KEY=~/.ssh/ansible_cluster ansible-playbook playbook-csi-janitor.yaml
-# read what it found, over a few days
-journalctl -t kubelet-csi-mount-janitor --since "-1 day"
-# then set csi_mount_janitor_mode to enforce in the role defaults and re-run
-```
-
-It matches only `.../plugins/kubernetes.io/csi/driver.longhorn.io/<64-hex>/globalmount` and skips
-any volume the kubelet still has a bind mount for under `kubelet/pods/` — the kubelet's own record
-that the volume is published — so a live volume is never touched. Cleared, the kubelet's
-own retry succeeds within about two minutes and the pod starts.
-
-**The upgrade is the trigger, so upgrades get a gate.** A Longhorn chart bump rolls the manager
-and recreates volume engines, which is how the leak starts. `renovate.json` now holds those PRs
-behind `dependencyDashboardApproval`, with a maintenance-window label and a 7-day soak, and
-`CODEOWNERS` lists the storage directory explicitly: merge them while you can watch the result,
-not as routine dependency noise.
 
 **Two rules that follow from this:**
 

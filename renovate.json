@@ -154,7 +154,7 @@
       "enabled": false
     },
     {
-      "description": "Longhorn is the storage engine. A chart bump rolls longhorn-manager and recreates volume engines, and an engine recreated under a live pod leaves the kubelet's node-side mount behind - the pod then wedges until someone clears it on that node (documentation/longhorn-migration.md section 8). It is the one dependency whose rollout can touch every mounted volume, so it waits for an explicit tick on the dashboard instead of arriving as routine PR noise.",
+      "description": "Longhorn is the storage engine. A chart bump rolls longhorn-manager and recreates volume engines, so it is the one dependency whose rollout can touch every mounted volume. It waits for an explicit tick on the dashboard instead of arriving as routine PR noise.",
       "matchManagers": [
         "flux"
       ],
@@ -168,12 +168,11 @@
       ],
       "prBodyNotes": [
         "### Storage engine - merge inside a maintenance window",
-        "This rolls `longhorn-manager` and recreates volume engines. An engine recreated under a live pod leaves the kubelet's node-side mount behind, and that pod stays Pending until the mount is cleared (see `documentation/longhorn-migration.md` section 8). Merge it when you can watch the result, then confirm nothing stuck:",
+        "This rolls `longhorn-manager` and recreates volume engines. Merge it when you can watch the result, then confirm nothing got stuck:",
         "```",
         "kubectl get pods -A --field-selector=status.phase=Pending",
         "kubectl -n longhorn-system get volumes.longhorn.io -o custom-columns=NAME:.metadata.name,STATE:.status.state,ROBUST:.status.robustness,NODE:.status.currentNodeID",
-        "```",
-        "The `kubelet-csi-mount-janitor` timer clears a leaked mount on its own once its mode is `enforce`."
+        "```"
       ]
     }
   ]

@@ -14,9 +14,3 @@
 /home-cluster/ai-services/hermes-rbac.yaml                 @kg6zjl
 /.github/workflows/                                        @kg6zjl
 /CODEOWNERS                                                @kg6zjl
-
-# The storage engine, listed explicitly for the same reason as the block above: a chart
-# bump rolls the manager and every volume engine, and an engine recreated under a live pod
-# wedges that pod until someone clears the node-side mount. It is a maintenance-window
-# change, not routine dependency noise.
-/home-cluster/longhorn-system/                             @kg6zjl
