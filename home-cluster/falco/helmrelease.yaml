@@ -316,10 +316,13 @@ spec:
         # kyvernopre, not kyverno), and it only connects on pod start, so a sweep window that
         # contains no restart of that workload cannot see it. Missing kyvernopre fired on the
         # 2026-10-01 02:58Z restart, 2h after both sweeps above had closed.
+        # registry-pull-rotator runs docker.io/library/python too, the same trap as the reconciler: it
+        # mints the registry-pull SA token via TokenRequest (registry/pull-rotator-rbac.yaml).
         - macro: user_known_contact_k8s_api_server_activities
           condition: >
             (container.image.repository in (known_k8s_api_clients))
             or (k8s.ns.name = "monitoring" and k8s.pod.name startswith "ingress-blackbox-reconciler-")
+            or (k8s.ns.name = "registry" and k8s.pod.name startswith "registry-pull-rotator-")
 
         # from rules/main (list)
         - list: grep_binaries

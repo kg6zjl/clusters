@@ -108,10 +108,11 @@ the API server only while a pod is initialising, which is how it survived both s
 namespace, so no kube-system image needs an entry. Longhorn's data-path images (engine,
 instance-manager, share-manager, livenessprobe, node-driver-registrar) are deliberately *not* listed:
 they talk to `longhorn-backend` on `10.152.183.60` and to the kubelet, not to the API server, and none
-of them appeared in the sweep. The `ingress-blackbox` reconciler Job is the one client matched on
-namespace + pod name instead: it runs `docker.io/library/python`, and allow-listing that repository
-would exempt every python container in the cluster from the rule - the same shape applies to any other
-generic base image. Every entry is an infrastructure controller by construction, so what the rule
+of them appeared in the sweep. Two clients are matched on namespace + pod name instead of by image: the
+`ingress-blackbox` reconciler Job and `registry`'s `registry-pull-rotator` Job (daily at 04:17Z). Both
+run `docker.io/library/python`, and allow-listing that repository would exempt every python container in
+the cluster from the rule - the same shape applies to any other generic base image. Every entry is
+an infrastructure controller by construction, so what the rule
 still reports is a container that is not one of them: in practice the application namespaces (media,
 home-assistant, nodered, adsb, vpn, netalertx, meshtastic, speedtest, local-services, sso), which have
 no business dialling the API server at all. An unlisted container still fires. See the known gaps for
