@@ -15,6 +15,7 @@ resources:
   - ingressroute-dashboard.yaml
   - service-comfy.yaml
   - middleware-comfy.yaml
+  - externalsecret-comfy-auth.yaml
   - ingressroute-comfy.yaml
   - external-secrets.yaml
   - hermes-rbac.yaml

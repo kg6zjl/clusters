@@ -21,15 +21,14 @@ spec:
   #
   # These webhook rules match every request of the wrapped kinds cluster-wide: an
   # admission webhook rule cannot be scoped to a username, so Kyverno's generated
-  # ValidatingWebhookConfiguration sees all Secret writes, all pod exec and all
-  # token requests. Setting Fail here would make a Kyverno outage block *every*
-  # Secret creation cluster-wide - ESO syncing credentials, cert-manager writing
-  # TLS material - and every kubectl exec used to debug. That is an
-  # unacceptably wide blast radius for a defence-in-depth check.
+  # ValidatingWebhookConfiguration sees all Secret writes (measured: about 900 a day
+  # here), all pod exec and all token requests. Setting Fail would let a Kyverno
+  # outage block every one of them - ESO syncing credentials, cert-manager writing TLS
+  # material, routine debugging.
   #
-  # The security consequence is explicit: if Kyverno is down, this policy does
-  # not run. Nothing is lost that the read-only RBAC and
-  # hermes-agent-readonly-rbac (which does Fail closed) do not already cover.
+  # The rules are Enforced but fail-open: if Kyverno is down this policy does not run.
+  # Nothing is lost that the read-only RBAC and hermes-agent-readonly-rbac (which does
+  # fail closed) do not already cover.
   webhookConfiguration:
     failurePolicy: Ignore
   rules:
@@ -47,7 +46,7 @@ spec:
             operator: Equals
             value: system:serviceaccount:ai-services:hermes-agent
       validate:
-        failureAction: Audit
+        failureAction: Enforce
         message: >-
           system:serviceaccount:ai-services:hermes-agent may not exec into pods;
           exec is a path to the credentials of the workload it lands in.
@@ -71,7 +70,7 @@ spec:
             operator: Equals
             value: system:serviceaccount:ai-services:hermes-agent
       validate:
-        failureAction: Audit
+        failureAction: Enforce
         message: >-
           system:serviceaccount:ai-services:hermes-agent may not mint service
           account tokens; a token is a bearer credential for another identity.
@@ -96,7 +95,7 @@ spec:
             operator: Equals
             value: system:serviceaccount:ai-services:hermes-agent
       validate:
-        failureAction: Audit
+        failureAction: Enforce
         message: >-
           system:serviceaccount:ai-services:hermes-agent may not create or modify
           Secrets; its design keeps every credential value out of its hands.
