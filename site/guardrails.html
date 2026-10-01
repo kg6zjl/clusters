@@ -110,10 +110,10 @@
     </p>
   </div>
   <p class="small">
-    Both policies run in audit mode today, so they report violations and block nothing. It's listed
-    with the other weak points on <a href="index.html">Why</a>. The policies have tests that run in
-    CI: fixtures for a widened role, a widened binding, and a cluster-admin binding, which must be
-    reported as violations, plus the read-only shape, which must pass clean.
+    Both policies enforce, so a violation is refused rather than reported. The read-only one fails
+    closed: if Kyverno is down, RBAC changes are blocked rather than waved through. The policies have
+    tests that run in CI: fixtures for a widened role, a widened binding, and a cluster-admin binding,
+    which must be refused, plus the read-only shape, which must pass clean.
   </p>
 </section>
 
