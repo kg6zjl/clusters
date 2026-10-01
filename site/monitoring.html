@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Monitoring: measure the thing that actually moves</title>
+<meta name="description" content="What a home Kubernetes cluster is worth measuring: pressure stall metrics instead of load average, per-disk latency with throughput, reconciliation and probe state, egress route, billing, and scan results — plus the short list of what isn't measured.">
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<nav class="topnav">
+  <ul>
+    <li><a href="index.html">Why</a></li>
+    <li><a href="guardrails.html">Guardrails</a></li>
+    <li><a href="monitoring.html" aria-current="page">Monitoring</a></li>
+    <li><a href="alerting.html">Alerting</a></li>
+    <li><a href="workflow.html">The loop</a></li>
+  </ul>
+</nav>
+
+<header class="page-head">
+  <p class="eyebrow">Monitoring</p>
+  <h1>Measure the thing that actually moves</h1>
+  <p class="lede">
+    Every metric I keep answers a question I've actually asked. The list is short because most metrics
+    answer nothing, and a dashboard full of them is worse than no dashboard: you stop looking.
+  </p>
+</header>
+
+<main>
+
+<section aria-labelledby="shape">
+  <h2 id="shape">The shape</h2>
+<pre><code>exporters ──▶ metrics store ──▶ dashboards  (a question per panel)
+     │                 │
+     │                 └──▶ alert rules (in git) ──▶ alerting pipeline
+     └──▶ logs  (short retention, on purpose for now)</code></pre>
+  <p>
+    One metrics store, one log store, one dashboard tool. Metrics are scraped, logs are shipped from
+    every pod by a collector. Nothing is sampled down and nothing is thrown away early, except logs,
+    which I keep hours of rather than weeks. That's a known weakness, not a plan.
+  </p>
+</section>
+
+<section aria-labelledby="nodes">
+  <h2 id="nodes">Nodes: the question that started this</h2>
+  <p>
+    A node kept looking unstable, and the obvious metrics were useless. Load average was low. iowait
+    was 0.1%. Neither number moved, and neither number means what people think it means.
+  </p>
+  <p>
+    The dashboard I built instead answers these, in this order:
+  </p>
+  <ul>
+    <li>
+      <strong>Pressure stall.</strong> How much time work spent waiting on CPU, memory and IO. This is
+      the honest contention metric. It moves when there's a problem and sits still when there isn't.
+    </li>
+    <li>
+      <strong>Disk latency with throughput.</strong> Latency on its own is a lie: the slowest device
+      in the cluster is slow because it's idle, not because it's broken. Latency is only meaningful
+      next to how many operations it's doing.
+    </li>
+    <li>
+      <strong>Memory, swap and kernel kill counts.</strong> If the kernel is killing processes, that's
+      a fact, not an inference from a percentage.
+    </li>
+    <li>
+      <strong>Reboots, as annotations.</strong> A reboot explains a hundred downstream symptoms at
+      once, so it belongs on the graph rather than in an alert (see <a href="alerting.html">Alerting</a>).
+    </li>
+  </ul>
+  <p>
+    What that found: one reboot, once, after seven days of uptime, with no metric explaining it. The
+    node wasn't sick. The earlier framing — flaky node, degraded disk — was wrong, and it was wrong
+    because the first metrics I looked at couldn't have told me either way.
+  </p>
+</section>
+
+<section aria-labelledby="what">
+  <h2 id="what">What else is worth watching</h2>
+  <div class="cards">
+    <div class="card">
+      <h3>Did it reconcile</h3>
+      <p>
+        Git is the source of truth, so a resource that won't reconcile is the failure mode that
+        matters. Alerts fire on the outcome — still not ready after fifteen minutes — rather than on
+        every attempt.
+      </p>
+    </div>
+    <div class="card">
+      <h3>Is it reachable</h3>
+      <p>
+        Blackbox probes from outside for each published hostname, so "the site is up" is measured
+        rather than assumed. Certificate expiry is watched separately, because a cert that expires in
+        silence looks like an outage at 2am.
+      </p>
+    </div>
+    <div class="card">
+      <h3>Where the traffic goes out</h3>
+      <p>
+        An exporter records which route egress leaves by and what public address it presents. Both
+        have to match what I expect, because a failure here looks like a random third of the cluster
+        being broken.
+      </p>
+    </div>
+    <div class="card">
+      <h3>Billing and transfers</h3>
+      <p>
+        The API provider's spend, and the nightly offsite copy. Both are things that quietly stop
+        working and only matter the day you need them.
+      </p>
+    </div>
+    <div class="card">
+      <h3>Storage</h3>
+      <p>
+        Volume usage per filesystem, and the shared file share. Every one of these has a known
+        behaviour when it fills up, and all of them are boring until they do.
+      </p>
+    </div>
+    <div class="card">
+      <h3>Jobs that should have run</h3>
+      <p>
+        Anything scheduled is alerted on its absence, not just its failure. A cron job that stops
+        being scheduled produces no error at all, which is the worst kind of silent.
+      </p>
+    </div>
+  </div>
+</section>
+
+<section aria-labelledby="dash">
+  <h2 id="dash">Dashboards</h2>
+  <p>
+    One dashboard per question I actually ask: nodes, image scanning, provider billing, logs, and the
+    storage boxes. The node one has the most panels because it's the one I open under pressure.
+  </p>
+  <p>
+    Dashboards are files in the repository next to the alert rules, so a panel is reviewed the same way
+    a rule is. The first version of the node dashboard had panels that looked right and queried the
+    wrong label, and the review caught it.
+  </p>
+  <div class="note">
+    <span class="label">Every panel is checked against real data before it ships</span>
+    <p>
+      Each query is run against the live store and its result histogrammed, because a panel that
+      returns nothing looks exactly like a system with nothing wrong. "No data" and "no problems" are
+      the same picture, which is the most expensive mistake in monitoring.
+    </p>
+  </div>
+</section>
+
+<section aria-labelledby="gaps">
+  <h2 id="gaps">What isn't measured</h2>
+  <ul>
+    <li><strong>Log retention is hours, not weeks.</strong> Enough to answer "what happened last
+      night". Not enough to answer "what changed three weeks ago".</li>
+    <li><strong>No tracing.</strong> A slow request across three services can't be followed end to
+      end. For a home cluster I've decided that's acceptable, and if something gets slow enough to
+      matter, that decision expires.</li>
+    <li><strong>Nothing measures the house.</strong> Power, temperature and the network gear are a
+      separate system. If the cluster loses a node because a breaker tripped, the cluster is the last
+      thing to know.</li>
+  </ul>
+</section>
+
+</main>
+
+<footer>
+  <div class="wrap">
+    <p><a href="guardrails.html">← Guardrails</a> · <a href="alerting.html">Alerting →</a></p>
+  </div>
+</footer>
+</body>
+</html>

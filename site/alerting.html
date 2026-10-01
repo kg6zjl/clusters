@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Alerting: quiet enough to trust</title>
+<meta name="description" content="An alerting pipeline for a home cluster: two independent receivers, severity routing, an always-firing watchdog, declarative silences, and an agent that is the second responder rather than the pager.">
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<nav class="topnav">
+  <ul>
+    <li><a href="index.html">Why</a></li>
+    <li><a href="guardrails.html">Guardrails</a></li>
+    <li><a href="monitoring.html">Monitoring</a></li>
+    <li><a href="alerting.html" aria-current="page">Alerting</a></li>
+    <li><a href="workflow.html">The loop</a></li>
+  </ul>
+</nav>
+
+<header class="page-head">
+  <p class="eyebrow">Alerting</p>
+  <h1>An alerting pipeline is only worth having if you still read it</h1>
+  <p class="lede">
+    The hard part isn't sending an alert. It's making sure the one that arrives at 1am is worth getting
+    out of bed for.
+  </p>
+</header>
+
+<main>
+
+<section aria-labelledby="shape">
+  <h2 id="shape">The shape</h2>
+<pre><code>metrics ──▶ rules (in git) ──▶ alertmanager ──▶ routes ──┬─▶ push notification (critical only)
+                                                          ├─▶ chat channel (the record)
+                                                          └─▶ security channel (policy findings)
+
+                                              every hour: a poller reads what is firing,
+                                              signs it, and wakes the agent</code></pre>
+  <p>
+    Rules are files in the repository. Routes, receivers and inhibit rules are one reviewed object. A
+    change to any of it is a pull request like everything else, which means the alerting config has a
+    history and a reviewer instead of being a thing someone fixed in a hurry.
+  </p>
+</section>
+
+<section aria-labelledby="receivers">
+  <h2 id="receivers">Two receivers, on purpose</h2>
+  <p>
+    They fail differently and get read differently. A <strong>push notification</strong> is for the
+    thing that wakes me: short, on a phone, no context. A <strong>chat channel</strong> is the record:
+    history, links, somewhere to reply. A third channel carries <strong>policy findings</strong> from
+    admission, because those aren't incidents and shouldn't share a feed with things that are.
+  </p>
+  <p>
+    The two alert receivers are sibling routes with <code>continue</code>, so each alert fans out to
+    both independently and one dying doesn't silence the other. When a receiver did break, that turned
+    "paging is down" into "half of paging is down" — a much smaller problem. The alert also names the
+    leg that failed, so I don't have to deduce it from silence.
+  </p>
+  <div class="note">
+    <span class="label">Severity decides who hears it</span>
+    <p>
+      Warnings group. Criticals page. If everything pages, nothing does.
+    </p>
+  </div>
+</section>
+
+<section aria-labelledby="deadman">
+  <h2 id="deadman">The alert that proves the pipeline works by firing</h2>
+  <p>
+    There's an alert that always fires. It isn't noise, it's a dead man's switch: its <em>absence</em>
+    is the signal that the rules stopped loading, the scrape died, or the pipeline can't deliver. Any
+    alerting system should have one, routed to a receiver you've proven works.
+  </p>
+  <p>
+    Silences follow the same rule. A mute that lives only in the alerting API doesn't survive a
+    rebuild of the pipeline. If a maintenance window has to be declarative, it's a route in git
+    matched on every shape the host appears as, with a written reason and an expiry.
+  </p>
+</section>
+
+<section aria-labelledby="second">
+  <h2 id="second">The agent is the second responder, not the pager</h2>
+  <p>
+    The cluster can wake the agent on its own: an hourly job reads what's currently firing, signs the
+    request, and posts the new alerts to a webhook on the agent. It wakes up knowing what broke,
+    looks at the resources and logs involved, and answers in the channel. If the fix is a manifest
+    change, it opens a pull request and stops.
+  </p>
+  <p>
+    The controls on that path matter because this is the thing that spends money:
+  </p>
+  <ul>
+    <li>
+      <strong>A short allow-list by alert name.</strong> Not a severity filter — a list of the alerts
+      where an unattended run is genuinely worth starting. Everything else still notifies me; it just
+      never spends an agent run.
+    </li>
+    <li>
+      <strong>An hourly poll, not every five minutes.</strong> The wake path isn't the paging path.
+      Every allow-listed alert already reaches my phone inside its own delay window, so the agent can
+      afford to be up to an hour behind.
+    </li>
+    <li>
+      <strong>A gate so a standing alert wakes it once.</strong> The lookback window is longer than the
+      schedule, so the same standing alert shows up in several polls in a row. Without a dedupe gate,
+      one broken thing costs a run an hour, forever.
+    </li>
+    <li>
+      <strong>A hard ceiling.</strong> At most one run per poll: twenty-four a day, by construction.
+    </li>
+  </ul>
+  <p class="small">
+    When that path first ran, it was the dominant cost, so it was turned off and rebuilt narrower
+    before being turned back on. The measurement that stopped it was the whole provider account for
+    24 hours, not this path.
+  </p>
+</section>
+
+<section aria-labelledby="hygiene">
+  <h2 id="hygiene">The habits that keep it trustworthy</h2>
+  <ul>
+    <li>
+      <strong>Measure a rule before you ship it.</strong> Every rule is checked against real metric
+      data, and a rule that can't fire gets deleted rather than admired. A rule that can never fire is
+      worse than no rule: it reads as coverage.
+    </li>
+    <li>
+      <strong>Test the config, not the YAML.</strong> All the rules and the routing tree are parsed
+      and checked before merge. A config rejected on reload doesn't break one route, it stops every
+      notification in the cluster.
+    </li>
+    <li>
+      <strong>Exempt narrowly at the source.</strong> When a legitimate process trips a detection
+      rule, the exemption is scoped to that process, its parent, and the host. Never to a file path,
+      and never to an image name — a generic base image is a whole class of containers, and a path is
+      exactly what the attacker touches.
+    </li>
+    <li>
+      <strong>Notify once per problem.</strong> An alert is keyed on its own start time and announced
+      once, and a request carries an idempotency key so an overlapping poll is dropped rather than
+      doing the work twice.
+    </li>
+    <li>
+      <strong>Link every notification to the graph.</strong> One that doesn't link to something
+      actionable gets ignored at 1am, and fixing the link template pays out every single time it
+      fires.
+    </li>
+    <li>
+      <strong>Inhibit by cause.</strong> One root cause shouldn't produce nine alerts. When the cause
+      is already waving, the symptoms go quiet.
+    </li>
+  </ul>
+</section>
+
+<section aria-labelledby="quiet">
+  <h2 id="quiet">What I've decided is not an alert</h2>
+  <ul>
+    <li><strong>Reboots.</strong> The nodes patch weekly and restart. That's expected, so it's a
+      dashboard annotation, not a page. I removed the rule that would have fired every cycle.</li>
+    <li><strong>A host maintenance job touching an ssh directory.</strong> It's the operating system
+      doing housekeeping, and the exemption can't be the directory itself, or the interesting case
+      goes quiet too.</li>
+    <li><strong>Provider balance alarms for a home lab.</strong> Excluded by name from the wake path.
+      The rule still fires and still notifies; it just doesn't spend an agent run on a number I've
+      decided not to act on.</li>
+  </ul>
+  <p class="small">
+    Each of those is written down where the rule lives, with the date, so the next person to see the
+    alert doesn't re-litigate it.
+  </p>
+</section>
+
+</main>
+
+<footer>
+  <div class="wrap">
+    <p><a href="monitoring.html">← Monitoring</a> · <a href="workflow.html">The loop →</a></p>
+  </div>
+</footer>
+</body>
+</html>

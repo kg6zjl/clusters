@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Guardrails: read-only, no secrets, and a policy that watches the agent itself</title>
+<meta name="description" content="What stops an AI agent in a Kubernetes cluster from going wrong: read-only RBAC, no path to a secret value, default-deny networking, admission policies that watch the agent's own identity, and a job that must be reviewed before it runs.">
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<nav class="topnav">
+  <ul>
+    <li><a href="index.html">Why</a></li>
+    <li><a href="guardrails.html" aria-current="page">Guardrails</a></li>
+    <li><a href="monitoring.html">Monitoring</a></li>
+    <li><a href="alerting.html">Alerting</a></li>
+    <li><a href="workflow.html">The loop</a></li>
+  </ul>
+</nav>
+
+<header class="page-head">
+  <p class="eyebrow">Guardrails</p>
+  <h1>Read-only, no secrets, and one policy that watches the agent itself</h1>
+  <p class="lede">
+    Five things stop this going wrong: permissions, secret access, networking, admission, and the
+    fact that the agent can't merge its own changes to the cluster. Each one covers a different
+    failure.
+  </p>
+  <p>
+    The default everywhere is deny. It has what it has because the grant was written down and
+    reviewed, not because nothing was watching. Every access decision here is a file in the
+    repository with a diff and a history.
+  </p>
+</header>
+
+<main>
+
+<section aria-labelledby="reach">
+  <h2 id="reach">Reach, not authority</h2>
+  <table>
+    <thead><tr><th>It can</th><th>It cannot</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>Read any workload, pod, log, event, PVC, network policy, Flux object or CRD status</td>
+        <td><code>apply</code>, <code>patch</code>, <code>delete</code>, <code>edit</code> — or run
+          <code>helm</code> at all</td>
+      </tr>
+      <tr>
+        <td>Query metrics and logs directly, and read the alerting pipeline's own logs</td>
+        <td>Read a secret value, exec into a container, port-forward, or mint a service account token</td>
+      </tr>
+      <tr>
+        <td>Push a branch and open a pull request, including a one-off job that prints what it needs</td>
+        <td>Merge to the cluster repository, or change a repository setting</td>
+      </tr>
+      <tr>
+        <td>Reproduce a failure by running the same request from a pod it controls</td>
+        <td>Reach the API server by any path outside its approved egress rules</td>
+      </tr>
+    </tbody>
+  </table>
+  <p class="small">
+    When the agent needs something it can't read, the answer is a reviewed job in the repository that
+    reads it and logs a sanitised result, never a wider role.
+  </p>
+</section>
+
+<section aria-labelledby="rbac">
+  <h2 id="rbac">Permissions: get, list, watch, and nothing else</h2>
+  <p>
+    The cluster role behind the agent has <code>get</code>, <code>list</code> and <code>watch</code>
+    on the resources it needs and no write verb anywhere.
+  </p>
+  <ul>
+    <li><strong>No secrets.</strong> It can see that a secret exists and what refers to it. It can't
+      read one, so the layer that would leak a credential has no credential in it.</li>
+    <li><strong>No <code>pods/exec</code>.</strong> Reading a container's stdout is fine. Getting a
+      shell inside one is not.</li>
+    <li><strong>No token minting.</strong> It can't create a service account token and climb from
+      there.</li>
+  </ul>
+  <p>
+    Least privilege here means the role is small on purpose and stored in git, so widening it is a
+    visible diff rather than a decision someone made in a shell. There's no host-level escape hatch to
+    find either: the account that can log into the nodes has no passwordless sudo, and the agent has no
+    ssh path at all.
+  </p>
+  <p>
+    That role is only half of it. Two admission policies watch the agent's own identity, because they
+    cover the case where the agent talks me into a bad change.
+  </p>
+  <ul>
+    <li>
+      <strong>The identity stays read-only.</strong> Its cluster role may not gain a verb outside
+      <code>get</code>/<code>list</code>/<code>watch</code>, and its service account may only be bound
+      to the read-only roles. It re-checks the role and binding that already exist, not just new ones.
+    </li>
+    <li>
+      <strong>Defence in depth on the privileged calls.</strong> Requests made as the agent are denied
+      <code>pods/exec</code>, service account token creation, and writes to secrets. The RBAC already
+      withholds all three; this holds if that RBAC is widened by mistake.
+    </li>
+  </ul>
+  <div class="note">
+    <span class="label">Why a policy and not just RBAC</span>
+    <p>
+      RBAC says what is allowed. The policy says what stays allowed. A pull request that quietly adds
+      <code>pods/exec</code> to the agent's role is a plausible change to make at the end of a long
+      day, and it's the one that undoes everything else.
+    </p>
+  </div>
+  <p class="small">
+    Both policies run in audit mode today, so they report violations and block nothing. It's listed
+    with the other weak points on <a href="index.html">Why</a>. The policies have tests that run in
+    CI: fixtures for a widened role, a widened binding, and a cluster-admin binding, which must be
+    reported as violations, plus the read-only shape, which must pass clean.
+  </p>
+</section>
+
+<section aria-labelledby="secrets">
+  <h2 id="secrets">Secrets: one path in, and the agent isn't on it</h2>
+  <p>
+    Secret values live in a password manager. An operator syncs one declared item per need into the
+    namespace that needs it. Nothing is copied into git, and there is no second path, because a second
+    path is just a leak you haven't noticed yet.
+  </p>
+  <p>
+    The agent's own credentials follow the same rule with one extra step. Its identity is a GitHub App
+    rather than my personal account, so the reviewer and the author aren't the same identity. The App's
+    key is mounted only into the containers that mint tokens: an init container mints one at start, a
+    sidecar re-mints before expiry, and the agent reads a short-lived token from a shared empty
+    directory. The durable key never enters the container the model drives. A compromise there yields a
+    token that dies within the hour, not a key that can mint more.
+  </p>
+  <p>
+    The same idea covers the other integrations: the agent posts to a chat channel through a webhook,
+    not through a chat account. There's no chat API client in the container, no bot with broad
+    permissions to borrow, and the webhook credential is delivered from the vault like everything else.
+    It can talk; it can't read the channel, join anything, or act as anyone.
+  </p>
+</section>
+
+<section aria-labelledby="network">
+  <h2 id="network">Networking: default deny, then a written exception</h2>
+  <p>
+    Every namespace is default-deny for ingress and egress. Nothing talks to anything until a policy
+    says it may, and the exceptions are objects in git like everything else. The agent's own egress is
+    a short list: DNS, the API server, the event webhook, GitHub over 443.
+  </p>
+  <div class="note">
+    <span class="label">The trap that catches everyone</span>
+    <p>
+      The API server is a host process, not a pod. A namespace selector will never match it, so a
+      policy that looks correct allows nothing to reach it. It needs an explicit address block. This
+      cost me an afternoon and it's the single most common way a default-deny cluster looks broken when
+      it's actually just policy.
+    </p>
+  </div>
+  <p>
+    The pleasant side effect: "can the agent do X" is usually answered by reading one policy file
+    rather than by trusting the prompt.
+  </p>
+</section>
+
+<section aria-labelledby="runtime">
+  <h2 id="runtime">Runtime behaviour and images</h2>
+  <p>
+    Three layers, and they see different things.
+  </p>
+  <ul>
+    <li>
+      <strong>Admission</strong> sees intent: what a manifest asks for, before it exists. It holds the
+      two policies above and nothing else right now.
+    </li>
+    <li>
+      <strong>Scanning</strong> sees images: it reports high and critical findings that have a fix
+      available, and nothing else, because an unfiltered list on a fat base image overruns the
+      apiserver's response limit and fails instead of reporting. Failed scans alert too, since a scan
+      that never ran otherwise looks clean.
+    </li>
+    <li>
+      <strong>Runtime detection</strong> sees behaviour: what a process does after it starts. That's
+      Falco, running a curated rule set. It's the layer that catches the thing the other two can't,
+      and it's also the layer that generates the most noise, so the exemptions are written narrow on
+      purpose — by process, parent and host, never by file path or image name.
+    </li>
+  </ul>
+</section>
+
+<section aria-labelledby="patching">
+  <h2 id="patching">Patching: the hosts on a timetable, the manifests by pull request</h2>
+  <p>
+    Two different problems that people usually solve with one bad habit. The hosts are machines with an
+    operating system. The cluster is a set of pinned versions in a repository. Both are handled as code,
+    and neither is handled by logging in and running something.
+  </p>
+  <h3>The hosts</h3>
+  <p>
+    Node configuration is playbooks in the same repository as everything else: base packages, kernel
+    settings, the pinned Kubernetes snap channel, the kubelet's node address, the mounts, the accounts.
+    A run resolves its secrets from the vault at run time, so nothing lands in git. Security updates
+    then install unattended, and the machines reboot to apply them on a staggered timetable — one host
+    at a time, ordered so control-plane quorum never drops.
+  </p>
+  <p>
+    That last part is why a reboot is not an alert here. It's the patching mechanism working, and
+    paging on it would just train me to ignore the pager. Reboots are annotations on the node dashboard
+    instead, so an <em>unscheduled</em> reboot is obvious by looking rather than by waking me up. See
+    <a href="alerting.html">Alerting</a>.
+  </p>
+  <h3>The manifests</h3>
+  <p>
+    Nothing in the cluster floats on <code>latest</code>. Chart versions, image tags, GitHub Action
+    versions and the CLI tools the pipeline pins are all pinned in the repository, and a bot checks
+    hourly for newer versions and opens a pull request when it finds one, one at a time.
+  </p>
+  <p>
+    So a version changes the way everything else changes: a reviewed merge, with the checks run against
+    the new version first. A pin nobody merges stays pinned, so the bot's pull requests are a to-do
+    list that can rot. That's the price of nothing silently upgrading itself underneath me.
+  </p>
+</section>
+
+<section aria-labelledby="state">
+  <h2 id="state">The pod is disposable, and so is everything in it</h2>
+  <p>
+    The agent runs in a container designed to be killed without losing anything. Config and skills are
+    re-seeded from git on every start. Work happens in a fresh worktree per task, thrown away after.
+    Nothing durable lives only inside the pod, which means "restart it" is always a safe first move.
+  </p>
+  <p>
+    Its knowledge is versioned like code: the skills it loads per task are files in a repository it
+    owns, with a history, and I can read any of them. When it learns something the hard way, the fix
+    goes in the skill and gets committed — which is how most of the entries on
+    <a href="index.html">Why</a> got there.
+  </p>
+  <div class="note">
+    <span class="label">The rule that came from breaking something</span>
+    <p>
+      The agent may not change its own tooling without asking: its git configuration, its credential
+      path, its deployment. It did once, mid-task, and then couldn't recover itself. Everything about
+      its own environment needs me to approve it first, including when the change looks obviously
+      correct.
+    </p>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  <div class="wrap">
+    <p><a href="index.html">← Why</a> · <a href="monitoring.html">Monitoring →</a></p>
+  </div>
+</footer>
+</body>
+</html>
