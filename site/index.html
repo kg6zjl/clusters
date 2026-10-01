@@ -3,234 +3,179 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>An AI agent as a cluster citizen</title>
-<meta name="description" content="How to give an AI agent real operational reach inside a Kubernetes cluster without giving it the cluster: read-only RBAC, no secrets in reach, default-deny networking, disposable state, and a pull request as the only write path.">
+<title>I let an AI agent manage my home cluster</title>
+<meta name="description" content="Three mini PCs, one Kubernetes cluster, an AI agent running inside it with read-only access and no secrets. Its only way to change anything is a pull request I review.">
 <link rel="stylesheet" href="assets/style.css">
 </head>
 <body>
 <nav class="topnav">
   <ul>
-    <li><a href="index.html" aria-current="page">The model</a></li>
-    <li><a href="architecture.html">Architecture</a></li>
-    <li><a href="limits.html">Permissions</a></li>
-    <li><a href="network.html">Network</a></li>
-    <li><a href="state.html">State &amp; storage</a></li>
-    <li><a href="skills.html">Skills</a></li>
+    <li><a href="index.html" aria-current="page">Why</a></li>
+    <li><a href="guardrails.html">Guardrails</a></li>
+    <li><a href="monitoring.html">Monitoring</a></li>
+    <li><a href="alerting.html">Alerting</a></li>
     <li><a href="workflow.html">The loop</a></li>
-    <li><a href="secrets.html">Secrets</a></li>
-    <li><a href="paging.html">Paging</a></li>
-    <li><a href="runners.html">Runners</a></li>
-    <li><a href="interesting.html">Interesting bits</a></li>
-    <li><a href="proud.html">Proud of</a></li>
-    <li><a href="checklist.html">Build your own</a></li>
   </ul>
 </nav>
 
 <header class="page-head">
-  <p class="eyebrow">Operating notes</p>
-  <h1>An AI agent as a cluster citizen</h1>
+  <p class="eyebrow">Home cluster</p>
+  <h1>I let an AI agent manage my cluster. It can't change anything without me.</h1>
   <p class="lede">
-    This is how an AI agent runs <em>inside</em> a Kubernetes cluster. It has enough reach to diagnose and fix real problems. It has no authority to change anything without review. Everything here comes from a working setup: a home cluster run from git, where the agent holds a read-only cluster role, cannot read a single secret value, and changes the world only by opening pull requests.
+    Hermes runs as a pod in a three node Kubernetes cluster at home. It has read-only RBAC, no access
+    to any secret, and no way to reach the outside world except a short list of things I approved. To
+    change anything it opens a pull request, and I review and merge it. That's the whole design.
   </p>
   <p class="small">
-    Written for someone building the same thing. No addresses, hostnames, domains or credentials —
-    mechanism, not topology.
+    This is what that looks like in practice: the guardrails, what it monitors, how it alerts, and
+    what's still broken. No addresses, no hostnames, no credentials.
   </p>
 </header>
 
 <main>
 
-<section aria-labelledby="idea">
-  <h2 id="idea">The one idea everything else follows from</h2>
+<section aria-labelledby="why">
+  <h2 id="why">Why bother with this at all</h2>
   <p>
-    An agent that can only read the cluster is safe but useless. An agent with a kubeconfig that can
-    write is useful and terrifying: one plausible mistake is unrecoverable, and "the model was
-    confused" is not a rollback plan.
+    Two versions of this are easy and neither one is useful. An agent that can only look at the
+    cluster is safe and pointless. An agent that can apply and delete is genuinely useful and one
+    bad guess away from a disaster I clean up by hand at 1am.
   </p>
   <p>
-    The way out is to separate <strong>reach</strong> from <strong>authority</strong>. The agent gets
-    maximum reach for reading — every workload, every log, every revision, every metric — and zero
-    authority to mutate. Its only write path is a <strong>pull request</strong>, which is reviewed,
-    CI-checked, and merged by a human before a controller applies it. The cluster is still the
-    agent's to fix; it just has to write down the fix and get it reviewed first.
+    So I split reach from authority. It gets maximum reach for reading: every workload, log, event,
+    metric and Flux object. It gets zero authority to mutate. The cluster is still its to fix, it
+    just has to write the fix down and get it reviewed first.
+  </p>
+  <p>
+    The reason that's safe is boring, and it's the whole trick: the cluster is reconciled from git.
+    Anything not in a merged commit gets reverted on the next reconcile. A bad idea from the agent
+    costs a rejected pull request, not an outage.
   </p>
   <div class="note">
-    <span class="label">Why this holds even when the agent is wrong</span>
+    <span class="label">The part I didn't expect</span>
     <p>
-      Git is the source of truth and a controller reconciles the cluster to match it. The agent
-      cannot even hold a durable change: anything applied outside the repository is reverted on the
-      next reconcile. So a bad idea from the agent costs a rejected PR, not an outage.
+      Reviewing every change is nowhere near the tax I thought it would be. It's the feature. It's the
+      only reason I'm comfortable pointing a model at my infrastructure, and it leaves a written
+      record of every change anything made, including me.
     </p>
   </div>
 </section>
 
-<section aria-labelledby="boundaries">
-  <h2 id="boundaries">The four boundaries</h2>
-  <div class="cards">
-    <div class="card">
-      <h3><a href="limits.html">Read-only, and no secrets</a></h3>
-      <p>
-        A cluster role with <code>get</code>, <code>list</code>, <code>watch</code> and nothing else,
-        no <code>create/update/patch/delete</code> anywhere, and — deliberately — no access to
-        <code>secrets</code>, <code>pods/exec</code> or token minting. It can see that a secret
-        exists in a reference; it can never see a value.
-      </p>
-    </div>
-    <div class="card">
-      <h3><a href="network.html">Default deny, then ask</a></h3>
-      <p>
-        Every namespace is default-deny for ingress and egress. The agent's namespace gets an
-        explicit, reviewed list: DNS, the API server, its own dependencies. A pod that cannot reach
-        something is a policy question first, and the policy is in git like everything else.
-      </p>
-    </div>
-    <div class="card">
-      <h3><a href="state.html">Disposable state</a></h3>
-      <p>
-        The pod is designed to be killed. Config and skills are re-seeded from git on every start,
-        work happens in a fresh worktree per task, and nothing durable lives only in the container.
-        A destroyed pod is a restart, not a loss.
-      </p>
-    </div>
-    <div class="card">
-      <h3><a href="workflow.html">The pull request is the API</a></h3>
-      <p>
-        Branch, commit, PR, required checks, human merge, reconcile. The agent can open and merge
-        <em>its own</em> skills repository but not the cluster one. Which of those two it may merge
-        is a decision worth making explicitly.
-      </p>
-    </div>
+<section aria-labelledby="wins">
+  <h2 id="wins">What it has actually done</h2>
+  <p>
+    Not "it could". These are from the last while, and most of them are boring on purpose.
+  </p>
+  <ul>
+    <li>
+      <strong>Deleted alerts that could not fire.</strong> Several rules watched metrics that don't
+      exist or conditions that never hold. They looked like coverage. The agent measured each one
+      against real data before it shipped, and cut the ones that were decoration.
+    </li>
+    <li>
+      <strong>Cut a paging alert for a weekly event.</strong> A node reboot alert would have fired
+      every patch cycle for something I already expect. Reboots aren't incidents here. It removed the
+      rule and left the signal on a dashboard instead.
+    </li>
+    <li>
+      <strong>Turned on runtime detection, then tuned it.</strong> Image scanning sees what's inside
+      an image, admission sees intent. Neither sees what a process does after it starts. Falco is live
+      now, with a curated rule set rather than the whole upstream one.
+    </li>
+    <li>
+      <strong>Found the hole in its own allow-list.</strong> Three things in this cluster legitimately
+      talk to the API server. The obvious fix was to allow-list their image, except two of them run a
+      generic base image, and that would have exempted every container built on it. It matched them on
+      namespace and pod name instead, and wrote down why.
+    </li>
+    <li>
+      <strong>Killed an alert that fired every night for nothing.</strong> A maintenance job on the
+      host reads an ssh directory on a daily timer. The exemption it wrote is scoped to that process,
+      its parent, and the host — not to the path. Exempting the path would have exempted the attacker
+      too.
+    </li>
+    <li>
+      <strong>Stopped flagging real logins.</strong> A newer ssh daemon reads its key file as a
+      differently named process, which wasn't on the list of expected ssh binaries, so every login I
+      made looked like an intrusion. That name is on the list now, and any other process reading that
+      directory still alerts.
+    </li>
+    <li>
+      <strong>Made half-built alerting visible.</strong> Policy findings were being reported into an
+      audit report nobody reads. They land in a security channel now, straight from the reports.
+    </li>
+    <li>
+      <strong>Built the dashboard I actually wanted.</strong> The question was "why does this node
+      look unstable". Load average and iowait answered nothing. The dashboard shows pressure stall
+      metrics, per-disk latency <em>with</em> throughput, memory, and reboots. The answer turned out
+      to be one reboot, not a sick node.
+    </li>
+  </ul>
+</section>
+
+<section aria-labelledby="cost">
+  <h2 id="cost">What it costs</h2>
+  <p>
+    The agent's budget is about twelve dollars a month and it holds itself to it. That number isn't
+    arbitrary: every wake costs real money, so cost control is a design constraint, not an
+    afterthought.
+  </p>
+  <p>
+    Alert-driven wakes were the dominant cost at first, so I turned that path off and rebuilt it
+    narrower: an hourly poll, a short allow-list of alerts genuinely worth an unattended run, and a
+    gate that stops a standing alert waking it once an hour. Then I turned it back on. The lesson was
+    that the fix is the filters, not disabling the thing.
+  </p>
+  <div class="note">
+    <span class="label">Also measured</span>
+    <p>
+      A spend meter runs every morning and reports what was burned. When a cost number looks alarming,
+      read what it actually measures: one scare was the whole provider account, not the agent, and the
+      agent's share of it was a fraction.
+    </p>
   </div>
 </section>
 
-<section aria-labelledby="reach">
-  <h2 id="reach">What the agent can and cannot do</h2>
-  <table>
-    <thead><tr><th>It can</th><th>It cannot</th></tr></thead>
-    <tbody>
-      <tr>
-        <td>Read any workload, pod, log, event, PVC, NetworkPolicy, Flux object or CRD status</td>
-        <td><code>apply</code>, <code>patch</code>, <code>delete</code>, <code>edit</code> — or run
-          <code>helm</code> at all</td>
-      </tr>
-      <tr>
-        <td>Query the metrics store directly and read the alerting pipeline's own logs</td>
-        <td>Read a Secret value, exec into a container, port-forward, or mint a service account token</td>
-      </tr>
-      <tr>
-        <td>Push a branch and open a PR, including a one-off Job that prints what it needs</td>
-        <td>Merge to the cluster repository, or change a repository setting</td>
-      </tr>
-      <tr>
-        <td>Reproduce a failure by running the same request from a pod it controls</td>
-        <td>Reach the cluster API through any path that is not an explicitly allowed egress rule</td>
-      </tr>
-    </tbody>
-  </table>
-  <p class="small">
-    That third row on the right is the important one: when the agent needs something it has no
-    permission to read, the answer is a reviewed Job in the repository that reads it and logs a
-    sanitized result — not a wider role.
-  </p>
-</section>
-
 <section aria-labelledby="weak">
-  <h2 id="weak">Where this setup is still weak</h2>
+  <h2 id="weak">What's weak right now</h2>
   <p>
-    A design document that only lists strengths is a brochure. These are open today.
+    A page that only lists strengths is a brochure. These are open today.
   </p>
   <ul>
     <li>
-      <strong>Admission reports, it does not block.</strong> The policy that pins the agent's
-      identity to read-only verbs runs in Audit: violations land in a report, and nothing stops a
-      widened role. Enforcement is a deliberate one-way flip, taken once the report shows the
-      expected zero violations.
+      <strong>Admission reports, it doesn't block.</strong> The policy that keeps the agent's identity
+      read-only runs in audit mode. It produces a report and stops nothing. Flipping it to enforce is a
+      deliberate one-way change, taken once the report shows the expected zero.
     </li>
     <li>
-      <strong>Scan triage is behind the findings.</strong> The image scanner is deployed and its
-      alerts are live; the first sweep found scores of running workloads carrying a fixable Critical.
-      Coverage is not the problem — working through the list is.
+      <strong>Scan triage is behind the findings.</strong> The scanner works and the alerts are live.
+      The first sweep found dozens of running workloads carrying a fixable critical. Coverage isn't
+      the problem, working through it is.
     </li>
     <li>
-      <strong>Nothing watches behaviour at runtime.</strong> Admission sees intent and scanning sees
-      images. Neither sees what a process does after it starts.
+      <strong>Log history is short.</strong> I get hours of searchable logs, not weeks. Enough to
+      answer "what happened last night", not "what happened last month".
+    </li>
+    <li>
+      <strong>The image registry is open inside the cluster.</strong> Any workload can pull any image
+      in it. Fine while everything there is a public base image or a build output. Not fine the day
+      that stops being true.
     </li>
   </ul>
-  <p class="small">
-    The full picture, including the parts that are weak on purpose, is on
-    <a href="architecture.html">Architecture</a>.
-  </p>
-</section>
-
-<section aria-labelledby="webhooks">
-  <h2 id="webhooks">Letting the cluster trigger the agent</h2>
-  <p>
-    The agent can also be started by the cluster instead of by a person. A detector runs
-    every five minutes, reads what Alertmanager is currently firing, and posts the alerts it
-    has not announced before to a webhook route on the agent, HMAC-signed. The agent wakes up
-    knowing what broke, examines the resources and logs involved, and answers in the
-    notification channel. It holds the same read-only access as any other session, so the
-    worst an unattended run can do is investigate and talk — and if the alert needs a
-    manifest change, it opens a pull request and stops. Merging stays with the human who was
-    asleep.
-  </p>
-  <p>
-    That answers the questions this page used to say had to come first, and the answers are
-    the trust model, so they are worth stating plainly.
-  </p>
-  <ul>
-    <li>
-      <strong>Who may trigger it.</strong> Not "anything that can reach the port". The
-      listener is a cluster-only address, a network policy narrows callers to the namespaces
-      with business sending, and every request must carry an HMAC signature nobody can
-      produce without the key. The key is not in the repository; it is rendered from the
-      vault into the sender's environment at run time.
-    </li>
-    <li>
-      <strong>What an unattended run may do.</strong> Diagnose, and propose. Read-only
-      cluster access, no secret access, and — the part that matters — a pull request, never a
-      merge. The prompt says so, and the credential cannot merge the cluster repository in
-      any case.
-    </li>
-    <li>
-      <strong>How much it can start.</strong> An alert is announced once, not once per poll:
-      the filter is the alert's own start time, and the request carries an idempotency key so
-      an overlapping poll is dropped rather than waking the agent twice. One poll starts at
-      most one run, which caps it at twelve wakes an hour by construction, with a per-route
-      rate limit as a backstop for a sender that loops.
-    </li>
-    <li>
-      <strong>What happens when the trigger breaks.</strong> Its freshness is alerted on like
-      any other scheduled job here, and that alert travels the ordinary path — Alertmanager
-      to the notification channel. The agent noticing a problem, and the cluster noticing that
-      the agent is no longer being woken, are deliberately two separate mechanisms, so
-      neither failure can hide the other.
-    </li>
-  </ul>
-  <p class="small">
-    Deliberately a pull rather than a push. Alertmanager cannot sign an inbound webhook, so
-    something in-cluster has to read the alerts and sign them itself, and polling is what
-    makes the deduplication stateless — there is no memory to lose in a pod that is recreated
-    every five minutes. The price is latency: the agent wakes within one poll interval, not
-    within seconds.
-  </p>
 </section>
 
 <section aria-labelledby="next">
   <h2 id="next">Read on</h2>
   <p>
-    <a href="architecture.html">Architecture</a> — what is actually running: the reconciliation
-    spine, the security stack, the agent's GitHub identity, and the path an alert takes to wake it.
-    <a href="limits.html">Permissions</a> — the actual role, the deliberate omissions, and why each
-    odd-looking grant exists. <a href="network.html">Network</a> — default deny, and the mistake
-    everyone makes with the API server. <a href="state.html">State &amp; storage</a> — what is
-    ephemeral, what is not, and how the pod rebuilds itself. <a href="skills.html">Skills</a> — how
-    the agent's own knowledge is versioned. <a href="workflow.html">The loop</a> — the mechanics of
-    getting a change merged. <a href="checklist.html">Build your own</a> — the short version.
+    <a href="guardrails.html">Guardrails</a> is the leash: permissions, secrets, networking, and the
+    policies that stop the agent widening its own rights. <a href="monitoring.html">Monitoring</a> is
+    what's measured, and why that list is short. <a href="alerting.html">Alerting</a> is the pipeline
+    and the decisions that keep it quiet enough to trust. <a href="workflow.html">The loop</a> is how
+    a change actually gets in.
   </p>
   <p class="small">
-    Corrections welcome: this is a description of a running system, not a product, and the parts
-    that broke are the parts worth reading.
+    Corrections welcome. This describes a running system, not a product, and the parts that broke are
+    the parts worth reading.
   </p>
 </section>
 
@@ -238,7 +183,7 @@
 
 <footer>
   <div class="wrap">
-    <p>Operating notes from a GitOps home cluster. Source lives in the cluster repository's <code>site/</code> directory. <a href="architecture.html">Architecture →</a></p>
+    <p>Notes from a GitOps home cluster. Source is the <code>site/</code> directory of the cluster repository. <a href="guardrails.html">Guardrails →</a></p>
   </div>
 </footer>
 </body>
