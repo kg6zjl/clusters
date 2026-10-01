@@ -66,29 +66,30 @@ spec:
         responseTypes: ["code"]
 
       staticClients:
-        # The apiserver's --oidc-client-id. It never sends a client secret, so this is a public
-        # client. `public: true` is not documentation here, it is the field Dex validates:
-        # cmd/dex/serve.go rejects any static client with no secret, no secretEnv and
-        # public != true ("invalid config: Secret or SecretEnv field is required for client"),
-        # which crash-looped the pod on its very first start after the chart resolved.
-        - id: kubernetes
-          name: Kubernetes API
-          public: true
-          redirectURIs:
-            - urn:ietf:wg:oauth:2.0:oob
-        # Headlamp's built-in OIDC client. Deliberately a PUBLIC client with no secret.
+        # ONE client for BOTH the apiserver and Headlamp, on purpose. Dex sets the id_token's `aud`
+        # to the id of the client that requested it, and the apiserver only accepts a token whose
+        # `aud` contains its own --oidc-client-id ("kubernetes"). Headlamp therefore has to present
+        # this same client id: with a separate `headlamp` client it would mint aud=headlamp and the
+        # apiserver would reject every per-user token. Headlamp's own Dex guide says use a single
+        # client id for both. Each consumer registers its own redirectURI on this one client.
         #
-        # Why: a first-party app talking to our own Dex needs no shared secret, and making it
-        # one would mean creating a new 1Password item purely to store a credential that grants
-        # nothing an attacker could not get by just starting the login flow. Headlamp sends a
-        # PKCE code_challenge (`-oidc-use-pkce=true`), so the authorization code is useless
-        # without the verifier that only the client that started the flow holds. Net effect:
-        # fewer secrets to create, rotate and leak, with no loss of security.
-        - id: headlamp
-          name: Headlamp
-          redirectURIs:
-            - https://headlamp.kube.stevearnett.com/oidc-callback
+        # Deliberately a PUBLIC client with no secret. `public: true` is not documentation here, it
+        # is the field Dex validates: cmd/dex/serve.go rejects any static client with no secret, no
+        # secretEnv and public != true ("invalid config: Secret or SecretEnv field is required for
+        # client"), which crash-looped the pod on its very first start after the chart resolved.
+        #
+        # No shared secret: kubectl never sends one, and Headlamp sends a PKCE code_challenge
+        # (`-oidc-use-pkce=true`), so the authorization code is useless without the verifier that
+        # only the client which started the flow holds. Net effect: no credential to create, rotate
+        # or leak, with no loss of security.
+        - id: kubernetes
+          name: Kubernetes API and Headlamp
           public: true
+          redirectURIs:
+            # kubectl and other CLI OIDC clients use the out-of-band flow.
+            - urn:ietf:wg:oauth:2.0:oob
+            # Headlamp's web callback; must match -oidc-callback-url exactly.
+            - https://headlamp.kube.stevearnett.com/oidc-callback
 
       connectors:
         - type: google

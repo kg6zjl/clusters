@@ -31,17 +31,29 @@ spec:
             # Built-in OIDC against Dex (home-cluster/sso). Flag names verified against the
             # Headlamp v0.45.0 chart's rendered templates, not from memory.
             #
+            # -oidc-client-id MUST equal the apiserver's --oidc-client-id (node-config: "kubernetes").
+            # Dex stamps the id_token's `aud` with the client id that requested it, and the apiserver
+            # accepts a token only when `aud` contains its own --oidc-client-id. A separate Headlamp
+            # client would mint aud=headlamp and the apiserver would reject every per-user request.
+            # Headlamp's own Dex guide says to use one client id for both -- see the single
+            # staticClient in home-cluster/sso/dex-helmrelease.yaml.
+            - "-oidc-client-id=kubernetes"
+            - "-oidc-idp-issuer-url=https://sso.kube.stevearnett.com/dex"
             # -oidc-callback-url is set explicitly rather than derived from request headers.
             # Headlamp would otherwise guess the scheme from X-Forwarded-Proto; pinning it means
             # a Traefik middleware that stops sending that header cannot silently break login.
             # It must match the redirectURI registered on the Dex static client exactly.
-            - "-oidc-client-id=headlamp"
-            - "-oidc-idp-issuer-url=https://sso.kube.stevearnett.com/dex"
             - "-oidc-callback-url=https://headlamp.kube.stevearnett.com/oidc-callback"
             - "-oidc-scopes=openid,profile,email"
             # PKCE: this client is public and has no secret, so the authorization code is
             # useless without the verifier only this flow's initiator holds.
             - "-oidc-use-pkce=true"
+            # Required because this Deployment runs Headlamp with -kubeconfig, not -in-cluster.
+            # v0.45.0's Config.Validate() rejects every -oidc-* flag unless -in-cluster OR this is
+            # set, and the pod exits 1 at startup otherwise (the CrashLoopBackOff after #841).
+            # The flag makes Headlamp keep the per-user id_token in a cookie and forward it as the
+            # request bearer, which is what gives per-user (not ServiceAccount) identity in RBAC.
+            - "-oidc-use-cookie=true"
           ports:
             - name: http
               containerPort: 4466
