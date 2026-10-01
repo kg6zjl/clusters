@@ -243,6 +243,13 @@
     instead, so an <em>unscheduled</em> reboot is obvious by looking rather than by waking me up. See
     <a href="alerting.html">Alerting</a>.
   </p>
+  <p>
+    A role there looks for what only a host can see: a CSI mount a storage volume left behind when
+    it was recreated, which stops a new pod from starting while every health check upstream stays
+    green. And the API server's own flags — including who it trusts to authenticate a human — are a
+    playbook here rather than a manifest, which makes them one of the few changes a person runs
+    rather than merges and forgets.
+  </p>
   <h3>The versions</h3>
   <p>
     Nothing in the cluster floats on <code>latest</code>. Chart versions, image tags, GitHub Action
