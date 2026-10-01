@@ -55,9 +55,10 @@ Navigate to https://headlamp.kube.stevearnett.com in browser and verify it loads
 - **Ingress**: From the `traefik` namespace (ports 80, 4466)
 - **Egress**: `kube-system` on 53 (DNS); `10.152.183.0/16` and `192.168.1.0/24` on 443/16443
   (the Kubernetes API -- the apiserver is a host process, so `namespaceSelector` cannot cover
-  it); and the `traefik` namespace on 443 (the OIDC issuer, `sso.kube.stevearnett.com`). Note the
+  it); and the `traefik` namespace on **8443** (the OIDC issuer, `sso.kube.stevearnett.com`). The
   issuer resolves to Traefik's MetalLB VIP, but egress policy is evaluated after DNAT, so the rule
-  must select the Traefik pods -- an `ipBlock` for the VIP is not enough.
+  must match the backing pod (`traefik` namespace) on the Service's **targetPort** (`websecure` =
+  8443) -- not the VIP:443 and not the ClusterIP:443.
 
 ## Related Files
 - `headlamp/networkpolicy.yaml` - Headlamp pod NetworkPolicy
