@@ -43,8 +43,9 @@
   </p>
   <p>
     So I split reach from authority. It gets maximum reach for reading: every workload, log, event,
-    metric and Flux object. It gets zero authority to mutate. The cluster is still its to fix, it
-    just has to write the fix down and get it reviewed first.
+    metric and Flux object. It gets zero authority to mutate. It can see the world; the only way it
+    interacts with the cluster is a pull request that a human gates. The cluster is still its to fix,
+    it just has to write the fix down and get it reviewed first.
   </p>
   <p>
     The reason that's safe is boring, and it's the whole trick: the cluster is reconciled from git.

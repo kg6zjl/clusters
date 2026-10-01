@@ -26,6 +26,11 @@
     fact that the agent can't merge its own changes to the cluster. Each one covers a different
     failure, and none of them is redundant.
   </p>
+  <p>
+    The default everywhere is deny. It has what it has because the grant was written down and
+    reviewed, not because nothing was watching. Every access decision on this page is a file in the
+    repository with a diff and a history.
+  </p>
 </header>
 
 <main>
@@ -77,6 +82,12 @@
       there.</li>
   </ul>
   <p>
+    Least privilege here means the role is small on purpose and stored in git, so widening it is a
+    visible diff rather than a decision someone made in a shell. There's no host-level escape hatch to
+    find either: the account that can log into the nodes has no passwordless sudo, and the agent has no
+    ssh path at all.
+  </p>
+  <p>
     That role is only half of it. Two admission policies watch the agent's own identity, and they're
     the part I care about most, because they cover the case where the agent talks me into a bad change.
   </p>
@@ -123,6 +134,12 @@
     sidecar re-mints before expiry, and the agent reads a short-lived token from a shared empty
     directory. The durable key never enters the container the model drives. A compromise there yields a
     token that dies within the hour, not a key that can mint more.
+  </p>
+  <p>
+    The same idea covers the other integrations: the agent posts to a chat channel through a webhook,
+    not through a chat account. There's no chat API client in the container, no bot with broad
+    permissions to borrow, and the webhook credential is delivered from the vault like everything else.
+    It can talk; it can't read the channel, join anything, or act as anyone.
   </p>
 </section>
 
@@ -171,6 +188,41 @@
       purpose — by process, parent and host, never by file path or image name.
     </li>
   </ul>
+</section>
+
+<section aria-labelledby="patching">
+  <h2 id="patching">Patching: the hosts on a timetable, the manifests by pull request</h2>
+  <p>
+    Two different problems that people usually solve with one bad habit. The hosts are machines with an
+    operating system. The cluster is a set of pinned versions in a repository. Both are handled as code,
+    and neither is handled by logging in and running something.
+  </p>
+  <h3>The hosts</h3>
+  <p>
+    Node configuration is playbooks in the same repository as everything else: base packages, kernel
+    settings, the pinned Kubernetes snap channel, the kubelet's node address, the mounts, the accounts.
+    A run resolves its secrets from the vault at run time, so nothing lands in git. Security updates
+    then install unattended, and the machines reboot to apply them on a staggered timetable — one host
+    at a time, ordered so control-plane quorum never drops.
+  </p>
+  <p>
+    That last part is why a reboot is not an alert here. It's the patching mechanism working, and
+    paging on it would just train me to ignore the pager. Reboots are annotations on the node dashboard
+    instead, so an <em>unscheduled</em> reboot is obvious by looking rather than by waking me up. See
+    <a href="alerting.html">Alerting</a>.
+  </p>
+  <h3>The manifests</h3>
+  <p>
+    Nothing in the cluster floats on <code>latest</code>. Chart versions, image tags, GitHub Action
+    versions and the CLI tools the pipeline pins are all pinned in the repository, and a bot checks
+    hourly for newer versions and opens a pull request when it finds one — one at a time, deliberately.
+  </p>
+  <p>
+    So a version changes the way everything else changes: a reviewed merge, with the checks run against
+    the new version first. The cost is worth stating plainly — a pin nobody merges stays pinned, so the
+    bot's pull requests are a to-do list that can rot. That's the price of nothing silently upgrading
+    itself underneath me.
+  </p>
 </section>
 
 <section aria-labelledby="state">
