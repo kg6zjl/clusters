@@ -185,6 +185,91 @@ spec:
         - macro: k8s_api_server
           condition: (fd.sip.name="kubernetes.default.svc.cluster.local")
 
+        # from rules/main (list) -- LOCALLY ADDED. Image repositories of every workload here that
+        # holds an explicit RBAC binding granting object-level API verbs, i.e. clients that exist
+        # to drive the API server rather than merely run in the cluster. Read from the live cluster
+        # on 2026-09-30 (all 166 pods present in the cluster - 138 running, the rest completed or
+        # pending - their ServiceAccounts and every binding), not copied
+        # from upstream. kube-system is deliberately absent: `k8s_containers` already excludes that
+        # whole namespace, so its controllers need no entry here.
+        #
+        # The longhorn entries are the ones measured firing. The rest are pre-emptive, because the
+        # rule fires on `evt.type=connect`: a client-go connection is long-lived and silent, but
+        # every pod start is a fresh burst, so any controller restart re-announces it.
+        #
+        # Deliberately NOT listed, with the reason:
+        #   longhornio/longhorn-engine, longhornio/longhorn-instance-manager,
+        #   longhornio/longhorn-share-manager, longhornio/livenessprobe,
+        #   longhornio/csi-node-driver-registrar
+        #     - the storage data path talks to longhorn-backend (10.152.183.60) and to the
+        #       kubelet, not to the API server, and none of them appeared in the sweep below
+        #   quay.io/prometheus/prometheus, docker.io/grafana/grafana
+        #     - not API clients themselves; their config-reloader and k8s-sidecar containers are,
+        #       and those images are listed (prometheus is also already in k8s_containers)
+        #   quay.io/jetstack/cert-manager-cainjector, quay.io/metallb/controller,
+        #   quay.io/metallb/speaker, quay.io/prometheus-operator/prometheus-operator
+        #     - already in k8s_containers
+        - list: known_k8s_api_clients
+          items:
+          # storage: longhorn-manager (its own container, plus the csi-plugin and
+          # driver-deployer containers, which run the same image) and the CSI sidecars
+          - longhornio/longhorn-manager
+          - docker.io/longhornio/longhorn-manager
+          - longhornio/csi-attacher
+          - docker.io/longhornio/csi-attacher
+          - longhornio/csi-provisioner
+          - docker.io/longhornio/csi-provisioner
+          - longhornio/csi-resizer
+          - docker.io/longhornio/csi-resizer
+          - longhornio/csi-snapshotter
+          - docker.io/longhornio/csi-snapshotter
+          # gitops
+          - ghcr.io/fluxcd/source-controller
+          - ghcr.io/fluxcd/kustomize-controller
+          - ghcr.io/fluxcd/helm-controller
+          - ghcr.io/fluxcd/notification-controller
+          - ghcr.io/controlplaneio-fluxcd/flux-operator
+          # policy
+          - reg.kyverno.io/kyverno/kyverno
+          - ghcr.io/kyverno/kyverno
+          - reg.kyverno.io/kyverno/background-controller
+          - reg.kyverno.io/kyverno/cleanup-controller
+          - reg.kyverno.io/kyverno/reports-controller
+          - reg.kyverno.io/kyverno/kyverno-cli
+          - ghcr.io/kyverno/kyverno-cli
+          # kyverno's init container ships as its own repository (kyvernopre, not kyverno)
+          - reg.kyverno.io/kyverno/kyvernopre
+          - ghcr.io/kyverno/kyvernopre
+          # certificates, secrets, cloud APIs
+          - quay.io/jetstack/cert-manager-controller
+          - quay.io/jetstack/cert-manager-webhook
+          - ghcr.io/external-secrets/external-secrets
+          - 1password/onepassword-operator
+          - xpkg.crossplane.io/crossplane/crossplane
+          - xpkg.upbound.io/crossplane-contrib/provider-upjet-github
+          # ingress, load balancing, registry, CI
+          - traefik
+          - docker.io/traefik
+          - quay.io/metallb/frr-k8s
+          - summerwind/actions-runner-controller
+          - quay.io/brancz/kube-rbac-proxy
+          - ghcr.io/project-zot/zot-linux-amd64
+          - ghcr.io/project-zot/zot
+          # monitoring
+          - quay.io/prometheus-operator/prometheus-config-reloader
+          - registry.k8s.io/kube-state-metrics/kube-state-metrics
+          - grafana/alloy
+          - docker.io/grafana/alloy
+          - quay.io/kiwigrid/k8s-sidecar
+          - docker.io/kiwigrid/k8s-sidecar
+          - ghcr.io/jkroepke/kube-webhook-certgen
+          - mirror.gcr.io/aquasec/trivy-operator
+          - mirror.gcr.io/aquasec/trivy
+          # the agent and its dashboard
+          - ghcr.io/headlamp-k8s/headlamp
+          - nousresearch/hermes-agent
+          - docker.io/nousresearch/hermes-agent
+
         # from rules/main (macro) -- LOCALLY OVERRIDDEN with this cluster's measured API
         # clients. `k8s_containers` cannot cover them: it excludes namespace kube-system and a
         # list of upstream image repositories, and these are ordinary workloads. This is an
@@ -203,22 +288,41 @@ spec:
         # sources still fired: the reconciler's Jobs (216) and one kyverno-migrate hook Job
         # (1). Both are listed below; that is the whole set, not the first of a weekly drip.
         #
+        # Swept again 2026-09-30 07:49Z-20:49Z (1626 events; enrichment still the only cut
+        # that matters). After 08:50Z the sources were the reconciler's Jobs (252, excluded
+        # since the last PR), longhorn's 1.13.0 rollout (176: csi-provisioner 36,
+        # csi-resizer 18, csi-attacher 3, csi-snapshotter 3, longhorn-manager and its
+        # csi-plugin/deployer containers 134, plus the post-upgrade Job), the
+        # kube-prometheus-stack admission hook (2, kube-webhook-certgen) and one
+        # kyverno-migrate Job (1). At the time of writing Alertmanager held 17 active alerts
+        # for this rule, every one of them from longhorn-system - that rollout is what
+        # prompted this list, and the 17 are exactly the longhorn entries below.
+        #
         # The ingress-blackbox reconciler is matched on its namespace and pod name instead of
         # its image: that image is docker.io/library/python, and allow-listing it would exempt
         # every python container in the cluster. reconcile.py lists IngressRoutes and Ingresses
         # and writes Probe CRs, backed by a deliberate ClusterRole/Role and egress policy.
-        # reg.kyverno.io/kyverno/kyverno-cli is the kyverno chart's kyverno-migrate-resources
-        # hook Job; it is the image kyverno already ships with.
+        # Same shape applies to any other generic base image if one starts firing: match
+        # namespace + pod name, never the repository.
+        #
+        # Because every entry is an infrastructure controller, what this rule still reports is a
+        # container that is NOT one of them - in practice the application namespaces (media,
+        # home-assistant, nodered, adsb, vpn, netalertx, meshtastic, speedtest, local-services,
+        # sso), none of which has any business dialling the API server. An unlisted container
+        # still fires; keep this list to things that exist to drive the API.
+        #
+        # Enumerate the images actually running before declaring this list complete, including
+        # initContainers: a vendor ships its init step as a separate repository (kyverno's
+        # kyvernopre, not kyverno), and it only connects on pod start, so a sweep window that
+        # contains no restart of that workload cannot see it. Missing kyvernopre fired on the
+        # 2026-10-01 02:58Z restart, 2h after both sweeps above had closed.
+        # registry-pull-rotator runs docker.io/library/python too, the same trap as the reconciler: it
+        # mints the registry-pull SA token via TokenRequest (registry/pull-rotator-rbac.yaml).
         - macro: user_known_contact_k8s_api_server_activities
           condition: >
-            (container.image.repository in (
-              ghcr.io/headlamp-k8s/headlamp,
-              docker.io/nousresearch/hermes-agent,
-              quay.io/kiwigrid/k8s-sidecar, docker.io/kiwigrid/k8s-sidecar,
-              reg.kyverno.io/kyverno/kyverno, ghcr.io/kyverno/kyverno,
-              reg.kyverno.io/kyverno/kyverno-cli, ghcr.io/kyverno/kyverno-cli,
-              ghcr.io/project-zot/zot-linux-amd64, ghcr.io/project-zot/zot))
+            (container.image.repository in (known_k8s_api_clients))
             or (k8s.ns.name = "monitoring" and k8s.pod.name startswith "ingress-blackbox-reconciler-")
+            or (k8s.ns.name = "registry" and k8s.pod.name startswith "registry-pull-rotator-")
 
         # from rules/main (list)
         - list: grep_binaries
@@ -287,9 +391,12 @@ spec:
           condition: (evt.type in (open,openat,openat2) and evt.is_open_read=true and fd.typechar='d' and fd.num>=0)
 
         # from rules/incubating (list)
+        # OpenSSH >= 9.8 runs each connection as sshd-session, which reads authorized_keys; sshd
+        # alone misses every real login (measured 2026-10-01 00:32Z, /home/steve/.ssh/authorized_keys).
         - list: ssh_binaries
           items:
           - sshd
+          - sshd-session
           - sftp-server
           - ssh-agent
           - ssh
@@ -307,8 +414,11 @@ spec:
             '
 
         # from rules/incubating (macro)
+        # systemd-tmpfiles --clean opens /root/.ssh on its daily timer, parented by systemd: host
+        # maintenance, not a workload read (measured tc03 2026-10-01 04:47Z). Exempt by process only.
         - macro: user_known_read_ssh_information_activities
-          condition: (never_true)
+          condition: >
+            (proc.name startswith "systemd-tmpfile" and proc.pname = systemd and container.id = host)
 
         # from rules/incubating (macro)
         - macro: allowed_openshift_registry_root

@@ -92,15 +92,31 @@ already privileged; with it, the rule fires only for a privileged container that
 the signal worth having. `busybox` is deliberately not listed even though two init containers use it
 privileged: "privileged busybox" is exactly a shape an attacker would use.
 
-`user_known_contact_k8s_api_server_activities` (upstream: `never_true`) lists the API clients measured
-in this cluster - headlamp, the agent's own `ai-services` pod, the grafana `k8s-sidecar`, kyverno,
-kyverno's `kyverno-migrate-resources` hook Job and zot - matched on the image repository, not the
-process name, because a shell inside one of those pods keeps the image while `kubectl` as a name is
-exactly what the rule is for. The `ingress-blackbox` reconciler Job is the one client matched on
-namespace + pod name instead: it runs `docker.io/library/python`, and allow-listing that repository
-would exempt every python container in the cluster from the rule. That list is the result of a single
-sweep of every event this rule produced, not a client-at-a-time drip; see the known gaps for the
-window and the argument that the rule should be dropped outright.
+`user_known_contact_k8s_api_server_activities` (upstream: `never_true`) lists the API clients that
+exist to drive the API server here, as the list `known_k8s_api_clients` - matched on the image
+repository, not the process name, because a shell inside one of those pods keeps the image while
+`kubectl` as a name is exactly what the rule is for. It is not a hand-written roster: every entry is a
+workload measured in the live cluster to hold an explicit RBAC binding granting object-level API
+verbs - read from all 166 pods present on 2026-09-30 (138 running) and their ServiceAccount bindings:
+longhorn's manager and CSI sidecars, the flux/kyverno/cert-manager/ESO/crossplane controllers,
+traefik, metallb's frr-k8s, the ARC controller, zot, Grafana's `k8s-sidecar`, the prometheus
+config-reloader, kube-state-metrics, alloy, the kube-prometheus-stack admission hook,
+trivy-operator, headlamp and the agent. The roster is per image repository, so a vendor's init step
+needs its own entry: Kyverno's `kyvernopre` is a separate repository from its controllers and dials
+the API server only while a pod is initialising, which is how it survived both sweeps below.
+`k8s_containers` already excludes the whole `kube-system`
+namespace, so no kube-system image needs an entry. Longhorn's data-path images (engine,
+instance-manager, share-manager, livenessprobe, node-driver-registrar) are deliberately *not* listed:
+they talk to `longhorn-backend` on `10.152.183.60` and to the kubelet, not to the API server, and none
+of them appeared in the sweep. Two clients are matched on namespace + pod name instead of by image: the
+`ingress-blackbox` reconciler Job and `registry`'s `registry-pull-rotator` Job (daily at 04:17Z). Both
+run `docker.io/library/python`, and allow-listing that repository would exempt every python container in
+the cluster from the rule - the same shape applies to any other generic base image. Every entry is
+an infrastructure controller by construction, so what the rule
+still reports is a container that is not one of them: in practice the application namespaces (media,
+home-assistant, nodered, adsb, vpn, netalertx, meshtastic, speedtest, local-services, sso), which have
+no business dialling the API server at all. An unlisted container still fires. See the known gaps for
+both sweep windows and the argument that the rule should be dropped outright.
 
 CRITICAL (2) - reserved for indicators that are essentially never legitimate:
 
@@ -172,21 +188,35 @@ matches on).
 
 ## Known gaps / follow-ups
 
-- **`Contact K8S API Server From Container` is still the firehose.** Swept 2026-09-30 across the
-  entire window Loki holds for this namespace (07:48Z-14:46Z; falco was created 07:47Z, so a full day
-  of data does not exist yet): 1453 events, all of them this rule. Before #838 added the CRI socket
-  the container plugin enriched nothing, so `k8s.pod.name` and `container.image.repository` were null
-  and no allow-list could match: headlamp 302, the agent's own `kubectl` 405, grafana's `k8s-sidecar`
-  228, kyverno 208, zot 56, the ingress-blackbox reconciler 253. From 08:50Z, once enrichment
-  started, exactly two sources still fired - the reconciler's Jobs 216 and one
-  `kyverno-migrate-resources` hook Job - and both are in the allow-list now, so the list is complete
-  as of this sweep. It only holds while the container plugin enriches
-  `container.image.repository`, and the next legitimate API client will need another entry. The
-  structural point is that this cluster is default-deny, so "a container reached the API server"
-  restates the NetworkPolicy egress inventory rather than adding anything to it - every client that
-  *can* connect is one that was explicitly allowed to. On this evidence the rule should probably be
-  dropped from the curated set and the API-access question left to the NetworkPolicies; that decision
-  wants a full day of enriched data, and this sweep is the widest window available so far.
+- **An init container's image is a separate client, and both sweeps missed one.**
+  `reg.kyverno.io/kyverno/kyvernopre` (container `kyverno-pre`, process `kyverno-init`) fired on the
+  2026-10-01 02:58Z Kyverno restart - the one that followed the 00:43Z thinkcentre02 node event. This
+  is structural rather than an oversight: that container dials the API server only while a pod is
+  initialising, and no Kyverno pod started inside either sweep window, so no amount of sweeping the
+  same windows would have found it. Derive the client set from `spec.initContainers` as well as
+  `spec.containers` - one image per vendor per component is not the same as one image per vendor.
+- **`Contact K8S API Server From Container` is still the firehose, and the allow-list now carries the
+  cluster's whole API client set.** Swept twice on 2026-09-30. The first sweep (07:48Z-14:46Z, 1453
+  events, all this rule) predates CRI enrichment, so `k8s.pod.name` and
+  `container.image.repository` were null on everything before 08:50Z and no allow-list could match:
+  headlamp 302, the agent's own `kubectl` 405, grafana's `k8s-sidecar` 228, kyverno 208, zot 56, the
+  reconciler 253. The second sweep covered the widest window Loki holds (07:49Z-20:49Z, 1626 events)
+  and confirms enrichment is the only cut that matters - after 08:50Z the sources were the
+  reconciler's Jobs 252, longhorn's 1.13.0 rollout 176 (csi-provisioner 36, csi-resizer 18,
+  csi-attacher 3, csi-snapshotter 3, longhorn-manager plus its csi-plugin and driver-deployer
+  containers 134, post-upgrade Job 1), the kube-prometheus-stack admission hook 2 and one
+  `kyverno-migrate-resources` Job 1. The longhorn burst is what prompted the expansion: 17 alerts were
+  active at that moment, every one of them from `longhorn-system`. That list is now derived from RBAC
+  rather than from incidents (every entry provably exists to drive the API server), so it should stop
+  being a per-week drip - but it still depends on the plugin enriching
+  `container.image.repository`, and the next legitimate API client needs an entry. The structural
+  point is unchanged and stronger after the expansion: this cluster is default-deny, so "a container
+  reached the API server" restates the NetworkPolicy egress inventory rather than adding anything to
+  it - every client that *can* connect is one that was explicitly allowed to - and what the rule still
+  reports is a container that is not an infrastructure controller. On this evidence the rule should
+  probably be dropped from the curated set and the API-access question left to the NetworkPolicies;
+  that decision wants a full day of enriched data, and the 20:49Z sweep is the widest window available
+  so far.
 - **A pathological command line still cannot be paged.** Falco has no truncation operator, so a
   critical rule whose `output:` carries `%proc.cmdline` can be pushed over ntfy's size limit by a long
   command line - an attacker with a padded cmdline silences their own page. Projected from the same

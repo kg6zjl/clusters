@@ -29,7 +29,7 @@ spec:
           type: RuntimeDefault
       containers:
       - name: unpoller
-        image: ghcr.io/unpoller/unpoller:v5.2.10
+        image: ghcr.io/unpoller/unpoller:v5.4.0
         env:
         # UniFi OS proxies the Network app on 443; appending :8443 breaks login.
         - name: UP_UNIFI_DEFAULT_URL

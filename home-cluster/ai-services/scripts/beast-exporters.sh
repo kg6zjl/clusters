@@ -6,7 +6,7 @@ set -euo pipefail
 # See ai-services/README.md "Monitoring the GPU box" for details.
 
 # renovate: datasource=github-releases depName=prometheus/node_exporter
-NODE_EXPORTER_VERSION="1.8.2"
+NODE_EXPORTER_VERSION="1.12.1"
 # renovate: datasource=github-releases depName=utkuozdemir/nvidia_gpu_exporter
 GPU_EXPORTER_VERSION="1.15.1"
 NODE_IPS="192.168.1.144 192.168.1.175 192.168.1.121 192.168.1.146"

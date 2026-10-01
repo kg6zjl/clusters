@@ -1,0 +1,126 @@
+# Builds the Mermaid renderer used to produce the site's diagrams, and pushes it to the cluster
+# registry.
+#
+# Why an image at all: the agent runs in a pod with no internet egress, so it cannot npm install
+# anything at runtime. Anything that needs to render has to arrive as an image. This is the same
+# reason the runner image is built rather than assembled by hand.
+#
+# Kept out of ci.yaml on purpose, for the same reason as build-runner-image.yaml: this is a publish,
+# not a gate, and it must be able to fail without blocking a pull request that has nothing to do with
+# diagrams. main only, plus manual dispatch to get the first build out before anything depends on it.
+#
+# Nothing here is required to publish the site. The rendered SVGs are committed to site/assets/img/
+# and Pages uploads them as files, so a failure in this workflow delays a diagram change; it never
+# takes the site down.
+#
+# There is deliberately no CI check that the committed SVGs match their sources. It would be the
+# right thing, and it is not here yet: a stale-diagram gate means a docker build on every pull
+# request touching site/, and a flaky image pull then blocks merges of unrelated work. Until that can
+# be made reliable, the drift check is a person remembering to run `task diagrams` after editing a
+# .mmd. Add it here when it can fail safely.
+name: Build diagram renderer
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - documentation/site-diagrams/**
+      - .github/workflows/diagrams.yaml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ${{ vars.CI_RUNNER || 'self-hosted' }}  # CI_RUNNER repo variable overrides this
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Log in to the cluster registry
+        run: |
+          # Same identity and the same gotcha as build-runner-image.yaml: the username must not
+          # contain a colon, because Go's BasicAuth splits at the *first* colon and zot keys the
+          # identity off the token's `sub` claim anyway. Any colon-free value is correct.
+          docker login registry.kube.stevearnett.com \
+            -u github-runner \
+            --password-stdin < /var/run/secrets/registry.zot/token
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # Tagged by commit, never ":latest". A moving tag is what every pin in this repository is
+      # deliberately not, and a diagram that re-renders differently after someone pulls a moving tag
+      # is worse than no reproducibility at all.
+      - name: Build and push
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: documentation/site-diagrams
+          file: documentation/site-diagrams/Dockerfile
+          push: true
+          tags: registry.kube.stevearnett.com/site/mermaid-renderer:${{ github.sha }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/kg6zjl/clusters
+            org.opencontainers.image.revision=${{ github.sha }}
+
+      # Proves the image can actually render, which a successful build does not: a Chromium missing a
+      # shared library builds fine and fails on first use. Renders into a scratch directory, so this
+      # proves the pipeline without touching the committed output.
+      - name: Smoke-test the renderer
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/smoke"
+          docker run --rm \
+            -v "$PWD/documentation/site-diagrams/src:/src:ro" \
+            -v "$RUNNER_TEMP/smoke:/out" \
+            "registry.kube.stevearnett.com/site/mermaid-renderer@${{ steps.build.outputs.digest }}"
+          count=$(find "$RUNNER_TEMP/smoke" -name '*.svg' | wc -l | tr -d ' ')
+          echo "rendered $count diagram(s) into the scratch directory"
+          if [ "$count" -ne "$(ls documentation/site-diagrams/src/*.mmd | wc -l | tr -d ' ')" ]; then
+            echo "::error::the renderer produced a partial set - it must fail loudly, not quietly"
+            exit 1
+          fi
+
+      # The real staleness check: render the sources with the image just built and diff the result
+      # against what is committed. A mismatch means someone edited a .mmd and forgot `task diagrams`,
+      # and the diagram on the site now disagrees with the prose beside it.
+      #
+      # Report-only on purpose, for the reason at the top of this file: making it a required check
+      # would put a docker build on every pull request touching site/, and a flaky image pull would
+      # then block merges of unrelated work. This tells the author; it does not block them. Flip the
+      # last line to `exit 1` once it has been reliable for long enough to trust.
+      - name: Check the committed SVGs match the sources
+        run: |
+          set -uo pipefail
+          mkdir -p "$RUNNER_TEMP/fresh"
+          docker run --rm \
+            -v "$PWD/documentation/site-diagrams/src:/src:ro" \
+            -v "$RUNNER_TEMP/fresh:/out" \
+            "registry.kube.stevearnett.com/site/mermaid-renderer@${{ steps.build.outputs.digest }}"
+
+          status=0
+          for src in documentation/site-diagrams/src/*.mmd; do
+            name=$(basename "$src" .mmd)
+            committed="site/assets/img/$name.svg"
+            fresh="$RUNNER_TEMP/fresh/$name.svg"
+
+            [ -f "$committed" ] || { echo "::warning::$name.svg is not committed at all"; status=1; continue; }
+            [ -f "$fresh" ]     || { echo "::warning::$name.svg was not rendered"; status=1; continue; }
+
+            if diff -q "$fresh" "$committed" >/dev/null; then
+              echo "up to date  $name.svg"
+            else
+              echo "::warning::$name.svg is stale - run 'task diagrams' and commit the result"
+              status=1
+            fi
+          done
+
+          echo
+          if [ "$status" -ne 0 ]; then
+            echo "One or more diagrams are stale. This is a warning, not a gate."
+            echo "To fix: cd documentation/site-diagrams && task diagrams && commit site/assets/img/"
+          else
+            echo "every diagram source matches its committed SVG"
+          fi

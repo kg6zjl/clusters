@@ -37,7 +37,7 @@ spec:
     # it keeps running. If it stops, the Probes that already exist are still
     # scraped (IngressDown keeps working for known hosts) but a newly added ingress
     # is never probed and nothing else would say so. absent() is deliberate, for
-    # the same reason it is used in prometheus-rules.yaml: a plain staleness
+    # the same reason it is used in cronjob-health-alerts.yaml: a plain staleness
     # expression on a series that has disappeared goes quiet forever, which is the
     # exact failure this rule exists to catch.
     - alert: IngressProbeReconcilerStale

@@ -17,16 +17,52 @@ spec:
     createNamespace: true
     timeout: 15m
   upgrade:
-    # #848 overrides the chart's appVersion 10.11.8 with 10.11.11, a 690 MB image. Helm's
-    # default 5m action timeout is shorter than this link's cold pull: four attempts each sat
-    # in ContainerCreating past the deadline (kube-state-metrics 09:12Z and 09:20Z, phase
-    # Pending, reason ContainerCreating, never ErrImagePull), the rollout was killed mid-pull
-    # every time, and 10.11.11 ended up on no node at all. Raised so one cold pull can finish;
-    # the pull sticks to the node afterwards, so this only cost matters on the first rollout.
+    # Insurance for the cold 690 MB image the first Recreate rollout has to pull from scratch
+    # (see deploymentStrategy below); the rollout itself is no longer blocked. The earlier
+    # attempts were killed by the 5m default while wedged on a volume attach, not on the pull.
+    #
+    # force + serverSideApply:disabled are what actually let the strategy below land. The chart
+    # renders strategy.type but never strategy.rollingUpdate, so the live Deployment keeps the
+    # rollingUpdate block the API server defaulted at create time. Under server-side apply that
+    # field belongs to no manager, and apply cannot delete a field it does not own -- the upgrade
+    # is rejected with "spec.strategy.rollingUpdate: Forbidden: may not be specified when strategy
+    # 'type' is 'Recreate'" and Helm rolls straight back to 10.11.8. force tells the controller to
+    # replace the object instead of patching it, which sidesteps field ownership entirely; it needs
+    # serverSideApply off, because the two together are rejected as "cannot use force conflicts and
+    # force replace together". Safe here because this release owns no PVC: persistence.config points
+    # at the pre-created jellyfin-config-longhorn claim, and persistence.media is a hostPath, so the
+    # only kinds in the rendered manifest are Deployment, Service, ServiceAccount and ServiceMonitor
+    # -- none of which carry data through a replace.
+    force: true
+    serverSideApply: disabled
     remediation:
       retries: 3
     timeout: 15m
   values:
+    # The chart defaults deploymentStrategy: RollingUpdate while also defaulting replicaCount: 1,
+    # and the config claim is ReadWriteOnce. A rollout therefore starts the new pod while the old
+    # pod still holds the volume, and the attach controller refuses it on any other node:
+    #   Warning FailedAttachVolume Multi-Attach error for volume "pvc-c8bef3a5-..." Volume is
+    #   already used by pod(s) jellyfin-746894f97-gjh6m
+    # The new pod then sat in ContainerCreating until progressDeadlineSeconds: 600 marked the
+    # Deployment Failed and Flux rolled the release back. The mount never completed, so the
+    # image was never even pulled -- which is why no node had 10.11.11, and why a longer Helm
+    # timeout could not have helped. Recreate terminates the old pod first, which is the only
+    # correct strategy for a single replica on an RWO claim.
+    # This only reaches the cluster together with the upgrade.force above; on its own it is inert.
+    deploymentStrategy:
+      type: Recreate
+    # Measured over 14d: peak RSS 356 MiB idle, with spikes during library scans and transcodes.
+    # The memory limit is ~6x the idle peak to absorb 4K transcodes; the CPU request is the
+    # measured idle cost rather than the 0.035-core sampled peak, so an idle pod does not reserve
+    # a core, while the limit still lets a transcode saturate one when it needs to.
+    resources:
+      requests:
+        cpu: 200m
+        memory: 512Mi
+      limits:
+        cpu: "2"
+        memory: 2Gi
     image:
       # Chart 3.2.0 is the newest release in the jellyfin-helm repo (Apr 2026)
       # and its appVersion is pinned at 10.11.8, whose Debian 13.4 base carries

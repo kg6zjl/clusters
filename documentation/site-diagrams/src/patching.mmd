@@ -1,0 +1,39 @@
+flowchart TB
+%% Two different problems that people usually solve with one bad habit: logging in and running
+%% something. The hosts are machines with an operating system. The cluster is a set of pinned
+%% versions in a repository. Both are handled as code; neither is handled by a shell.
+%%
+%% The dashed arrow is the consequence that makes host reboots a dashboard annotation rather than
+%% a page — the patching mechanism is *designed* to restart nodes on a timetable, so a restart is
+%% the mechanism working rather than an incident.
+
+  subgraph hosts["The hosts — machines with an operating system"]
+    direction TB
+    playbooks["Ansible playbooks<br/>in the same repository"]
+    resolve["secrets resolved from the<br/>vault at run time,<br/>nothing lands in git"]
+    updates["unattended security updates"]
+    reboot["reboot one host at a time,<br/>ordered so control-plane<br/>quorum never drops"]
+    playbooks --> resolve --> updates --> reboot
+  end
+
+  subgraph manifests["The cluster — pinned versions in a repository"]
+    direction TB
+    renovate["Renovate<br/>checks hourly,<br/>one pull request per version"]
+    pins["chart versions, image tags,<br/>action versions, CLI pins<br/>— nothing floats on latest"]
+    renovate --> pins
+  end
+
+  pr["The same review queue<br/>required checks, then a human"]
+  fleet["The fleet, running<br/>the new version"]
+
+  hosts --> pr
+  manifests --> pr
+  pr -->|"merge"| fleet
+  fleet -.->|"a scheduled restart,<br/>not an incident"| reboot
+
+  note["Renovate proposes and never merges.<br/>A pin nobody merges simply stays pinned — that is the price<br/>of nothing quietly upgrading itself underneath you."]
+
+  renovate -.-> note
+
+  classDef gate fill:#121820,stroke:#71b7ff,stroke-width:2px,color:#e7edf3
+  class pr gate

@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Alerting: quiet enough to trust</title>
+<meta name="description" content="An alerting pipeline for a home cluster: two independent receivers, severity routing, an always-firing watchdog, declarative silences, and an agent that is the second responder rather than the pager.">
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<nav class="topnav">
+  <ul>
+    <li><a href="index.html">Why</a></li>
+    <li><a href="guardrails.html">Guardrails</a></li>
+    <li><a href="monitoring.html">Monitoring</a></li>
+    <li><a href="alerting.html" aria-current="page">Alerting</a></li>
+    <li><a href="workflow.html">The loop</a></li>
+    <li><a href="stack.html">The stack</a></li>
+  </ul>
+</nav>
+
+<header class="page-head">
+  <p class="eyebrow">Alerting</p>
+  <h1>An alerting pipeline is only worth having if you still read it</h1>
+  <p class="lede">
+    The hard part isn't sending an alert. It's making sure the one that arrives at 1am is worth getting
+    out of bed for.
+  </p>
+</header>
+
+<main>
+
+<section aria-labelledby="shape">
+  <h2 id="shape">The shape</h2>
+
+  <figure class="shot">
+    <img src="assets/img/alerting.svg" alt="A rule fires in git and goes to Alertmanager, which reaches a push notification for criticals, an alerts channel, and a security channel. Separately, once an hour and only for allow-listed alert names, an alert-detector posts to the agent, which investigates and opens a pull request, then replies in the alerts channel." width="960" height="918" loading="lazy">
+    <figcaption>
+      <strong>Two exits.</strong> One wakes me. The other only ever opens a pull request, so it lands
+      in the same review queue with the same human at the end of it — just started without me being
+      awake.
+    </figcaption>
+  </figure>
+
+  <p>
+    Rules are files in the repository, evaluated by Alertmanager. Routes, receivers and inhibit rules
+    are one reviewed object. A change to any of it is a pull request like everything else, which means
+    the alerting config has a history and a reviewer instead of being a thing someone fixed in a hurry.
+  </p>
+</section>
+
+<section aria-labelledby="channels">
+  <h2 id="channels">Where everything actually shows up</h2>
+  <p>
+    Discord is the entire human interface for this cluster. Not a dashboard I check — I would not
+    check it. Channels, each with a single job, so that a policy finding and a paging incident are
+    not sitting in the same thread arguing about what they mean.
+  </p>
+
+  <figure class="shot">
+    <img src="assets/img/discord.svg" alt="Four producers each holding one channel webhook: Alertmanager, Flux notifications, a GitHub webhook and CI. They post to an alerts channel, a security channel, a pull-requests channel, a flux-failures channel and a CI channel. The agent's token sidecar mints a short-lived App token for the container the model drives, which posts back to the alerts and pull-request channels." width="1459" height="810" loading="lazy">
+    <figcaption>
+      <strong>Four producers, four webhooks, one outbound identity.</strong> The asymmetry on the
+      right is the whole security argument for this page.
+    </figcaption>
+  </figure>
+
+  <ul>
+    <li><strong><code>#alerts</code></strong> — everything firing, every severity. The record, with
+      links to the graphs.</li>
+    <li><strong><code>#security</code></strong> — policy and scan findings. Separate because they
+      are not incidents, and because "the cluster is fine" and "the cluster is fine but something
+      was refused" are different sentences.</li>
+    <li><strong><code>#pull-requests</code></strong> — every change, from me and from the agent. The
+      place the loop is visible.</li>
+    <li><strong><code>#flux-failures</code></strong> — reconcile errors only, and only the ones
+      that don't heal themselves.</li>
+    <li><strong>A push notification</strong>, separately, for criticals only. Discord is where I read;
+      the phone is what wakes me up.</li>
+  </ul>
+
+  <div class="note">
+    <span class="label">Why a webhook is a good credential here</span>
+    <p>
+      Everything posting in holds one channel webhook and nothing else. A webhook can add a message
+      to the one channel it was created in: it cannot read history, cannot react, cannot join another
+      channel, and no API client anywhere holds it. There is one consequence worth knowing — a
+      channel webhook is permanently bound to its channel, so the security channel's webhook cannot be
+      swapped for the alerts channel's URL. That separation is a property of the credential, not a
+      routing rule somebody has to remember to maintain.
+    </p>
+  </div>
+  <p class="small">
+    The agent's way out is the opposite shape: one Discord App token, minted and re-minted hourly by a
+    sidecar the model's own container never holds. It can post, and that is very nearly all it can do.
+    The agent is <em>told</em> to reply in channel, and told never to merge — but the credential can't
+    merge either, so a prompt that gets talked out of the rule doesn't matter. A rule the model can be
+    argued out of is not a control.
+  </p>
+</section>
+
+<section aria-labelledby="receivers">
+  <h2 id="receivers">Severity decides who hears it</h2>
+  <p>
+    Warnings group. Criticals page. The two alert receivers are sibling routes with
+    <code>continue</code>, so each alert fans out to both independently and one dying doesn't silence
+    the other. When a receiver did break, that turned "paging is down" into "half of paging is down" —
+    a much smaller problem. The alert also names the leg that failed, so I don't have to deduce it
+    from silence.
+  </p>
+  <p>
+    If everything pages, nothing does. That is the whole discipline, and it is much easier to state
+    than to hold: every alert added here has to be one I would rather stop reading than miss.
+  </p>
+</section>
+
+<section aria-labelledby="deadman">
+  <h2 id="deadman">The alert that proves the pipeline works by firing</h2>
+  <p>
+    There's an alert that always fires. It isn't noise, it's a dead man's switch: its <em>absence</em>
+    is the signal that the rules stopped loading, the scrape died, or the pipeline can't deliver. Any
+    alerting system should have one, routed to a receiver you've proven works.
+  </p>
+  <p>
+    Silences follow the same rule. A mute that lives only in the Alertmanager API doesn't survive a
+    rebuild of the pipeline. If a maintenance window has to be declarative, it's a route in git matched
+    on every shape the host appears as, with a written reason and an expiry.
+  </p>
+</section>
+
+<section aria-labelledby="second">
+  <h2 id="second">The agent is the second responder, not the pager</h2>
+  <p>
+    The cluster can wake the agent on its own. A scheduled job reads what's currently firing from
+    Alertmanager and posts the new alerts to a webhook on the agent, signed, in-cluster only. It wakes
+    up knowing what broke, looks at the resources and logs involved, and answers in the channel. If
+    the fix is a manifest change, it opens a pull request and stops.
+  </p>
+  <p>
+    It can't be pushed to directly: Alertmanager can't sign an inbound request, so that job is the
+    sender, and it only ever forwards what Alertmanager itself is already firing. Nothing on the
+    network can hand the agent a task.
+  </p>
+  <p>
+    The controls on that path matter, because this is the thing that spends money:
+  </p>
+  <ul>
+    <li>
+      <strong>A short allow-list by alert name.</strong> Not a severity filter — a list of the alerts
+      where an unattended run is genuinely worth starting. Everything else still notifies me; it just
+      never spends an agent run.
+    </li>
+    <li>
+      <strong>An hourly poll, not every five minutes.</strong> The wake path isn't the paging path.
+      Every allow-listed alert already reaches my phone inside its own delay window, so the agent can
+      afford to be up to an hour behind.
+    </li>
+    <li>
+      <strong>A gate so a standing alert wakes it once.</strong> The lookback window is longer than the
+      schedule, so the same standing alert shows up in several polls in a row. A small key-value store
+      holds one key per announced alert, and without that dedupe gate one broken thing costs a run an
+      hour, forever.
+    </li>
+    <li>
+      <strong>A hard ceiling.</strong> At most one run per poll, and a daily cap on top of that. The
+      allow-list decides what is worth a run; the cap decides what it costs.
+    </li>
+  </ul>
+  <p class="small">
+    When that path first ran, it was the dominant cost, so it was turned off and rebuilt narrower
+    before being turned back on. The measurement that stopped it was the whole provider account for
+    24 hours, not this path.
+  </p>
+</section>
+
+<section aria-labelledby="hygiene">
+  <h2 id="hygiene">The habits that keep it trustworthy</h2>
+  <ul>
+    <li>
+      <strong>Exempt narrowly at the source.</strong> When a legitimate process trips a detection
+      rule, the exemption is scoped to that process, its parent, and the host. Never to a file path,
+      and never to an image name — a generic base image is a whole class of containers, and a path is
+      exactly what the attacker touches.
+    </li>
+    <li>
+      <strong>Measure a rule before you ship it, and check it can load.</strong> Every rule is
+      checked against real metric data, and a rule that can't fire gets deleted rather than admired.
+      Separately, the whole ruleset and routing tree are parsed before merge, because a config
+      rejected on reload doesn't break one route — it stops every notification in the cluster.
+    </li>
+    <li>
+      <strong>Notify once per problem.</strong> An alert is keyed on its own start time and announced
+      once, and a request carries an idempotency key so an overlapping poll is dropped rather than
+      doing the work twice.
+    </li>
+    <li>
+      <strong>Link every notification to the graph.</strong> One that doesn't link to something
+      actionable gets ignored at 1am, and fixing the link template pays out every single time it
+      fires.
+    </li>
+    <li>
+      <strong>Inhibit by cause.</strong> One root cause shouldn't produce nine alerts. When the cause
+      is already waving, the symptoms go quiet.
+    </li>
+  </ul>
+</section>
+
+<section aria-labelledby="quiet">
+  <h2 id="quiet">What I've decided is not an alert</h2>
+  <ul>
+    <li><strong>Reboots.</strong> The nodes patch weekly and restart. That's expected, so it's a
+      dashboard annotation, not a page. I removed the rule that would have fired every cycle.</li>
+    <li><strong>A host maintenance job touching an ssh directory.</strong> It's the operating system
+      doing housekeeping, and the exemption can't be the directory itself, or the interesting case
+      goes quiet too.</li>
+    <li><strong>Provider balance alarms for a home lab.</strong> Excluded by name from the wake path.
+      The rule still fires and still notifies; it just doesn't spend an agent run on a number I've
+      decided not to act on.</li>
+  </ul>
+  <p class="small">
+    Each of those is written down where the rule lives, with the date, so the next person to see the
+    alert doesn't re-litigate it.
+  </p>
+
+  <figure class="shot">
+    <div class="shot-pending" role="img" aria-label="Screenshot pending: a Discord channel showing a rolled-up Alertmanager notification, the severity, the affected workload, and a link to the graph.">
+      <span class="todo">Screenshot pending</span>
+      <code class="path">assets/img/shots/alert-channel.png</code>
+      <span class="hint">A rolled-up alert in the channel: title, severity, the affected workload, the
+        runbook-free description, and the link into the graph. This is what arrives at 1am, so it is
+        the thing that has to be readable on a phone.</span>
+    </div>
+    <figcaption>
+      <strong>A firing alert.</strong> One notification per problem, grouped, with a link to the graph
+      — an alert that doesn't link to something actionable gets ignored.
+    </figcaption>
+  </figure>
+</section>
+
+</main>
+
+<footer>
+  <div class="wrap">
+    <p><a href="monitoring.html">← Monitoring</a> · <a href="workflow.html">The loop →</a></p>
+  </div>
+</footer>
+</body>
+</html>

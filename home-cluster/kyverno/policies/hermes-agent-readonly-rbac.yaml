@@ -19,22 +19,15 @@ spec:
   # existing ClusterRole hermes-agent and ClusterRoleBinding hermes-agent are
   # re-checked on every scan, not only when someone writes them.
   background: true
-  # ROLLOUT STATE: Audit. Violations are reported in a ClusterPolicyReport, not
-  # blocked. The flip to Enforce (validate.failureAction: Enforce on all three
-  # rules AND webhookConfiguration.failurePolicy: Fail) is the deliberate
-  # follow-up once the live ClusterPolicyReport shows the expected zero
-  # violations; see the PR body for the exact check and commands.
-  #
-  # failurePolicy at Enforce time is Fail on purpose: this rule set matches only
-  # RBAC objects (Role/ClusterRole/RoleBinding/ClusterRoleBinding), so a Kyverno
-  # outage fails closed on privilege changes without blocking ordinary workload
-  # admission, Secret creation or Flux's applies of anything else. That narrow
-  # blast radius is what makes Fail defensible here.
+  # ROLLOUT STATE: Enforce, since 2026-10-01. The precondition was checked first, from
+  # Kyverno's own result counters over 24h: pass 247 on both rules that should pass,
+  # fail 0, error 0, and no ClusterPolicyReport existed (Kyverno deletes an empty one).
   webhookConfiguration:
-    # Ignore while in Audit: an Audit policy that Fails closed would let a Kyverno
-    # outage block RBAC admission for no security benefit, because Audit does not
-    # block anything anyway. This becomes Fail together with the Enforce flip.
-    failurePolicy: Ignore
+    # Fail is defensible because these rules match RBAC objects only: a Kyverno outage
+    # fails closed on privilege changes and blocks nothing else - not workload
+    # admission, not Secret writes, not Flux applying any other resource. Roll back by
+    # setting this to Ignore and the three failureAction fields to Audit.
+    failurePolicy: Fail
   rules:
     - name: agent-clusterrole-readonly
       match:
@@ -49,7 +42,7 @@ spec:
             value:
               - hermes-agent*
       validate:
-        failureAction: Audit
+        failureAction: Enforce
         message: >-
           ClusterRole '{{ request.object.metadata.name }}' is part of the read-only
           identity for system:serviceaccount:ai-services:hermes-agent and may only
@@ -76,7 +69,7 @@ spec:
             value:
               - hermes-agent*
       validate:
-        failureAction: Audit
+        failureAction: Enforce
         message: >-
           Role '{{ request.object.metadata.name }}' shares the read-only identity
           naming convention for system:serviceaccount:ai-services:hermes-agent and
@@ -104,7 +97,7 @@ spec:
             value:
               - ai-services
       validate:
-        failureAction: Audit
+        failureAction: Enforce
         message: >-
           system:serviceaccount:ai-services:hermes-agent may only be bound to the
           read-only ClusterRoles 'hermes-agent' or 'view'. This binding grants it

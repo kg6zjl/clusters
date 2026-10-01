@@ -112,9 +112,10 @@ data:
         extra:
           port: 8644
           # Backstop, not throughput. The detector posts at most one batched wake per poll
-          # (12/hour) and the leak route is event-driven; the adapter's default is 30/min per
-          # route, which is far more agent runs than a looping or rogue sender should be able
-          # to buy. Exceeding this answers 429 instead of starting work.
+          # (1/hour, and at most MAX_WAKES_PER_DAY per day) and the leak route is event-driven;
+          # the adapter's default is 30/min per route, which is far more agent runs than a
+          # looping or rogue sender should be able to buy. Exceeding this answers 429 instead
+          # of starting work.
           rate_limit: 6
           # Every route's prompt OPENS with a trigger banner naming the class and the sender, so a
           # wake is self-identifying: the run, the session log and Discord all say which path fired

@@ -1,0 +1,100 @@
+# Dedupe gate for the alert-detector wake path (see alert-detector-cronjob.yaml). The
+# detector asks for a key per (fingerprint, start time) before it posts and records it only
+# after a 2xx; without this, an hourly run against a longer-than-schedule lookback would
+# re-announce every standing alert every hour. The gateway adapter's own idempotency cache
+# is exactly one hour, so it expires at the next poll and cannot do the job.
+#
+# 1 replica, emptyDir, no PVC: the store is a 7-day TTL of a few hundred keys, so losing it
+# on a restart costs at most one duplicate POST of an already-seen alert set. A Longhorn
+# volume would add a node-pinning dependency for state that expires in a week.
+#
+# Lives in ai-services rather than its own namespace, which would need a Kustomization in
+# flux-system/syncs/ for one stateless replica. Accepted limitation: ai-services-allow-egress
+# permits all pod-to-pod egress and NetworkPolicy unions cannot subtract, so this pod's egress
+# is not narrow.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis
+  namespace: ai-services
+  labels:
+    app: redis
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 999
+        runAsGroup: 999
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+      - name: redis
+        image: redis:7-alpine
+        # noeviction on purpose: a full store fails loudly rather than evicting a key and
+        # re-waking the agent for an alert it has already announced.
+        args:
+        - --save
+        - ""
+        - --appendonly
+        - "no"
+        - --maxmemory
+        - 48mb
+        - --maxmemory-policy
+        - noeviction
+        ports:
+        - name: redis
+          containerPort: 6379
+        readinessProbe:
+          tcpSocket:
+            port: redis
+          initialDelaySeconds: 2
+          periodSeconds: 10
+        livenessProbe:
+          tcpSocket:
+            port: redis
+          initialDelaySeconds: 10
+          periodSeconds: 30
+        resources:
+          requests:
+            cpu: 10m
+            memory: 16Mi
+          limits:
+            cpu: 100m
+            memory: 64Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+        volumeMounts:
+        - name: data
+          mountPath: /data
+      volumes:
+      - name: data
+        emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+  namespace: ai-services
+  labels:
+    app: redis
+spec:
+  selector:
+    app: redis
+  ports:
+  - name: redis
+    port: 6379
+    targetPort: redis

@@ -31,7 +31,7 @@ spec:
   #
   # This suppresses the message, not the fault. If the datastore keeps failing, the
   # effect is caught with hysteresis by ApiserverWriteErrorsSustained in
-  # home-cluster/monitoring/prometheus-rules.yaml. The pattern is deliberately narrow
+  # home-cluster/monitoring/control-plane-write-alerts.yaml. The pattern is deliberately narrow
   # so that every other failure still notifies immediately - add a pattern here only
   # after checking the same way that it heals on its own.
   exclusionList:

@@ -402,3 +402,92 @@ needed.
   afterwards — deleting the CRDs destroys every Longhorn CR in the cluster.
 - The `install`/`upgrade` timeouts in `longhorn-helmrelease.yaml` are 15m, not
   Flux's 5m default, precisely so a cold install cannot trip this path.
+
+## 8. Known failure mode: a stale Longhorn mount wedges the pod in `Init:0/1`
+
+**Symptom**
+
+A pod that owns a `longhorn` PVC sits in `Init:0/1` (or `ContainerCreating`)
+with no IP, and its events loop on:
+
+```
+MountVolume.MountDevice failed for volume "pvc-<uuid>" : rpc error: code = Internal
+desc = mount failed: exit status 32
+  Mounting command: mount
+  Mounting arguments: -t ext4 -o defaults /dev/longhorn/pvc-<uuid> <...>/globalmount
+  Output: mount: <...>/globalmount: /dev/longhorn/pvc-<uuid> already mounted or mount point busy.
+```
+
+Longhorn itself looks perfectly healthy, which is what makes this confusing:
+
+```bash
+# [READ-ONLY] all of these report healthy:
+kubectl get volumes.longhorn.io -n longhorn-system pvc-<uuid>   # attached / healthy
+kubectl get engines.longhorn.io  -n longhorn-system             # running
+kubectl get replicas.longhorn.io -n longhorn-system             # running
+```
+
+**Mechanism**
+
+1. A pod mounts the volume and its engine later restarts or migrates to another
+   node (node drain, engine restart, a stuck rollout). Longhorn tears the engine
+   down and re-creates the iSCSI device — often reusing the **same `8:32` minor**.
+2. The kubelet's node-level ("global") mount of the *old* device inode is left
+   behind, still pinning the CSI `globalmount` staging directory.
+3. Every subsequent `NodeStageVolume` retries `mount` against the re-created
+   device and gets `EBUSY`, because the staging path is already busy. This does
+   **not** self-heal and does **not** clear on pod recreation.
+
+**Distinguishing this from a stale `Recreate` rollout** — check the events:
+
+| Event | Meaning |
+|---|---|
+| `FailedAttachVolume` | volume not attached to the pod's node yet — the RWO deadlock |
+| `FailedMount ... already mounted or mount point busy` | this failure mode — engine is fine, node-side mount leaked |
+
+**Recovery** — this is a **host filesystem operation** and needs root on the node.
+It cannot be fixed by a manifest change and is not something the agent can do
+(`sudo` on these nodes requires a password; host changes also go through Ansible
+per `AGENTS.md`).
+
+```bash
+# [OPERATOR] On the node the pod is scheduled to. Find it with:
+#   kubectl get pod <pod> -n <ns> -o wide
+# Confirm the engine is healthy first (if it is not, fix the engine instead —
+# restarting longhorn-manager on that node also releases the device):
+#   kubectl -n longhorn-system get pods -o wide | grep longhorn-manager
+
+# 1. See what is actually holding the path (expect an entry pointing at the old device):
+sudo findmnt -t ext4 | grep <pvc-uuid>
+
+# 2. Release it. If it is genuinely busy (a live pod still using the volume),
+#    stop that pod FIRST or you will corrupt it — umount -l on a live mount
+#    tears an in-use filesystem out from under the process:
+sudo umount <...>/globalmount          # add -l only if plain umount reports busy
+sudo umount -l <...>/globalmount       # last resort: lazy unmount
+
+# 3. The kubelet retries NodeStageVolume on its own and the pod starts.
+#    Verify:
+kubectl get pod <pod> -n <ns> -o wide   # expect an IP and 1/1
+```
+
+**Prefer the cleaner path when you can:** restarting the `longhorn-manager`
+DaemonSet pod on the affected node (or the volume's `instance-manager` pod)
+stops the engine, which releases the device and lets Longhorn recreate it —
+without hand-editing the mount table:
+
+```bash
+# [OPERATOR] only safe when no live pod is using the volume on that node:
+kubectl -n longhorn-system delete pod -l app=longhorn-manager --field-selector spec.nodeName=<node>
+```
+
+**Two rules that follow from this:**
+
+- The **real** root cause of a stuck rollout is usually a single-replica
+  `Deployment` on an RWO claim with `strategy: RollingUpdate` — the surge pod
+  cannot multi-attach and the old pod is never released (`maxUnavailable: 25%`
+  of 1 replica floors to 0). All such workloads use `strategy: Recreate`. See
+  §9 for the non-obvious SSA trap in flipping an existing object to that.
+- Do not "fix" a wedged pod by deleting it. If the pod's mount is stuck on a
+  leaked node-side mount, a fresh pod fails identically — check the event reason
+  (`FailedAttachVolume` vs `FailedMount`) before recreating anything.

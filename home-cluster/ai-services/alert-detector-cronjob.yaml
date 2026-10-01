@@ -1,21 +1,32 @@
 # Wakes the agent when the cluster is already broken. Alertmanager cannot sign an inbound
 # HMAC itself (its webhook_configs have no headers field), so it cannot POST to the agent
 # directly; this is the sender that can. It reads the firing alerts out of Alertmanager and
-# re-posts them to the webhook route, signed.
+# re-posts the ones the allow-list admits to the webhook route, signed.
 #
-# Pull rather than push, deliberately: the alert's own start time decides what is new, so
-# one poll produces at most one agent run, an alert is announced once, and nothing has to
-# be remembered in a pod that is recreated every five minutes. The cost of that choice is
-# latency - the agent wakes within one poll interval, not within seconds.
+# Pull rather than push, deliberately: the alert's own start time decides what is new. It runs
+# HOURLY (0 * * * *), not every five minutes. The wake path is not the paging path - every
+# allow-listed alert already notifies the human on Discord/ntfy inside its own `for:` window,
+# so the agent is the second responder and up to ~65 minutes of latency is accepted in
+# exchange for a hard cap of <=24 runs/day.
 #
-# Severity filter is "critical" only. Widen ALERT_SEVERITIES to include warnings when the
-# agent's investigation is worth more than the extra runs it will start.
+# What keeps the run count low is ALERT_INCLUDE_ALERTNAMES, not the schedule: on 2026-09-30
+# only 1 of the previous 28 wakes would have passed this list (the rest were Trivy, IngressDown,
+# Alertmanager-notification and synthetic self-tests). Severity (critical only) and
+# ALERT_EXCLUDE_ALERTNAMES (the OpenRouter balance/spend class, by the user's decision) stay as
+# defence in depth on either side of it.
 #
-# ALERT_EXCLUDE_ALERTNAMES is the other half of the filter: a name listed there never wakes
-# the agent whatever its severity. The OpenRouter balance/spend class is in it by the user's
-# decision (2026-09-30) - this is a home lab and the remaining balance is noise, not a thing
-# to act on. The rules, the metric and the ntfy/Discord routes are untouched; only this path
-# is deaf to them.
+# LOOKBACK_SECONDS is longer than the schedule ON PURPOSE, so a delayed or skipped run is still
+# covered. That means the same standing alert is seen by many consecutive polls; the Redis
+# dedupe gate in detector.py is what stops each one waking the agent. Without it the gateway
+# adapter's idempotency cache (exactly one hour) would expire at the next poll and a standing
+# alert would wake the agent every single hour.
+#
+# Suspended 2026-09-30 (t_b53be70a) because alert-driven wakes were the dominant API cost;
+# re-enabled here as this narrower, slower, gated design (t_0055eeec). The "11.51 USD in 24h"
+# that triggered the suspension is openrouter_account_usage_total - the WHOLE account, read with
+# the management key's /credits - not this path; the recorded webhook sessions were ~1.58 USD of
+# it. Cost control therefore lives here, in the filters and the schedule. The agent's own
+# deployment is not the lever, and is deliberately not touched by this change.
 apiVersion: batch/v1
 kind: CronJob
 metadata:
@@ -24,7 +35,8 @@ metadata:
   labels:
     app: alert-detector
 spec:
-  schedule: "*/5 * * * *"
+  suspend: false
+  schedule: "0 * * * *"
   concurrencyPolicy: Forbid
   startingDeadlineSeconds: 120
   successfulJobsHistoryLimit: 3
@@ -47,7 +59,7 @@ spec:
               type: RuntimeDefault
           containers:
           - name: detector
-            image: python:3.13-slim
+            image: python:3.14-slim
             command: ["python", "/app/detector.py"]
             env:
             - name: ALERTS_URL
@@ -61,18 +73,55 @@ spec:
               value: "https://alerts.kube.stevearnett.com"
             - name: ALERT_SEVERITIES
               value: "critical"
-            # The OpenRouter balance/spend class, by alertname. Comma-separated, exact match;
-            # see the note at the top of this file. Keep in step with the openrouter group in
-            # monitoring/prometheus-rules.yaml when an alert there is added or renamed.
+            # THE COST LEVER. Comma-separated, exact match; empty = no include filter. Only
+            # these names wake the agent. Each must be one an unattended read-only-plus-PR run
+            # can investigate into something actionable - not merely "serious". Widening it is
+            # a one-line change here; adding a name is cheap, a name that fires constantly is
+            # not. Keep in step with the rule names in monitoring/prometheus-rules.yaml.
+            #   ProdServiceDown         - app pods down; logs/events/Flux status -> rollback/PR
+            #   CIRunnerPoolEmpty       - frozen CI pool; runner deployment investigation
+            #   PrometheusBadConfig     - one bad expression silences a whole rule file
+            #   PrometheusRuleFailures  - same class: the rule that cannot evaluate
+            #   LonghornVolumeSpaceFull - name the PVC consumer, PR a persistence.size bump
+            - name: ALERT_INCLUDE_ALERTNAMES
+              value: "ProdServiceDown,CIRunnerPoolEmpty,PrometheusBadConfig,PrometheusRuleFailures,LonghornVolumeSpaceFull"
+            # The OpenRouter balance/spend class, by alertname. Second line of defence behind
+            # the allow-list; see the note at the top of this file. Keep in step with the
+            # openrouter group in monitoring/prometheus-rules.yaml when an alert there is added
+            # or renamed.
             - name: ALERT_EXCLUDE_ALERTNAMES
               value: "OpenRouterCreditLow,OpenRouterCreditExhausted,OpenRouterAccountBalanceLow,OpenRouterAccountBalanceCritical,OpenRouterBalanceDepletionImminent,OpenRouterBurnRateHigh,OpenRouterDailySpendHigh"
-            # Longer than the 5m schedule on purpose: an alert is then covered even if one
-            # run is delayed, and the duplicate it may produce is dropped by the adapter's
-            # idempotency key rather than starting a second run.
+            # Label-aware exclusion, for a class that is unfixable for one target rather
+            # than for all of them: comma-separated name=value pairs, every one of which
+            # must be present on the alert for it to be dropped. E.g.
+            # "alertname=TrivyCriticalVulnerability,image_repository=coredns/coredns" leaves
+            # every other Trivy alert waking the agent. Empty = no label-based exclusion.
+            - name: ALERT_EXCLUDE_LABELS
+              value: ""
+            # 65 min = the hourly schedule + 300s slack, so a delayed or skipped run is still
+            # covered. Longer than the schedule on purpose: the duplicate that produces is what
+            # the Redis dedupe gate drops. A 420s lookback with an hourly run would ignore most
+            # of every hour.
             - name: LOOKBACK_SECONDS
-              value: "420"
+              value: "3900"
             - name: MAX_ALERTS
               value: "20"
+            # Redis dedupe gate. Keys are set only after a 2xx and expire after 7 days, so a
+            # long-running alert instance is announced once and the store stays small. Redis
+            # unreachable makes the run exit 1 without posting (fail closed) - the human is
+            # still paged by the normal routes.
+            - name: REDIS_HOST
+              value: "redis.ai-services.svc.cluster.local"
+            - name: REDIS_PORT
+              value: "6379"
+            - name: REDIS_TIMEOUT_SECONDS
+              value: "5"
+            - name: DEDUPE_TTL_SECONDS
+              value: "604800"
+            # Spend ceiling: at most one wake per UTC day, whatever the allow-list sees. The
+            # allow-list decides what is worth a run; this decides what it costs.
+            - name: MAX_WAKES_PER_DAY
+              value: "1"
             - name: PYTHONDONTWRITEBYTECODE
               value: "1"
             - name: WEBHOOK_SECRET

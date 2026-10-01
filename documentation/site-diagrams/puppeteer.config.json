@@ -1,0 +1,4 @@
+{
+  "$comment": "Chromium will not start as root without --no-sandbox, and this container runs as root. The image renders trusted, in-repo .mmd files, never untrusted input, so the sandbox buys nothing here and costs the whole render. Anything else means running the container as a non-root user, which then needs the bind-mounted output directory to be writable by that uid -- a fiddliness that buys a stronger sandbox against inputs nobody else can write.",
+  "args": ["--no-sandbox", "--disable-setuid-sandbox"]
+}

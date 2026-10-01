@@ -3,36 +3,28 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>The loop: from a problem to a merged change</title>
-<meta name="description" content="The mechanics of an agent-driven GitOps loop: fresh worktree, rebase before pushing, required checks, human merge, verifying the reconcile, and the failure modes that waste an afternoon.">
+<title>The loop: a pull request is the only write path</title>
+<meta name="description" content="How a change reaches a GitOps cluster: branch, commit, required checks on runner pods in the same cluster, human merge, Flux reconcile. Plus Renovate proposing version bumps and an agent that may never merge its own infrastructure changes.">
 <link rel="stylesheet" href="assets/style.css">
 </head>
 <body>
 <nav class="topnav">
   <ul>
-    <li><a href="index.html">The model</a></li>
-    <li><a href="architecture.html">Architecture</a></li>
-    <li><a href="limits.html">Permissions</a></li>
-    <li><a href="network.html">Network</a></li>
-    <li><a href="state.html">State &amp; storage</a></li>
-    <li><a href="skills.html">Skills</a></li>
+    <li><a href="index.html">Why</a></li>
+    <li><a href="guardrails.html">Guardrails</a></li>
+    <li><a href="monitoring.html">Monitoring</a></li>
+    <li><a href="alerting.html">Alerting</a></li>
     <li><a href="workflow.html" aria-current="page">The loop</a></li>
-    <li><a href="secrets.html">Secrets</a></li>
-    <li><a href="paging.html">Paging</a></li>
-    <li><a href="runners.html">Runners</a></li>
-    <li><a href="interesting.html">Interesting bits</a></li>
-    <li><a href="proud.html">Proud of</a></li>
-    <li><a href="checklist.html">Build your own</a></li>
+    <li><a href="stack.html">The stack</a></li>
   </ul>
 </nav>
 
 <header class="page-head">
-  <p class="eyebrow">Boundary 5</p>
-  <h1>The loop: from a problem to a merged change</h1>
+  <p class="eyebrow">The loop</p>
+  <h1>A pull request is the only way anything changes</h1>
   <p class="lede">
-    Reading the cluster is where the agent's authority ends. Everything it changes goes through the
-    same path a human's change does, and the path has more steps than it looks like from the outside
-    — which is why the mechanics are worth writing down until they are automatic.
+    Including for me. There's no apply, no patch, no "just this once" — because the moment there is,
+    the rest of this stops being true.
   </p>
 </header>
 
@@ -40,108 +32,136 @@
 
 <section aria-labelledby="loop">
   <h2 id="loop">The loop</h2>
-  <pre><code>diagnose  →  fresh worktree from main  →  branch  →  commit  →  push  →  PR
-   ↑                                                                       ↓
-verify the object in the cluster  ←  reconcile  ←  merge (human)  ←  required checks</code></pre>
-  <ol>
-    <li><strong>Diagnose from the cluster, not from the repository.</strong> Read the actual state:
-      the object, its status, the log, the event, the metric. A change written from memory is a guess
-      with a review attached.</li>
-    <li><strong>Start a fresh worktree off the current main.</strong> Every time. A stale base has
-      produced duplicate pull requests and, worse, merges that reintroduced bugs somebody had already
-      fixed.</li>
-    <li><strong>Change the smallest thing that solves the problem</strong>, and let the diff be
-      readable: one concern per pull request, the reason in the commit message, the evidence in the
-      description.</li>
-    <li><strong>Push and open the pull request.</strong> Then watch the required checks, because they
-      are the only thing standing between the idea and the cluster.</li>
-    <li><strong>Merge is the human's call</strong> for the cluster repository. For the agent's own
-      skills repository it may be the agent's — which is a decision worth making explicitly rather
-      than discovering by accident.</li>
-    <li><strong>Wait for the reconcile, then verify the object.</strong> "Merged" is not "applied".
-      The check is the resource's own state — revision, condition, replica count — not the merge
-      commit.</li>
-    <li><strong>Clean up after yourself.</strong> Remove the worktree, and delete the temporary file
-      you added for a one-off inspection so the controller prunes the object it created.</li>
-  </ol>
+
+  <figure class="shot">
+    <img src="assets/img/loop.svg" alt="Flow diagram: something breaks or a version moves, a branch and commit are made by either me or Hermes, a pull request is opened, required checks run and loop back on failure, a decision asks who merges, a human always merges the cluster repository, then Flux reconciles and the new state is attributable to a commit." width="822" height="1096" loading="lazy">
+    <figcaption>
+      <strong>The whole loop.</strong> The dashed path is the design: the agent's pull request lands in
+      the same queue as mine, so "it wrote the fix" and "a human approved the fix" stay two separate
+      events.
+    </figcaption>
+  </figure>
+
+  <p>
+    Flux watches the repository, renders the manifests and applies them. Each top-level path is one
+    reconciliation unit with its own interval and health checks. Failure is alerted on the outcome —
+    still not ready after fifteen minutes — rather than on every attempt, because a controller that
+    retries is working, not broken.
+  </p>
+  <p>
+    The runners that test the repository are pods in the cluster the repository describes, spawned by
+    the Actions Runner Controller and discarded after the job. A bad change can break the thing that
+    validates the next change. The pipeline is tested against reality, not a hosted runner with
+    different network rules than production.
+  </p>
 </section>
 
-<section aria-labelledby="friction">
-  <h2 id="friction">Where the loop actually costs you time</h2>
+<section aria-labelledby="split">
+  <h2 id="split">Who may merge what</h2>
   <p>
-    These are the failures that turn a ten-minute change into an hour. All of them are mechanical,
-    which is exactly why they belong in a runbook rather than in someone's memory:
+    The agent can open pull requests anywhere it has access. It may merge its <em>own</em> skills
+    repository, because that's its own knowledge and reviewing every line of my own notes would grind
+    the loop to a halt. It may not merge the cluster repository. That's mine.
   </p>
+  <p>
+    It's also not my account doing the pushing. Its identity is its own app installation, so the author
+    and the reviewer are genuinely different identities, and the commit history says which one did
+    what. Before that change, "the agent opened this" and "I opened this" were indistinguishable.
+  </p>
+  <div class="note">
+    <span class="label">Why the split matters more than the tooling</span>
+    <p>
+      An agent that can merge its own infrastructure changes is an agent that can authorise its own
+      widening. The one thing it must never be able to do is approve the change that gives it more
+      room. That's why the admission policies on its identity exist as well as the merge rule: two
+      independent ways of saying no.
+    </p>
+  </div>
+
+  <figure class="shot">
+    <div class="shot-pending" role="img" aria-label="Screenshot pending: a pull request opened by the agent, showing the app identity as the author and the required checks passing.">
+      <span class="todo">Screenshot pending</span>
+      <code class="path">assets/img/shots/agent-pr.png</code>
+      <span class="hint">A pull request opened by the agent. The thing to capture is the
+        <em>author</em> — it shows the app identity, not your account — plus the checks going green
+        and the merge button being yours.</span>
+    </div>
+    <figcaption>
+      <strong>The agent's pull request.</strong> A different identity from the reviewer. That single
+      detail is what makes the commit history evidence rather than a story.
+    </figcaption>
+  </figure>
+</section>
+
+<section aria-labelledby="unattended">
+  <h2 id="unattended">The unattended version of the loop</h2>
+  <p>
+    When an alert wakes it, the loop is: read the alert, look at the resources and logs involved,
+    answer in the notification channel, and — if a manifest change is the fix — open a pull request and
+    stop. It runs with exactly the same access as any other session, so the worst an unattended run can
+    do is investigate and talk. The merge waits for the human who was asleep.
+  </p>
+  <p>
+    The prompt says so, and the credential can't do it anyway. A rule the model can be talked out of is
+    not a control.
+  </p>
+</section>
+
+<section aria-labelledby="papercuts">
+  <h2 id="papercuts">The mechanics that waste an afternoon</h2>
   <ul>
     <li>
-      <strong>"Required status checks are expected" on merge.</strong> The branch is behind the base
-      branch: the checks have to run again against the new base before the merge will be accepted.
-      Rebase onto the current main and push; do not fight it.
+      <strong>CI filters by path.</strong> If the repository's check workflow doesn't watch the
+      directory you changed, no check attaches to your pull request and it reads as blocked forever.
+      "Wait for CI" becomes an infinite wait, and the fix is to widen the filter in its own change —
+      never to smuggle an unrelated file into the pull request to trip it.
     </li>
     <li>
-      <strong>A force-push that "stale info" refuses.</strong> A lease on a branch the local clone has
-      never fetched fails before it starts. Fetch the branch, read its current commit, and pass that
-      explicitly as the lease — or rebase and do an ordinary push.
+      <strong>A narrowly scoped token can't touch its own pipeline.</strong> An app installation that
+      can push code still can't push a workflow file without an extra permission, which is the correct
+      default and a confusing error. Sometimes the honest answer is "this one needs a human".
     </li>
     <li>
-      <strong>A required check that fails for everybody.</strong> When the pipeline itself is broken,
-      every pull request is blocked, including the one that would fix the problem. Fix the pipeline
-      first, in its own change, then rebase your work on top. Chasing a red check across an unrelated
-      diff is pure waste.
+      <strong>One risk per command.</strong> Bundling several checks into one shell line trains
+      whoever is reading to approve without reading. Splitting them is slower and that's the point.
     </li>
     <li>
-      <strong>A pre-commit hook that refuses to commit on a stale branch.</strong> The hook is right.
-      Stash, rebase, restore, commit — in that order, and expect to do it more than once.
-    </li>
-    <li>
-      <strong>An action that runs on the pull request but only works on main.</strong> Deployment
-      workflows must be scoped so they do not run on a pull request, and checks that gate a merge must
-      not depend on something that cannot happen before the merge.
-    </li>
-    <li>
-      <strong>A change to a workflow file that the agent cannot push.</strong> The App deliberately has
-      no Workflows permission, so a PR that edits CI is rejected at push time. Either make the edit by
-      hand or grant the permission on purpose — knowing it lets the App change the checks that gate it.
+      <strong>Read the manifests, not the memory.</strong> Half the wrong statements in a document come
+      from describing what something did last month. The repository is what's true. A checkout that's
+      a week behind is a source of confident nonsense.
     </li>
   </ul>
 </section>
 
-<section aria-labelledby="evidence">
-  <h2 id="evidence">What "done" means here</h2>
-  <ul>
-    <li><strong>Merged and verified.</strong> The pull request's merge commit, and then the object in
-      the cluster showing the new state. Both, in that order.</li>
-    <li><strong>No leftovers.</strong> Temporary Jobs deleted from the repository after their logs are
-      read, worktrees removed, branches deleted by the merge.</li>
-    <li><strong>The evidence quoted, not paraphrased.</strong> The check's actual output, the log line
-      with its timestamp, the revision the controller says it applied. An agent's summary of its own
-      success is a claim; the cluster's state is the fact.</li>
-    <li><strong>Assumptions labelled.</strong> "I could not verify X because Y" is a complete and
-      useful answer. A confident guess is not.</li>
-  </ul>
-</section>
-
-<section aria-labelledby="guardrails">
-  <h2 id="guardrails">Guardrails are the point, not the friction</h2>
+<section aria-labelledby="skills">
+  <h2 id="skills">Its knowledge is versioned too</h2>
   <p>
-    The honest note from the humans in this setup, worth repeating because it is the opposite of the
-    usual complaint: getting to work inside a system that refuses to let you poke the cluster directly
-    is <em>better</em>. The review gate is why an agent can be given real reach at all. The friction
-    worth removing is not the gate — it is the mechanical noise around it: prompts for commands that
-    are obviously read-only, and pipeline failures unrelated to the change.
+    The agent doesn't carry a personality file it was born with. It loads task-specific skills — how to
+    triage a stuck pod, how the alerting tree is shaped, how to publish this site — from files in a
+    repository, on demand. Each is a short document with the actual commands and the mistakes that cost
+    time.
   </p>
-  <p class="small">
-    Two rules keep the gate honest. Keep the number of approved one-off privileged actions small
-    enough that each one gets read. And never let the agent change its own tooling without approval —
-    see <a href="state.html">the failure mode with no self-repair</a>.
+  <p>
+    When a task teaches it something, it updates the skill and commits that, in the same session. That's
+    where most of the lessons on this site came from: something broke, the fix went in the repository,
+    and the next session starts already knowing.
   </p>
+  <div class="note">
+    <span class="label">The diagrams on this site are written the same way</span>
+    <p>
+      Every figure here is a Mermaid source file in the repository, rendered to SVG by a pinned image.
+      Editing a diagram is editing text, reviewing it is reviewing a diff, and it cannot quietly
+      drift from what the prose says — which is the failure mode of every diagram I have ever seen
+      go stale.
+    </p>
+  </div>
 </section>
 
 </main>
 
 <footer>
   <div class="wrap">
-    <p><a href="skills.html">← Skills</a> · <a href="secrets.html">Secrets →</a></p>
+    <p><a href="alerting.html">← Alerting</a> · <a href="stack.html">The stack →</a></p>
   </div>
 </footer>
 </body>

@@ -1,0 +1,33 @@
+---
+# The failure in documentation/longhorn-migration.md section 8, made loud. Critical
+# because nothing retries and nothing else alerts: the pod is still Pending tomorrow.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: longhorn-volume-alerts
+  namespace: monitoring
+  labels:
+    prometheus: kube-prometheus-stack-prometheus
+    app: kube-prometheus-stack-prometheus
+spec:
+  groups:
+  - name: longhorn-volume
+    rules:
+    # Same 15m signal as PodPendingTooLong, escalated for pods whose claim is on
+    # Longhorn - the class that does not self-heal. That rule excludes these pods so
+    # one wedged pod produces one notification, from here, at the paging severity.
+    - alert: PodStuckOnLonghornVolume
+      expr: |
+        kube_pod_status_phase{phase="Pending"} == 1
+        and on(namespace, pod)
+        (
+          kube_pod_spec_volumes_persistentvolumeclaims_info
+          * on(namespace, persistentvolumeclaim) group_left(storageclass)
+          kube_persistentvolumeclaim_info{storageclass="longhorn"}
+        )
+      for: 15m
+      labels:
+        severity: critical
+      annotations:
+        summary: "Pod {{ $labels.pod }} in {{ $labels.namespace }} stuck Pending on a Longhorn volume for 15m"
+        description: "A pod that owns a longhorn PVC cannot start, and this class never clears on its own. `kubectl -n {{ $labels.namespace }} describe pod {{ $labels.pod }}` separates the two causes: FailedAttachVolume means the RWO claim is still attached to another node; FailedMount with `already mounted or mount point busy` is the leaked node-side CSI mount in documentation/longhorn-migration.md section 8, which needs an umount on that node (or a restart of its longhorn-manager pod) and will not clear on pod recreation. Either way the volume and Longhorn itself report healthy - the events are the only evidence."
