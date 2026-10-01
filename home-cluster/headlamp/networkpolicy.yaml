@@ -21,4 +21,34 @@ spec:
     - protocol: TCP
       port: 80
   egress:
-  - {}
+  # DNS.
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: kube-system
+    ports:
+    - protocol: UDP
+      port: 53
+    - protocol: TCP
+      port: 53
+  # The Kubernetes API, plus Traefik for the OIDC back-channel.
+  #
+  # The apiserver is a HOST process, not a pod, so a namespaceSelector does NOT cover it: egress has
+  # to name BOTH the service CIDR (ClusterIP 10.152.183.1:443, pre-DNAT) and the node LAN subnet
+  # (the apiserver endpoints 192.168.1.121/144/146:16443, post-DNAT). Omitting the node-LAN half is
+  # the classic "Headlamp times out talking to the apiserver" bug this directory documents.
+  #
+  # 192.168.1.0/24 also covers Traefik's MetalLB VIP (192.168.1.241:443). That is where the OIDC
+  # issuer https://sso.kube.stevearnett.com/dex resolves (verified with dig -- CoreDNS has no
+  # rewrite for it), so the backend's discovery document, token exchange and JWKS fetches have a
+  # path. This is why egress is no longer a blanket `- {}`.
+  - to:
+    - ipBlock:
+        cidr: 10.152.183.0/16
+    - ipBlock:
+        cidr: 192.168.1.0/24
+    ports:
+    - protocol: TCP
+      port: 443
+    - protocol: TCP
+      port: 16443
