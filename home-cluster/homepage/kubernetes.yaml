@@ -1,0 +1,4 @@
+# disabled: no cluster discovery. That keeps Homepage free of a ServiceAccount, of API-server egress
+# and of any NetworkPolicy gap to go with them. Tiles are hand-written in services.yaml rather than
+# discovered from ingress annotations, so nothing here needs to read the cluster.
+mode: disabled

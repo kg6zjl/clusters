@@ -30,10 +30,14 @@ spec:
         - containerPort: 3000
           protocol: TCP
         env:
-        # Required by Homepage when it is not served from localhost: without it the request is
-        # refused rather than answered.
+        # Homepage refuses requests whose Host header is not listed. The pod-IP entry is what its own
+        # Kubernetes example calls "required for the k8s probe"; the hostname is what the browser sends.
+        - name: MY_POD_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
         - name: HOMEPAGE_ALLOWED_HOSTS
-          value: home.kube.stevearnett.com
+          value: "$(MY_POD_IP):3000,home.kube.stevearnett.com"
         - name: PUID
           value: "1000"
         - name: PGID
@@ -47,16 +51,15 @@ spec:
           limits:
             cpu: 500m
             memory: 512Mi
-        # tcpSocket, not httpGet: Homepage validates the Host header against
-        # HOMEPAGE_ALLOWED_HOSTS, and a probe's Host is the pod IP, so an HTTP probe would be
-        # refused by the app and the pod would never become Ready.
         readinessProbe:
-          tcpSocket:
+          httpGet:
+            path: /api/healthcheck
             port: 3000
           initialDelaySeconds: 5
           periodSeconds: 15
         livenessProbe:
-          tcpSocket:
+          httpGet:
+            path: /api/healthcheck
             port: 3000
           initialDelaySeconds: 15
           periodSeconds: 30
@@ -66,20 +69,26 @@ spec:
             drop:
             - ALL
         volumeMounts:
+        # File by file, not the whole directory. Homepage copies its own defaults into /app/config for
+        # anything not supplied, so that directory must stay writable: mounting the ConfigMap over it
+        # made startup fail with EROFS while copying /app/src/skeleton/kubernetes.yaml.
         - name: config
-          mountPath: /app/config
+          mountPath: /app/config/settings.yaml
+          subPath: settings.yaml
           readOnly: true
-        # Nested inside the read-only config mount: Homepage writes its own logs under here, and a
-        # read-only volume would otherwise make that fail.
+        - name: config
+          mountPath: /app/config/services.yaml
+          subPath: services.yaml
+          readOnly: true
+        - name: config
+          mountPath: /app/config/kubernetes.yaml
+          subPath: kubernetes.yaml
+          readOnly: true
         - name: config-logs
           mountPath: /app/config/logs
-        - name: tmp
-          mountPath: /tmp
       volumes:
       - name: config
         configMap:
           name: homepage-config
       - name: config-logs
-        emptyDir: {}
-      - name: tmp
         emptyDir: {}

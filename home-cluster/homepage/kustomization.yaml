@@ -13,3 +13,4 @@ configMapGenerator:
     files:
       - settings.yaml
       - services.yaml
+      - kubernetes.yaml
