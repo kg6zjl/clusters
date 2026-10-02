@@ -8,6 +8,7 @@ resources:
   - network-policy-openwebui.yaml
   - network-policy-github.yaml
   - network-policy-hermes-kubeapi.yaml
+  - network-policy-hermes-telemetry.yaml
   - namespace.yaml
   - open-webui.yaml
   - open-webui-data-longhorn-pvc.yaml
