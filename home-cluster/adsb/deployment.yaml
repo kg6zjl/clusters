@@ -24,7 +24,7 @@ spec:
         kubernetes.io/hostname: thinkcentre02
       containers:
       - name: ultrafeeder
-        image: ghcr.io/sdr-enthusiasts/docker-adsb-ultrafeeder:latest-build-316
+        image: ghcr.io/sdr-enthusiasts/docker-adsb-ultrafeeder:latest-build-372
         resources:
           requests:
             memory: 128Mi
