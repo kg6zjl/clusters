@@ -28,18 +28,32 @@ spec:
   policyTypes:
   - Egress
   egress:
+  # The ClusterIP itself, in case policy is matched before DNAT.
   - to:
     - ipBlock:
         cidr: 10.152.183.1/32
     ports:
     - protocol: TCP
       port: 443
-  # The LAN on 443 only: 192.168.1.241 is Traefik's MetalLB VIP, which is where
-  # prometheus.kube.stevearnett.com and alerts.kube.stevearnett.com resolve for the
-  # agent's monitoring queries, and .1 is the gateway API.
+  # What actually carries kubectl. The apiserver is a HOST process, so the ClusterIP on 443
+  # is DNAT'd to the node's apiserver port 16443 and 16443 is what policy matches. Drop it
+  # and kubectl times out on 10.152.183.1:443 while DNS and internet egress stay fine.
   - to:
     - ipBlock:
         cidr: 192.168.1.0/24
+    ports:
+    - protocol: TCP
+      port: 443
+    - protocol: TCP
+      port: 16443
+  # Prometheus, Alertmanager and Loki are reached by name, and those names resolve to
+  # Traefik's MetalLB VIP, which is DNAT'd to a Traefik POD: the peer that matches is the
+  # namespace, not an ipBlock. This is what carried the agent's monitoring queries before
+  # the namespace-wide egress rule went away.
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: traefik
     ports:
     - protocol: TCP
       port: 443
