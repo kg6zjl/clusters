@@ -273,6 +273,18 @@ spec:
         volumeMounts: []
 ```
 
+### Comments
+
+**A comment must not be longer than the diff it explains.** A one- or two-line change gets no
+comment at all: the rationale belongs in the PR body and the commit message, which are mandatory,
+reviewed, and do not rot inside the file.
+
+- Comment only what the code cannot say — an upstream quirk, a measured number, a deliberate
+  deviation from the obvious approach, a trap the next editor would fall into.
+- Never restate the change, narrate the file's history, or argue against an alternative you
+  rejected. That argument is a review comment, not a manifest comment.
+- Past three or four lines, the detail belongs in the PR body or a README beside the file.
+
 ### 🛡️ INFRASTRUCTURE & SECURITY POLICY
 When proposing or implementing architectural changes (e.g., CI/CD, migration to ARC, or new services):
 1. **RBAC Least Privilege**:
