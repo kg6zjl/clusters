@@ -4,7 +4,12 @@ Tracks aircraft via the Nooelec NESDR SMArt v5 (RTL2838) plugged into `thinkcent
 at `/dev/bus/usb/001/004`. Web UI (tar1090 map): `https://adsb.kube.stevearnett.com`.
 
 Uses the [sdr-enthusiasts/docker-adsb-ultrafeeder](https://github.com/sdr-enthusiasts/docker-adsb-ultrafeeder)
-image (readsb decoder + tar1090 map + graphs1090) on the `latest` tag.
+image (readsb decoder + tar1090 map + graphs1090), pinned to a `latest-build-<N>` tag rather
+than `latest`.
+
+Upstream tags every CI build as `latest-build-<N>` and publishes no semver and no releases, so the
+build number *is* the version. `renovate.json` matches that shape with a `regex:` versioning rule,
+which is what lets Renovate propose a bump at all — without it the pin rots silently.
 
 ## SDR assignment
 
