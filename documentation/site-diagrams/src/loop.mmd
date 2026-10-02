@@ -1,36 +1,55 @@
 flowchart TB
 %% The only write path, for the reader who wants to implement this part first.
-%%
-%% The dashed return path is the whole design. The agent's pull request lands in the same review
-%% queue as mine, so "it wrote the fix" and "a human approved the fix" stay two separate events
-%% with two separate identities attached to them.
-%%
-%% The invisible links (~~~) hold the two authors side by side without drawing an arrow between
-%% them — they are alternatives reaching the same place, not a sequence.
 
-  what["Something is broken,<br/>or a version moved"]
+%% Three authors open a pull request: me, the agent, and Renovate. They are alternatives reaching
+%% the same place, not a sequence, so they are drawn side by side with no arrows between them.
+
+%% The return path is the whole design. The agent's pull request lands in the same review queue as
+%% mine, so "it wrote the fix" and "a human approved the fix" stay two events with two identities
+%% attached to them.
+
+%% The amber dashed edge is what makes this a loop rather than a line. If Flux cannot settle the
+%% cluster on the merged intent, that is itself an alert — it raises one and reaches me, and the
+%% only way to change the outcome is another pull request through the same gate.
 
   me["Me"]
-  agent["Hermes<br/>read-only in-cluster,<br/>a GitHub App in git"]
+  agent["Hermes"]
+  renovate["Renovate"]
 
   pr["Pull request"]
-  checks["Required checks<br/>lint, kustomize, policy tests"]
+  checks["Required checks"]
   review{"Who merges?"}
   merge["Merged to main"]
-  reconcile["Flux reconciles"]
-  done["New state, and the commit<br/>that caused it"]
+  flux["Flux reconciles"]
+  done["New state"]
 
-  what --> pr
   me --> pr
   agent --> pr
-  pr --> checks
-  checks -->|"red"| pr
-  checks -->|"green"| review
-  review -->|"a human, always"| merge
-  review -.->|"never for the<br/>cluster repository"| note["The agent may merge<br/>its own skills — that is<br/>its own knowledge"]
-  merge --> reconcile
-  reconcile -->|"ready"| done
-  reconcile -.->|"stuck"| what
+  renovate --> pr
 
-  classDef gate fill:#121820,stroke:#71b7ff,stroke-width:2px,color:#e7edf3
-  class review gate
+  pr --> checks
+  checks -->|"fail"| pr
+  checks -->|"pass"| review
+
+  review -->|"a human, always"| merge
+  merge --> flux
+  flux --> done
+  flux -.->|"fails to reconcile,<br/>raises an alert"| me
+
+  %% Colour carries the decision and nothing else: green is the path that changes something,
+  %% red is the check failing, amber is a reconcile that did not settle. The gate is blue because
+  %% it is the one box that decides whether anything downstream happens at all.
+  classDef ok fill:#17251d,stroke:#4f8f6a,stroke-width:2px,color:#dce9e0
+  classDef bad fill:#261a1a,stroke:#bb6552,stroke-width:2px,color:#ecd8d3
+  classDef warn fill:#262013,stroke:#a98a3c,stroke-width:2px,color:#ebe1c9
+  classDef control fill:#121820,stroke:#71b7ff,stroke-width:2px,color:#e7edf3
+
+  class merge,done ok
+  class review control
+
+%% linkStyle takes an index into the rendered link order, which is not the order these arrows
+%% appear in the file. After re-rendering, confirm the red edge is still checks->pr and the green
+%% edge is still checks->review; git diff on the SVG shows an edge changing colour.
+linkStyle 4 stroke:#bb6552,stroke-width:2px
+linkStyle 5 stroke:#4f8f6a,stroke-width:2px
+linkStyle 9 stroke:#a98a3c

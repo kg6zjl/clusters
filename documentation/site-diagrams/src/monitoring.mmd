@@ -1,33 +1,33 @@
 flowchart LR
-%% What is measured, and what a measurement is allowed to do about it.
-%%
-%% The solid-versus-dashed split is the part worth taking away. Scraped metrics can raise an
-%% alert; an alert can reach a human or start an investigation. No path from a metric reaches the
-%% cluster's desired state, because a number moving is not an opinion about what the cluster
-%% should be.
+%% What is measured, and where that measurement is allowed to go. Nothing here writes to the
+%% cluster — a number moving is not an opinion about what the cluster should be. Where a firing
+%% alert goes next is the alerting page's story, not this one's.
 
   subgraph collect["collect"]
-    nodeex["node exporter<br/>pressure stall,<br/>not load average"]
+    nodeex["node exporter"]
     kube["kube-state-metrics"]
-    alloy["Grafana Alloy<br/>ships logs from every pod"]
-    blackbox["blackbox-exporter<br/>probes each published name"]
+    blackbox["blackbox-exporter"]
+    alloy["Grafana Alloy<br/>logs from every pod"]
   end
 
   prom[("Prometheus")]
-  loki[("Loki<br/>hours, not weeks")]
-  grafana["Grafana<br/>one dashboard per question"]
-  rules["alert rules<br/>in git, reviewed like code"]
+  loki[("Loki")]
+  grafana["Grafana"]
+  am["Alertmanager"]
 
   nodeex --> prom
   kube --> prom
   blackbox --> prom
   alloy --> loki
+
   loki --> grafana
   prom --> grafana
-  prom --> rules
+  prom -->|"fires"| am
 
-  rules -->|"a rule fires"| am["Alertmanager"]
-  am -.->|"never back into<br/>the cluster"| collect
+  %% Stores are grey and a firing alert is amber. There is no blue here: this page has no gate,
+  %% because the gate — the pull request a human merges — belongs to the alerting page.
+  classDef store fill:#121820,stroke:#6b7885,stroke-width:2px,color:#e7edf3
+  classDef warn fill:#262013,stroke:#a98a3c,stroke-width:2px,color:#ebe1c9
 
-  classDef store fill:#121820,stroke:#98a5b2,color:#e7edf3
   class prom,loki store
+  class am warn

@@ -34,7 +34,9 @@
   <h2 id="loop">The loop</h2>
 
   <figure class="shot">
-    <img src="assets/img/loop.svg" alt="Flow diagram: something breaks or a version moves, a branch and commit are made by either me or Hermes, a pull request is opened, required checks run and loop back on failure, a decision asks who merges, a human always merges the cluster repository, then Flux reconciles and the new state is attributable to a commit." width="822" height="1096" loading="lazy">
+    <a class="zoom" href="assets/img/loop.svg">
+      <img src="assets/img/loop.svg" alt="Flow diagram of the only write path. Three authors open a pull request on the same queue: me, Hermes and Renovate. Required checks run: a failure goes back to the pull request along a red arrow and a pass goes forward along a green one to a gate asking who merges, which only a human can pass. The merge goes to main, Flux reconciles, and the result is a new state. An amber dashed arrow returns from Flux to me when a reconcile fails and raises an alert, so the only way out is another pull request through the same gate." width="518" height="846" loading="lazy">
+    </a>
     <figcaption>
       <strong>The whole loop.</strong> The dashed path is the design: the agent's pull request lands in
       the same queue as mine, so "it wrote the fix" and "a human approved the fix" stay two separate
