@@ -10,19 +10,23 @@ spec:
   policyTypes:
   - Egress
   egress:
+  # beast, the bare-metal GPU box: llama.cpp on 11434 and ComfyUI on 8080 (direct, and
+  # through the comfy-local facade). Only this workload uses it - the agent's local
+  # llama.cpp fallback was removed, so it reaches ComfyUI over Traefik on 443 if it ever
+  # needs to. The other gate is beast's own UFW allow-list, which admits cluster node IPs.
+  - to:
+    - ipBlock:
+        cidr: 192.168.1.161/32
+    ports:
+    - protocol: TCP
+      port: 11434
+    - protocol: TCP
+      port: 8080
   # Internet egress: Open WebUI fetches its default embedding model
   # (HuggingFace sentence-transformers) during startup, plus fonts/favicons
   - to:
     - ipBlock:
         cidr: 0.0.0.0/0
-    ports:
-    - protocol: TCP
-      port: 80
-    - protocol: TCP
-      port: 443
-  - to:
-    - ipBlock:
-        cidr: ::/0
     ports:
     - protocol: TCP
       port: 80

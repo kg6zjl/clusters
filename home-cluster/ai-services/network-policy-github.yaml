@@ -10,24 +10,19 @@ spec:
   policyTypes:
   - Egress
   egress:
-  # GitHub API/git tooling: GitHub's published ranges rotate across many
-  # CIDRs (api.github.com currently resolves to Azure-hosted IPs), so follow
-  # the open-webui internet-egress convention: 443/80 to anywhere. The
-  # credential is a GitHub App installation token: scoped to the two repositories
-  # the App is installed on, and expiring within the hour. See github-app-identity.md.
+  # The name is historical: this is the general internet rule, not a GitHub-only one.
+  # Deliberately unbounded by IP. The destinations are anycast or rotating -
+  # openrouter.ai (inference - without it the agent does not run), github.com / api /
+  # codeload / raw (PRs and pushes), discord.com (the chat platform) - so an ipBlock list
+  # would break on the next DNS change. DNS is scoped in ai-services-allow-egress
+  # (kube-system :53). 443 only: git pushes over HTTPS, no SSH, and 80 is closed, which
+  # also means in-cluster plain HTTP to a ClusterIP no longer works from here (add
+  # 10.152.183.0/16:80 here if a plain-HTTP service ever has to be called).
   - to:
     - ipBlock:
         cidr: 0.0.0.0/0
     ports:
     - protocol: TCP
-      port: 80
-    - protocol: TCP
       port: 443
-  - to:
-    - ipBlock:
-        cidr: ::/0
-    ports:
-    - protocol: TCP
-      port: 80
-    - protocol: TCP
-      port: 443
+  # The ::/0 rule that lived here is gone: the pod has one v4 address, so it can never
+  # source a v6 packet and the rule allowed nothing.
