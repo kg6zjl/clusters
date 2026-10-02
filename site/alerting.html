@@ -34,7 +34,9 @@
   <h2 id="shape">The shape</h2>
 
   <figure class="shot">
-    <img src="assets/img/alerting.svg" alt="An alert rule in git fires and goes to Alertmanager, which fans out three ways to reach me and a fourth to reach the agent. The three are an amber ntfy push for criticals only, an alerts channel and a security channel. The fourth is the alert-detector, drawn blue as the gate: it runs hourly, only for allow-listed alert names, posts once to Hermes, and Hermes replies in the alerts channel after opening a pull request." width="530" height="743" loading="lazy">
+    <a class="zoom" href="assets/img/alerting.svg">
+      <img src="assets/img/alerting.svg" alt="An alert rule in git fires and goes to Alertmanager, which fans out three ways to reach me and a fourth to reach the agent. The three are an amber ntfy push for criticals only, an alerts channel and a security channel. The fourth is the alert-detector, drawn blue as the gate: it runs hourly, only for allow-listed alert names, posts once to Hermes, and Hermes replies in the alerts channel after opening a pull request." width="530" height="743" loading="lazy">
+    </a>
     <figcaption>
       <strong>Two exits.</strong> One wakes me. The other only ever opens a pull request, so it lands
       in the same review queue with the same human at the end of it — just started without me being
@@ -58,7 +60,9 @@
   </p>
 
   <figure class="shot">
-    <img src="assets/img/discord.svg" alt="Five producers in a column on the left post into four Discord channels in a column on the right, drawn green: alerts, security, pull-requests and general. Alertmanager feeds both alerts and security. Flux feeds alerts and Alertmanager feeds alerts, so the two lines converge on that one channel. The GitHub webhook and CI both feed pull-requests, converging there. Hermes, drawn blue, feeds general." width="606" height="493" loading="lazy">
+    <a class="zoom" href="assets/img/discord.svg">
+      <img src="assets/img/discord.svg" alt="Five producers in a column on the left post into four Discord channels in a column on the right, drawn green: alerts, security, pull-requests and general. Alertmanager feeds both alerts and security. Flux feeds alerts and Alertmanager feeds alerts, so the two lines converge on that one channel. The GitHub webhook and CI both feed pull-requests, converging there. Hermes, drawn blue, feeds general." width="606" height="493" loading="lazy">
+    </a>
     <figcaption>
       <strong>Five producers, four channels.</strong> The four on the left are channel webhooks:
       each can add a message to the one channel it was created in and nothing else. Hermes is the

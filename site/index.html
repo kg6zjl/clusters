@@ -41,7 +41,6 @@
   </a>
   <figcaption>
     <strong>Hermes in action.</strong> The AI agent and human communicate through Discord channels.
-    Click the screenshot to read it at full size.
   </figcaption>
 </figure>
 
@@ -65,7 +64,9 @@
   </p>
 
   <figure class="shot">
-    <img src="assets/img/loop.svg" alt="Flow diagram of the only write path. Three authors open a pull request on the same queue: me, Hermes and Renovate. Required checks run: a failure goes back to the pull request along a red arrow and a pass goes forward along a green one to a gate asking who merges, which only a human can pass. The merge goes to main, Flux reconciles, and the result is a new state. An amber dashed arrow returns from Flux to me when a reconcile fails and raises an alert, so the only way out is another pull request through the same gate." width="518" height="846" loading="lazy">
+    <a class="zoom" href="assets/img/loop.svg">
+      <img src="assets/img/loop.svg" alt="Flow diagram of the only write path. Three authors open a pull request on the same queue: me, Hermes and Renovate. Required checks run: a failure goes back to the pull request along a red arrow and a pass goes forward along a green one to a gate asking who merges, which only a human can pass. The merge goes to main, Flux reconciles, and the result is a new state. An amber dashed arrow returns from Flux to me when a reconcile fails and raises an alert, so the only way out is another pull request through the same gate." width="518" height="846" loading="lazy">
+    </a>
     <figcaption>
       <strong>The only write path.</strong> Including for me. No apply, no patch, no "just this once" —
       because the moment there is, the rest of this stops being true.
