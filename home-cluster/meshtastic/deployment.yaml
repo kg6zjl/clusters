@@ -72,6 +72,9 @@ spec:
       containers:
       - name: meshmonitor
         image: ghcr.io/yeraze/meshmonitor:4.16.2
+        resources:
+          requests:
+            memory: 1280Mi
 
         ports:
         - containerPort: 3001

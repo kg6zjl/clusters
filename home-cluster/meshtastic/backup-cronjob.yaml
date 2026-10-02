@@ -48,6 +48,9 @@ spec:
           containers:
           - name: backup
             image: alpine:3.24
+            resources:
+              requests:
+                memory: 64Mi
             command:
             - /bin/sh
             - -c

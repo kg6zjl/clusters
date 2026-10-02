@@ -44,6 +44,9 @@ spec:
           containers:
             - name: push-to-nas
               image: alpine:3.24
+              resources:
+                requests:
+                  memory: 64Mi
               command:
                 - /bin/sh
                 - -c

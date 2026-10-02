@@ -50,6 +50,9 @@ spec:
       containers:
         - name: home-assistant
           image: homeassistant/home-assistant:2026.9.4
+          resources:
+            requests:
+              memory: 896Mi
           ports:
             - containerPort: 8123
           volumeMounts:
@@ -73,6 +76,9 @@ spec:
                 - CAP_NET_RAW
         - name: matter-server
           image: ghcr.io/home-assistant-libs/python-matter-server:6.6.1
+          resources:
+            requests:
+              memory: 128Mi
           ports:
             - containerPort: 5580
           command: ["python", "-m", "matter_server.server", "--log-level", "debug"]

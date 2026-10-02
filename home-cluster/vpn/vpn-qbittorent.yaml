@@ -81,6 +81,9 @@ spec:
       containers:
       - name: gluetun
         image: qmcgaw/gluetun:v3.41.3
+        resources:
+          requests:
+            memory: 64Mi
         securityContext:
           privileged: true
           capabilities:
@@ -135,6 +138,9 @@ spec:
           readOnly: true
       - name: qbittorrent
         image: linuxserver/qbittorrent:version-5.2.3_v2.0.15
+        resources:
+          requests:
+            memory: 64Mi
         readinessProbe:
           tcpSocket:
             port: 8080
