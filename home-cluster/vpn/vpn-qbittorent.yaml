@@ -46,10 +46,10 @@ spec:
         nameservers:
           - 8.8.8.8
       initContainers:
+      # Dropping privileged rather than whitelisting busybox: mkdir on a mounted volume needs
+      # write permission, and user_privileged_containers deliberately omits busybox.
       - name: init-config
         image: busybox:1.38
-        securityContext:
-          privileged: true
         command: ['sh', '-c', 'mkdir -p /config/qBittorrent']
         volumeMounts:
         - name: config
