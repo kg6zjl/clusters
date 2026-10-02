@@ -25,6 +25,11 @@ spec:
       containers:
       - name: ultrafeeder
         image: ghcr.io/sdr-enthusiasts/docker-adsb-ultrafeeder:latest-build-316
+        resources:
+          requests:
+            memory: 128Mi
+        limits:
+          memory: 256Mi
         ports:
         - containerPort: 80
           name: web
