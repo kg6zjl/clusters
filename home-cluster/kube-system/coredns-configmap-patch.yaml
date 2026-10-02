@@ -11,9 +11,11 @@ data:
           lameduck 5s
         }
         ready
-        log . {
-          class error
-        }
+        # Bare 'log' writes every request to stdout in common log format. The previous
+        # 'log . { class error }' filtered on a DNS class nothing uses, so outbound resolution
+        # was invisible; with Alloy shipping CoreDNS logs to Loki (namespace=kube-system) a
+        # pod's egress is now auditable by name. Client IP in the line identifies the pod.
+        log .
         # In-cluster clients must not hairpin out to Traefik's MetalLB VIP (192.168.1.241) and back.
         # Resolve the registry name straight to the Traefik Service, so pods and CI reach it the
         # k8s-native way. The target is a Service DNS name, not an address, so it follows the

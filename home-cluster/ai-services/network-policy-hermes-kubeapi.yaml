@@ -1,7 +1,14 @@
-# Hermes kubectl-access to the kube-apiserver (read-only).
-# The API server is a HOST process, NOT a pod: namespaceSelector-only egress
-# does not cover it. Must use ipBlocks for the ClusterIP (service CIDR, port
-# 443) and the node LAN subnet post-DNAT (the apiserver secure port 16443).
+# Hermes kubectl-access to the kube-apiserver (read-only), plus the LAN endpoints the
+# agent's own tooling needs.
+#
+# The API server is a HOST process, NOT a pod: namespaceSelector-only egress does not
+# cover it, so this needs ipBlocks. Two ClusterIPs, no CIDRs: kubernetes.default.svc
+# (10.152.183.1, which is what hermes-kubeconfig's server line resolves to) and Traefik
+# (10.152.183.231, which CoreDNS rewrites registry.kube.stevearnett.com to, so registry
+# pulls come here on 443). A new in-cluster HTTPS service needs a line added here.
+#
+# 16443 is gone: that was a node-IP kubeconfig, and the in-cluster one uses
+# https://kubernetes.default.svc:443.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -14,19 +21,20 @@ spec:
   policyTypes:
   - Egress
   egress:
-  # ClusterIP of kubernetes service (10.152.183.1) - service CIDR on 443
   - to:
     - ipBlock:
-        cidr: 10.152.183.0/16
+        cidr: 10.152.183.1/32
+    - ipBlock:
+        cidr: 10.152.183.231/32
     ports:
     - protocol: TCP
       port: 443
-  # Node LAN post-DNAT endpoints (thinkcentres/pi4) on apiserver port 16443
+  # The LAN on 443 only: 192.168.1.241 is Traefik's MetalLB VIP, which is where
+  # prometheus.kube.stevearnett.com and alerts.kube.stevearnett.com resolve for the
+  # agent's monitoring queries, and .1 is the gateway API.
   - to:
     - ipBlock:
         cidr: 192.168.1.0/24
     ports:
     - protocol: TCP
       port: 443
-    - protocol: TCP
-      port: 16443
