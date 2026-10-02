@@ -77,7 +77,7 @@ tasks:
             # printf "%d" truncates, so a truncating check fails a correctly-rounded pair by a pixel.
             w=$(echo "$vb" | awk '{printf "%d", int($3 + 0.5)}')
             h=$(echo "$vb" | awk '{printf "%d", int($4 + 0.5)}')
-            line=$(grep "$src" "$f" | head -1)
+            line=$(grep "$src" "$f" | grep '<img' | head -1)
             case "$line" in
               *"width=\"$w\""*"height=\"$h\""*) printf 'ok   %-18s %s (%sx%s)\n' "$f" "$src" "$w" "$h" ;;
               *) echo "FAIL $f: $src is ${w}x${h} but the <img> does not declare it"; status=1 ;;

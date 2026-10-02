@@ -14,7 +14,7 @@ site/
   workflow.html     how a change actually reaches the cluster
   stack.html        every tool, and why that one rather than another
   assets/style.css  one stylesheet, dark only
-  assets/lightbox.js  one script: click a screenshot to open it full size, click away to close
+  assets/lightbox.js  one script: click a figure to open it full size, click away to close
   assets/img/*.svg  the diagrams, rendered and committed
   .nojekyll         serve the files as-is; no Jekyll processing
 ```

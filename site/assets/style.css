@@ -114,17 +114,18 @@ pre code { font-size: 1em; }
 
 /* ---------- figures ---------- */
 
-/* Diagrams and screenshots break out of the 54rem measure. A diagram that has to fit inside the
-   line length renders at about 60% scale, which turns 15px labels into 9px ones; giving figures
-   their own wider measure is cheaper than redrawing every diagram to be tall and narrow.
-   Centred on the column rather than left-aligned to it, so the text above and below it stays
-   where the eye expects. */
+/* Figures sit inside the 54rem measure, capped so a tall one cannot fill the viewport. A click
+   opens the full-resolution file over the page (lightbox below), so inline size only has to read. */
 figure.shot { margin: 2rem 0; }
 
 figure.shot img,
 figure.shot svg {
   display: block;
-  width: 100%;
+  max-width: 100%;
+  /* A portrait diagram at the full column width renders thousands of pixels tall. max-height with
+     width:auto scales the width down with the ratio instead of squashing the box. */
+  max-height: 30rem;
+  width: auto;
   height: auto;
   margin: 0 auto;
   border: 1px solid var(--line);
@@ -132,21 +133,12 @@ figure.shot svg {
   background: var(--bg-soft);
 }
 
-/* A portrait phone screenshot is the one figure that should not have the full breakout measure:
-   at 100% of 68rem it renders 1088x2170px and buries the paragraph under it. Sized on the figure
-   rather than the image so the caption inherits the same edges and stays flush left with the
-   image - narrowing the image alone leaves the caption stranded against the column.
-   18rem is small on purpose: the full-resolution shot is one click away (see the lightbox below),
-   so the thumbnail only has to be legible enough to recognise. The width attribute in the markup
-   cannot do this job: it only takes whole pixels, and the rule above overrides it regardless.
-   max-width gives up the narrow measure on phones, where there is no breakout to be a fraction
-   of, and transform: none cancels the -50% shift the breakout applies at 76rem, which would
-   otherwise pull the narrower figure off centre. */
+/* The phone screenshot keeps a smaller measure than the diagrams: even capped, a 1008x2008
+   portrait shot is the tallest thing on any page. Sized on the figure so the caption matches it. */
 figure.shot.narrow {
   width: 18rem;
   max-width: 100%;
   margin-inline: auto;
-  transform: none;
 }
 
 /* Block, because the image inside it is block-level and an inline box around a block splits into
@@ -301,10 +293,8 @@ footer p { margin: 0; }
 }
 
 @media (min-width: 76rem) {
-  /* 68rem of measure, centred on the 54rem column. main is width-constrained rather than
-     max-width-constrained so the breakout has a real containing block to centre against. */
+  /* Fixed measure at desktop width; figures no longer break out of it. */
   main { width: 54rem; }
-  figure.shot { width: 68rem; margin-left: 50%; transform: translateX(-50%); }
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -45,7 +45,9 @@
   </p>
 
   <figure class="shot">
-    <img src="assets/img/guardrails.svg" alt="Five stacked boxes with no arrows between them, all drawn the same way to say they are peers: 1. RBAC, read-only, with no write verb, no secrets and no exec. 2. Network policy, default-deny in both directions. 3. Admission, Kyverno policies on the agent's own identity. 4. Secrets, one path in from a vault. 5. The pull request, which only a human merges." width="272" height="656" loading="lazy">
+    <a class="zoom" href="assets/img/guardrails.svg">
+      <img src="assets/img/guardrails.svg" alt="Five stacked boxes with no arrows between them, all drawn the same way to say they are peers: 1. RBAC, read-only, with no write verb, no secrets and no exec. 2. Network policy, default-deny in both directions. 3. Admission, Kyverno policies on the agent's own identity. 4. Secrets, one path in from a vault. 5. The pull request, which only a human merges." width="272" height="656" loading="lazy">
+    </a>
     <figcaption>
       <strong>The five.</strong> In order from the control that is hardest to bypass to the one
       easiest to get wrong, which is the order they are worth reviewing in.
@@ -222,7 +224,9 @@
   </p>
 
   <figure class="shot">
-    <img src="assets/img/patching.svg" alt="Three ways a change starts, into one pull request, then branching to two appliers. When I ask for a change it comes via Hermes, or a pull request I write myself. When something upstream moves, Renovate proposes the version. When a machine needs updating, it is a change to node configuration. All three reach one blue pull request, merged by a human. From there it branches: a change touching the cluster goes to Flux to apply manifests, and a change touching the machines goes to Ansible to run the playbooks." width="836" height="465" loading="lazy">
+    <a class="zoom" href="assets/img/patching.svg">
+      <img src="assets/img/patching.svg" alt="Three ways a change starts, into one pull request, then branching to two appliers. When I ask for a change it comes via Hermes, or a pull request I write myself. When something upstream moves, Renovate proposes the version. When a machine needs updating, it is a change to node configuration. All three reach one blue pull request, merged by a human. From there it branches: a change touching the cluster goes to Flux to apply manifests, and a change touching the machines goes to Ansible to run the playbooks." width="836" height="465" loading="lazy">
+    </a>
     <figcaption>
       <strong>Three ways in, one gate, two appliers.</strong> A change is written by opening a pull
       request, and it only counts once a human merges it. What the merged diff then touches decides

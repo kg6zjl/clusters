@@ -34,7 +34,9 @@
   <h2 id="shape">The shape</h2>
 
   <figure class="shot">
-    <img src="assets/img/monitoring.svg" alt="Collectors on the left feeding two stores. Node exporter, kube-state-metrics and blackbox-exporter feed Prometheus; Grafana Alloy ships logs to Loki. Both stores feed Grafana, and Prometheus also feeds Alertmanager, drawn in amber. The diagram stops there: where a firing alert goes next is on the alerting page." width="786" height="380" loading="lazy">
+    <a class="zoom" href="assets/img/monitoring.svg">
+      <img src="assets/img/monitoring.svg" alt="Collectors on the left feeding two stores. Node exporter, kube-state-metrics and blackbox-exporter feed Prometheus; Grafana Alloy ships logs to Loki. Both stores feed Grafana, and Prometheus also feeds Alertmanager, drawn in amber. The diagram stops there: where a firing alert goes next is on the alerting page." width="786" height="380" loading="lazy">
+    </a>
     <figcaption>
       <strong>Collectors in, dashboards and alerts out.</strong> Prometheus holds the numbers and
       Loki holds the logs, and Grafana draws both. An alert goes to Alertmanager, and from there it
