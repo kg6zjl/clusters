@@ -14,6 +14,7 @@ site/
   workflow.html     how a change actually reaches the cluster
   stack.html        every tool, and why that one rather than another
   assets/style.css  one stylesheet, dark only
+  assets/lightbox.js  one script: click a screenshot to open it full size, click away to close
   assets/img/*.svg  the diagrams, rendered and committed
   .nojekyll         serve the files as-is; no Jekyll processing
 ```
@@ -21,6 +22,12 @@ site/
 It was thirteen pages. It's six, because the reader came for five things: what holds this together,
 what it watches, how it tells you, how a change gets in, and what it's built from. Anything that
 didn't serve one of those became a section on a page that did.
+
+`assets/lightbox.js` is the only script, and it is the one concession to interactivity: a screenshot
+you cannot read at 100% and cannot zoom without script is a screenshot nobody reads. It is native
+`<dialog>` plus a delegated click handler, so there is nothing to install and nothing to pin, and
+it is progressive — the trigger is a plain link to the image, so with scripting off the click opens
+the file. Everything else on the site works with no JavaScript at all.
 
 ## Deploying
 

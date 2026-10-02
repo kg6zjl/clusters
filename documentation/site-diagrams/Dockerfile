@@ -11,6 +11,17 @@ FROM node:22-bookworm-slim
 # renovate: datasource=npm depName=@mermaid-js/mermaid-cli
 ARG MERMAID_CLI_VERSION=11.12.0
 
+# renovate: datasource=npm depName=mermaid
+ARG MERMAID_VERSION=11.17.2
+
+# mermaid is pinned separately from mermaid-cli because the CLI does not constrain it: it depends on
+# mermaid@^11.0.2 and nothing else, so the CLI pin alone leaves the actual renderer floating to
+# whatever the newest 11.x was when the image was built. That matters here because of ELK -- the
+# layout engine mermaid.config.json selects is bundled *inside* the mermaid package rather than
+# installed separately, so "does this build have ELK" is a property of this number and nothing else.
+# Left floating, a mermaid bump could silently move every diagram to dagre, or redraw all seven with
+# different geometry, and the result would be a diff nobody can explain.
+
 # Puppeteer drives a real Chromium. These are its shared-library dependencies on bookworm; the
 # list is upstream's and is complete for headless rendering, which is all render.sh does.
 RUN apt-get update \
@@ -56,8 +67,11 @@ RUN apt-get update \
  && apt-get install -y --no-install-recommends chromium \
  && rm -rf /var/lib/apt/lists/*
 
-RUN npm install --global --no-fund --no-audit "@mermaid-js/mermaid-cli@${MERMAID_CLI_VERSION}" \
- && mmdc --version
+RUN npm install --global --no-fund --no-audit \
+      "@mermaid-js/mermaid-cli@${MERMAID_CLI_VERSION}" \
+      "mermaid@${MERMAID_VERSION}" \
+ && mmdc --version \
+ && node -e "console.log('mermaid', require('mermaid/package.json').version)"
 
 COPY mermaid.config.json /etc/mermaid/mermaid.config.json
 COPY puppeteer.config.json /etc/mermaid/puppeteer.config.json
