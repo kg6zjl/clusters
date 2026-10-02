@@ -3,7 +3,7 @@ kind: Job
 metadata:
   # Bump the suffix to run again: Job names are immutable. No ttlSecondsAfterFinished on purpose - a
   # self-deleting Job reads as a missing resource to Flux, which recreates it and re-runs it forever.
-  name: unifi-dns-audit-20261002
+  name: unifi-dns-audit-20261002b
   namespace: unifi
 spec:
   backoffLimit: 1
@@ -19,6 +19,9 @@ spec:
       containers:
       - name: dns-audit
         image: python:3.13-alpine
+        # Required: this image's entrypoint only prepends python3 for flag-shaped args, so
+        # args: ["-c", ...] execs "-c" and the pod dies with StartError.
+        command: ["python3"]
         envFrom:
         - secretRef:
             name: unifi-ro-creds
