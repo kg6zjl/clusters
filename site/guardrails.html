@@ -136,11 +136,11 @@
       Flux tries to apply it and the reconcile fails visibly.
     </li>
     <li>
-      <strong>Validate</strong> — builds the cluster directory with Kustomize. That root is mostly
-      Flux's own bootstrap, so it catches a broken overlay there and little else. Flux builds each
-      component's own directory separately, and a build error in one of those shows up as a failed
-      reconcile rather than here. It also checks that the registry's config is strict JSON, which
-      Kustomize cannot see, because a broken string is still valid YAML.
+      <strong>Validate</strong> — builds every root Flux reconciles with Kustomize, all forty of them,
+      read from the sync files rather than a hardcoded list so a new component is covered as soon as
+      its sync object lands. It also builds the cluster directory itself, which is mostly Flux's own
+      bootstrap, and checks that the registry's config is strict JSON, which Kustomize cannot see
+      because a broken string is still valid YAML.
     </li>
     <li>
       <strong>Secret Scan</strong> — TruffleHog over this pull request's commits rather than its tip,
@@ -225,9 +225,11 @@
         which is the whole reason this section exists, and also its limit.
       </li>
       <li>
-        <strong>Most of what Flux applies is never built in CI.</strong> Flux reconciles around forty
-        component directories. The build check covers one root, and that root already contains one of
-        them; the rest surface as a failed reconcile rather than a red check.
+        <strong>Nothing validates the change against the live API.</strong> A Kustomize build proves
+        the tree assembles, not that the cluster will accept it. A field the server rejects, or a
+        server-side apply conflict with a resource some other manager owns, only shows up when Flux
+        reconciles. Catching that earlier needs a dry run against the real API, which nothing here
+        does.
       </li>
       <li>
         <strong>The local hooks are a speed bump.</strong> They run for the agent and for any clone
