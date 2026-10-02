@@ -48,8 +48,6 @@ spec:
       initContainers:
       - name: init-config
         image: busybox:1.38
-        securityContext:
-          privileged: true
         command: ['sh', '-c', 'mkdir -p /config/qBittorrent']
         volumeMounts:
         - name: config
