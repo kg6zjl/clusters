@@ -73,9 +73,20 @@ jobs:
           mv kustomize /tmp/kustomize
 
       - name: Validate Kustomize
-        run: |
-          cd home-cluster
-          /tmp/kustomize build . 2>&1 > /dev/null && echo "Kustomize: OK" || { echo "Kustomize: FAILED"; exit 1; }
+        # One build of the umbrella root covers all 42 component directories plus Flux's
+        # own bootstrap. See home-cluster/flux-system/scripts/build_umbrella.sh for why
+        # the umbrella and not a per-directory list, and why listing every directory also
+        # catches cross-component collisions that per-root builds miss. The script is
+        # shared with pre-commit so the local gate and this one cannot diverge.
+        run: sh home-cluster/flux-system/scripts/build_umbrella.sh /tmp/kustomize
+
+      - name: Check the component registry matches the umbrella root
+        # The build above only covers what the umbrella lists, and the umbrella is
+        # hand-maintained. This fails if the two have drifted in either direction, or if a
+        # sync file nothing references, or if two Flux Kustomizations share a name - each a
+        # registration that silently does nothing. A new component needs a sync file in
+        # flux-system/syncs/ and an umbrella entry, or it is built by nobody.
+        run: python3 home-cluster/flux-system/scripts/check_sync_coverage.py .
 
       - name: Check the registry config is strict JSON
         # zot refuses to start on a comment or trailing comma inside config.json, and
