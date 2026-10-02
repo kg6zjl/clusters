@@ -77,6 +77,14 @@ jobs:
           cd home-cluster
           /tmp/kustomize build . 2>&1 > /dev/null && echo "Kustomize: OK" || { echo "Kustomize: FAILED"; exit 1; }
 
+      # `kustomize build .` above builds one root, and it is mostly Flux's own bootstrap.
+      # Flux reconciles each component separately from the paths in flux-system/syncs/, so a
+      # broken overlay in one of those passed every required check and only surfaced as a
+      # failed reconcile. Build the paths the sync files actually point at instead of a
+      # hardcoded list, so a new component is covered as soon as its Kustomization lands.
+      - name: Validate every Flux sync root
+        run: python3 home-cluster/flux-system/scripts/check_sync_roots_build.py . /tmp/kustomize
+
       - name: Check the registry config is strict JSON
         # zot refuses to start on a comment or trailing comma inside config.json, and
         # kustomize build cannot see it: a broken string is still valid YAML.
