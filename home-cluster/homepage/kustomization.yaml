@@ -14,3 +14,8 @@ configMapGenerator:
       - settings.yaml
       - services.yaml
       - kubernetes.yaml
+      - widgets.yaml
+      - bookmarks.yaml
+      - docker.yaml
+      - custom.css
+      - custom.js
