@@ -34,11 +34,11 @@
   <h2 id="shape">The shape</h2>
 
   <figure class="shot">
-    <img src="assets/img/monitoring.svg" alt="Collectors on the left feeding a Prometheus store and a Loki store; Prometheus feeds Grafana dashboards and the alert rules in git; a firing rule goes to Alertmanager, and nothing goes back from Alertmanager into the cluster." width="1303" height="629" loading="lazy">
+    <img src="assets/img/monitoring.svg" alt="Collectors on the left feeding two stores. Node exporter, kube-state-metrics and blackbox-exporter feed Prometheus; Grafana Alloy ships logs to Loki. Both stores feed Grafana, and Prometheus also feeds Alertmanager, drawn in amber. The diagram stops there: where a firing alert goes next is on the alerting page." width="786" height="380" loading="lazy">
     <figcaption>
-      <strong>Collectors in, dashboards and alerts out.</strong> The dashed arrow is the important
-      one: nothing measured can reach the cluster's desired state, because a number moving is not an
-      opinion about what the cluster should be.
+      <strong>Collectors in, dashboards and alerts out.</strong> Prometheus holds the numbers and
+      Loki holds the logs, and Grafana draws both. An alert goes to Alertmanager, and from there it
+      is someone else's story: the alerting page covers where it goes and who it wakes.
     </figcaption>
   </figure>
 
@@ -46,8 +46,7 @@
     One metrics store, one log store, one dashboard tool. Prometheus and Alertmanager and Grafana come
     from a single well-worn chart rather than three decisions, because what is actually portable is
     the rule format and the query language. Metrics are scraped; logs are shipped from every pod by
-    Grafana Alloy. Nothing is sampled down and nothing is thrown away early, except logs, which I keep
-    hours of rather than weeks. That's a known weakness, not a plan.
+    Grafana Alloy. Nothing is sampled down and nothing is thrown away early.
   </p>
 </section>
 
@@ -177,8 +176,6 @@
 <section aria-labelledby="gaps">
   <h2 id="gaps">What isn't measured</h2>
   <ul>
-    <li><strong>Log retention is hours, not weeks.</strong> Enough to answer "what happened last
-      night". Not enough to answer "what changed three weeks ago".</li>
     <li><strong>No tracing.</strong> A slow request across three services can't be followed end to
       end. For a home cluster I've decided that's acceptable, and if something gets slow enough to
       matter, that decision expires.</li>
