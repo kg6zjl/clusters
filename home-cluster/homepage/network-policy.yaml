@@ -1,0 +1,133 @@
+# Homepage reaches exactly what it draws a status dot for: one namespace, one port per app.
+#
+# The port is the CONTAINER port, because policy is evaluated after the Service DNAT. Three of these
+# Services use named targetPorts and would be silently wrong written as the Service port: jellyfin
+# (`http` -> 8096), grafana (`grafana` -> 3000) and longhorn-ui (`http` -> 8000).
+#
+# No internet egress on purpose - icons ship in the image. Deleting the siteMonitor lines from
+# services.yaml makes every rule below deletable too; tiles alone need only DNS.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: homepage
+  namespace: homepage
+spec:
+  podSelector:
+    matchLabels:
+      app: homepage
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  # Traefik to the pod port, not the Service's 80.
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: traefik
+    ports:
+    - protocol: TCP
+      port: 3000
+  egress:
+  # DNS, to resolve the service names the monitors use.
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: kube-system
+    ports:
+    - protocol: UDP
+      port: 53
+    - protocol: TCP
+      port: 53
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: media
+    ports:
+    - protocol: TCP
+      port: 8989  # sonarr
+    - protocol: TCP
+      port: 7878  # radarr
+    - protocol: TCP
+      port: 8686  # lidarr
+    - protocol: TCP
+      port: 9696  # prowlarr
+    - protocol: TCP
+      port: 5055  # seerr
+    - protocol: TCP
+      port: 8096  # jellyfin, named targetPort http
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: monitoring
+    ports:
+    - protocol: TCP
+      port: 3000  # grafana, named targetPort grafana
+    - protocol: TCP
+      port: 9090  # prometheus
+    - protocol: TCP
+      port: 9093  # alertmanager
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: longhorn-system
+    ports:
+    - protocol: TCP
+      port: 8000  # longhorn-ui, named targetPort http
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: home-assistant
+    ports:
+    - protocol: TCP
+      port: 8123
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: adsb
+    ports:
+    - protocol: TCP
+      port: 80
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: meshtastic
+    ports:
+    - protocol: TCP
+      port: 3001
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: netalertx
+    ports:
+    - protocol: TCP
+      port: 20211
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: nodered
+    ports:
+    - protocol: TCP
+      port: 1880
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: speedtest
+    ports:
+    - protocol: TCP
+      port: 80
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: headlamp
+    ports:
+    - protocol: TCP
+      port: 4466  # headlamp, named targetPort http
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: ai-services
+    ports:
+    - protocol: TCP
+      port: 8080  # open-webui
+    - protocol: TCP
+      port: 9119  # hermes-dashboard

@@ -19,10 +19,13 @@
 # within flux-system). Traefik is therefore NOT admitted without
 # networkpolicy.yaml alongside this file, which allows exactly traefik -> 9080.
 #
-# DNS: external-dns runs with --source=crd (DNSEndpoint) and --source=ingress
-# only -- it does not read IngressRoutes. dnsendpoint.yaml is what actually
-# publishes this record; the hostname annotation below is inert today, kept only
-# to match the sibling routes so it goes live if a traefik source is ever added.
+# DNS: --source=traefik-proxy IS enabled (kube-system/external-dns-helmrelease.yaml), so this
+# annotation is live, and external-dns logs the endpoint it builds from this route:
+#   Endpoints generated from flux-system/flux-operator: [flux.kube.stevearnett.com 0 IN CNAME
+#   kube.stevearnett.com []]
+# An earlier comment here claimed the source did not exist and pointed at a
+# flux-operator/dnsendpoint.yaml that was never in this repo. With policy: sync that is the
+# dangerous kind of wrong: someone trusting it would delete the annotation and lose the record.
 apiVersion: traefik.io/v1alpha1
 kind: IngressRoute
 metadata:

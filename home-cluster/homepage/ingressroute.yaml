@@ -1,0 +1,26 @@
+# No auth middleware on purpose: this is LAN-only, and the tools it links to carry their own locks.
+# If that assumption ever changes, one middlewares: block here is the whole fix.
+#
+# These external-dns annotations are honoured. The cluster runs --source=traefik-proxy alongside
+# service, ingress and crd, and external-dns logs the endpoints it builds from IngressRoutes:
+#   Endpoints generated from ai-services/comfy: [comfy.kube.stevearnett.com 0 IN CNAME
+#   kube.stevearnett.com []]
+# adsb, comfy and flux each resolve with no plain Ingress, no DNSEndpoint and an unannotated
+# Service, so that source is the only thing publishing them. No DNSEndpoint is needed here.
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: homepage
+  namespace: homepage
+  annotations:
+    external-dns.alpha.kubernetes.io/hostname: home.kube.stevearnett.com
+    external-dns.alpha.kubernetes.io/target: kube.stevearnett.com
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - match: Host(`home.kube.stevearnett.com`)
+      kind: Rule
+      services:
+        - name: homepage
+          port: 80
