@@ -17,8 +17,10 @@
 installed on `kg6zjl/clusters` and `kg6zjl/skills` only. The owner's personal access token is
 no longer mounted into the pod. Because the agent is now a distinct identity, the branch
 protection and `CODEOWNERS` rules the owner sets are what gate changes to the agent's own
-access -- the agent cannot approve or merge its own PRs, and the App is not an administrator,
-so it cannot relax its own guardrails.
+access -- the App holds `Contents: write`, which is enough to merge on its own, so the gate
+that actually stops it is the code-owner rule: it is not the code owner, so it cannot supply
+the approval its own PR needs. The App is not an administrator, so it cannot relax its own
+guardrails either.
 
 ## Why, in one paragraph
 

@@ -107,9 +107,10 @@
   <p class="small">
     The agent's way out is the opposite shape: one Discord App token, minted and re-minted hourly by a
     sidecar the model's own container never holds. It can post, and that is very nearly all it can do.
-    The agent is <em>told</em> to reply in channel, and told never to merge — but the credential can't
-    merge either, so a prompt that gets talked out of the rule doesn't matter. A rule the model can be
-    argued out of is not a control.
+    The agent is <em>told</em> to reply in channel, and told never to merge. A rule the model can be
+    argued out of is not a control — which is why the credential matters as much as the prompt: this
+    one can post, and nothing else. It is not what stops a merge, though. The branch rules are, and
+    those are covered under <a href="workflow.html#unattended">the loop</a>.
   </p>
 </section>
 
