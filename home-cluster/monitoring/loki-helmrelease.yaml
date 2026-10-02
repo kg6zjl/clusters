@@ -114,10 +114,11 @@ spec:
             period: 24h
 
       limits_config:
-        # 7 days of retention. Sized for a few hundred pods at ~1-2GB/week of
-        # compressed chunks; LokiVolumeFillingUp/LokiVolumeFull in
-        # loki-alerts.yaml are what actually catch growth before the volume does.
-        retention_period: 168h
+        # 30 days. At 7 days the volume actually held 3.4GiB (attached PVC, actual
+        # size, 5 days in), so this is ~15-20GiB of chunks; the 40Gi below carries
+        # that with room for a spike. LokiVolumeFillingUp/LokiVolumeFull in
+        # loki-alerts.yaml still fire before the volume fills.
+        retention_period: 720h
 
       compactor:
         # THE IMPORTANT ONE: retention_period alone does NOT delete anything. The
@@ -158,10 +159,10 @@ spec:
         enabled: true
         # Longhorn explicitly, not the microk8s-hostpath cluster default: logs are
         # the one data set here that must survive the node the pod lands on, and
-        # the StorageClass carries defaultReplicaCount 2. 10Gi matches what the
-        # previous install used and leaves a full retention period's worth of
-        # headroom instead of sizing to the tight estimate.
-        size: 10Gi
+        # the StorageClass carries defaultReplicaCount 2. 40Gi holds 30 days at the
+        # measured rate (3.4GiB per 7 days), and Longhorn is thin-provisioned and
+        # grows online, so this is headroom rather than a reservation.
+        size: 40Gi
         storageClass: longhorn
         accessModes:
         - ReadWriteOnce
