@@ -159,10 +159,16 @@ spec:
         enabled: true
         # Longhorn explicitly, not the microk8s-hostpath cluster default: logs are
         # the one data set here that must survive the node the pod lands on, and
-        # the StorageClass carries defaultReplicaCount 2. 40Gi holds 30 days at the
-        # measured rate (3.4GiB per 7 days), and Longhorn is thin-provisioned and
-        # grows online, so this is headroom rather than a reservation.
-        size: 40Gi
+        # the StorageClass carries defaultReplicaCount 2.
+        #
+        # This value MUST match the live StatefulSet. volumeClaimTemplates cannot be
+        # changed after creation, so bumping it here fails EVERY upgrade - retention
+        # included - and Flux stalls the release (it did exactly that at 40Gi). The
+        # 30-day resize is a one-off claim expansion instead, on the human side:
+        #   kubectl -n monitoring patch pvc storage-loki-0 --type=merge \
+        #     -p '{"spec":{"resources":{"requests":{"storage":"40Gi"}}}}'
+        # 40Gi is the target size: 3.4GiB per 7 days measured.
+        size: 10Gi
         storageClass: longhorn
         accessModes:
         - ReadWriteOnce
