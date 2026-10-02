@@ -1,0 +1,31 @@
+# One file per rule group; the split buys review, not isolation - Prometheus reloads the whole
+# rule set at once, so a bad expression anywhere refuses the reload.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: pod-memory-alerts
+  namespace: monitoring
+  labels:
+    prometheus: kube-prometheus-stack-prometheus
+    app: kube-prometheus-stack-prometheus
+spec:
+  groups:
+  # Nothing here has ever been OOM-killed (checked 2026-10-02: both termination-reason metrics
+  # and kubelet_evictions are empty), so this rule is expected to stay silent. It exists because
+  # an OOM kill is invisible after the fact - the container restarts and the pod reads Running.
+  - name: pod-memory
+    rules:
+    - alert: ContainerOOMKilled
+      # The restart increase is what bounds it: last_terminated_reason stays OOMKilled until the
+      # container terminates again, so that condition alone would never clear.
+      expr: |
+        increase(kube_pod_container_status_restarts_total[15m]) >= 1
+        and on (namespace, pod, container)
+        kube_pod_container_status_last_terminated_reason{reason="OOMKilled"} == 1
+      for: 5m
+      labels:
+        severity: critical
+      annotations:
+        summary: "{{ $labels.namespace }}/{{ $labels.pod }} container {{ $labels.container }} OOM-killed and restarted"
+        description: "{{ $labels.container }} in {{ $labels.namespace }}/{{ $labels.pod }} restarted within the last 15 minutes and its last termination reason is OOMKilled, so the kernel killed it for exceeding its cgroup memory limit rather than it crashing. Compare that limit against the container's working set: a limit below the real peak is the usual cause, and the fix belongs in the workload's own manifest. A container with no limit has the whole node as its limit, in which case the same symptom arrives as node pressure - see NodeMemoryCritical and NodeEvictedPods."
+        runbook_url: "https://prometheus.kube.stevearnett.com/graph"

@@ -16,6 +16,7 @@ resources:
   - ci-runner-alerts.yaml
   - node-health-alerts.yaml
   - node-memory-alerts.yaml
+  - pod-memory-alerts.yaml
   - flux-resource-alerts.yaml
   - pod-scheduling-alerts.yaml
   - longhorn-volume-alerts.yaml
