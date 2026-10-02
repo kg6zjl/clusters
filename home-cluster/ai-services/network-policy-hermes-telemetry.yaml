@@ -1,0 +1,38 @@
+# The agent's read-only window on cluster telemetry: the operator UIs behind Traefik, and
+# Loki's API for log queries. Separate from network-policy-hermes-kubeapi.yaml, which is
+# the apiserver path plus the LAN.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: hermes-agent-allow-telemetry
+  namespace: ai-services
+spec:
+  podSelector:
+    matchLabels:
+      app: hermes-agent
+  policyTypes:
+  - Egress
+  egress:
+  # Prometheus, Alertmanager, Grafana and the Longhorn UI are reached by name; those names
+  # resolve to Traefik's MetalLB VIP, and the VIP is DNAT'd to a Traefik POD on its TARGET
+  # port 8443 - not the Service's 443. Scoped to 443 this peer matched nothing and every
+  # one of those hosts timed out. The port is the container port.
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: traefik
+    ports:
+    - protocol: TCP
+      port: 8443
+  # Loki, by service name rather than a hostname: nothing routes it through Traefik (no
+  # IngressRoute, no CoreDNS rewrite), so the k8s-native address is
+  # http://loki.monitoring.svc.cluster.local:3100. 3100 is the container port Loki serves
+  # and the Service's targetPort, so it is the number policy sees after DNAT. This is what
+  # makes the CoreDNS query logs in Loki readable rather than write-only.
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: monitoring
+    ports:
+    - protocol: TCP
+      port: 3100

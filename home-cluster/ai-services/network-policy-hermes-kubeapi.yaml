@@ -1,21 +1,17 @@
 # Hermes kubectl-access to the kube-apiserver (read-only), plus the LAN endpoints the
-# agent's own tooling needs.
+# agent's own tooling needs. Telemetry reads - the operator UIs, Loki - live in
+# network-policy-hermes-telemetry.yaml.
 #
-# The API server is a HOST process, NOT a pod: namespaceSelector-only egress does not
-# cover it, so this needs an ipBlock. One address, which is fixed rather than current:
-# kubernetes.default.svc is the first ClusterIP of the service CIDR (10.152.183.1), and
-# hermes-kubeconfig points at that name, so the two track each other.
+# The apiserver is a HOST process reached through the kubernetes Service ClusterIP:
+# 10.152.183.1:443 is DNAT'd to the node's apiserver port before policy is evaluated, so
+# the port that matters is 16443 on the node, not 443 on the ClusterIP. Drop 16443 and
+# kubectl times out while DNS and internet egress stay fine - which is how it looked when
+# this entry was deleted on the pre-DNAT reading.
 #
-# Traefik's ClusterIP (10.152.183.231) used to be here for registry pulls. It is gone:
-# the registry answers 401 to this pod both anonymously and with its own ServiceAccount
-# token - the runner's OIDC identity is what it accepts - so the rule bought access the
-# agent cannot use. It was also the one entry that was NOT fixed: a ClusterIP is a
-# Service's current address, so it moves if that Service is recreated. If a tool here
-# ever needs another in-cluster HTTPS service, prefer that service's LAN name over its
-# ClusterIP, and add a line here for it.
-#
-# 16443 is gone: that was a node-IP kubeconfig, and the in-cluster one uses
-# https://kubernetes.default.svc:443.
+# The LAN block also covers the gateway and any other node-hosted endpoint. Traefik's
+# ClusterIP (10.152.183.231) is deliberately absent: the registry answers 401 to this pod
+# both anonymously and with its own ServiceAccount token, so the rule bought access the
+# agent cannot use, and a ClusterIP is a Service's current address - it moves on recreate.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -28,9 +24,7 @@ spec:
   policyTypes:
   - Egress
   egress:
-  # What actually carries kubectl. The apiserver is a HOST process, so the ClusterIP on 443
-  # is DNAT'd to the node's apiserver port 16443, and 16443 is what policy matches. Drop it
-  # and kubectl times out on 10.152.183.1:443 while DNS and internet egress stay fine.
+  # The post-DNAT apiserver port: this rule is what carries kubectl.
   - to:
     - ipBlock:
         cidr: 192.168.1.0/24
@@ -39,14 +33,3 @@ spec:
       port: 443
     - protocol: TCP
       port: 16443
-  # Prometheus, Alertmanager, Loki and the Longhorn UI are reached by name; those names
-  # resolve to Traefik's MetalLB VIP, and the VIP is DNAT'd to a Traefik POD on its TARGET
-  # port 8443 - not the Service's 443. Scoping this peer to 443 matched nothing and every
-  # monitoring call timed out. Same rule as for ingress policies: the port is the pod port.
-  - to:
-    - namespaceSelector:
-        matchLabels:
-          kubernetes.io/metadata.name: traefik
-    ports:
-    - protocol: TCP
-      port: 8443
