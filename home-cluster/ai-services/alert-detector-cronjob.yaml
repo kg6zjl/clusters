@@ -77,17 +77,19 @@ spec:
             # these names wake the agent. Each must be one an unattended read-only-plus-PR run
             # can investigate into something actionable - not merely "serious". Widening it is
             # a one-line change here; adding a name is cheap, a name that fires constantly is
-            # not. Keep in step with the rule names in monitoring/prometheus-rules.yaml.
+            # not. Keep in step with the rule names in monitoring/ (one file per rule group).
             #   ProdServiceDown         - app pods down; logs/events/Flux status -> rollback/PR
             #   CIRunnerPoolEmpty       - frozen CI pool; runner deployment investigation
             #   PrometheusBadConfig     - one bad expression silences a whole rule file
             #   PrometheusRuleFailures  - same class: the rule that cannot evaluate
             #   LonghornVolumeSpaceFull - name the PVC consumer, PR a persistence.size bump
+            #   NodeEvictedPods         - kubelet reclaimed under pressure; name the workload
+            #   ContainerOOMKilled      - limit below the real peak; PR the workload's limit
             - name: ALERT_INCLUDE_ALERTNAMES
-              value: "ProdServiceDown,CIRunnerPoolEmpty,PrometheusBadConfig,PrometheusRuleFailures,LonghornVolumeSpaceFull"
+              value: "ProdServiceDown,CIRunnerPoolEmpty,PrometheusBadConfig,PrometheusRuleFailures,LonghornVolumeSpaceFull,NodeEvictedPods,ContainerOOMKilled"
             # The OpenRouter balance/spend class, by alertname. Second line of defence behind
             # the allow-list; see the note at the top of this file. Keep in step with the
-            # openrouter group in monitoring/prometheus-rules.yaml when an alert there is added
+            # openrouter group in monitoring/openrouter-alerts.yaml when an alert there is added
             # or renamed.
             - name: ALERT_EXCLUDE_ALERTNAMES
               value: "OpenRouterCreditLow,OpenRouterCreditExhausted,OpenRouterAccountBalanceLow,OpenRouterAccountBalanceCritical,OpenRouterBalanceDepletionImminent,OpenRouterBurnRateHigh,OpenRouterDailySpendHigh"
