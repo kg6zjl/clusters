@@ -2,10 +2,17 @@
 # agent's own tooling needs.
 #
 # The API server is a HOST process, NOT a pod: namespaceSelector-only egress does not
-# cover it, so this needs ipBlocks. Two ClusterIPs, no CIDRs: kubernetes.default.svc
-# (10.152.183.1, which is what hermes-kubeconfig's server line resolves to) and Traefik
-# (10.152.183.231, which CoreDNS rewrites registry.kube.stevearnett.com to, so registry
-# pulls come here on 443). A new in-cluster HTTPS service needs a line added here.
+# cover it, so this needs an ipBlock. One address, which is fixed rather than current:
+# kubernetes.default.svc is the first ClusterIP of the service CIDR (10.152.183.1), and
+# hermes-kubeconfig points at that name, so the two track each other.
+#
+# Traefik's ClusterIP (10.152.183.231) used to be here for registry pulls. It is gone:
+# the registry answers 401 to this pod both anonymously and with its own ServiceAccount
+# token - the runner's OIDC identity is what it accepts - so the rule bought access the
+# agent cannot use. It was also the one entry that was NOT fixed: a ClusterIP is a
+# Service's current address, so it moves if that Service is recreated. If a tool here
+# ever needs another in-cluster HTTPS service, prefer that service's LAN name over its
+# ClusterIP, and add a line here for it.
 #
 # 16443 is gone: that was a node-IP kubeconfig, and the in-cluster one uses
 # https://kubernetes.default.svc:443.
@@ -24,8 +31,6 @@ spec:
   - to:
     - ipBlock:
         cidr: 10.152.183.1/32
-    - ipBlock:
-        cidr: 10.152.183.231/32
     ports:
     - protocol: TCP
       port: 443
