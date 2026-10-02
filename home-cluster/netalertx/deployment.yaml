@@ -38,6 +38,8 @@ spec:
         resources:
           requests:
             memory: 320Mi
+        limits:
+          memory: 640Mi
         ports:
         - containerPort: 20211
         env:

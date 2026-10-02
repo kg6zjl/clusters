@@ -24,6 +24,8 @@ spec:
           resources:
             requests:
               memory: 64Mi
+          limits:
+            memory: 128Mi
           ports:
             - containerPort: 1883
               name: mqtt
