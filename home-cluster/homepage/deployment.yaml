@@ -14,8 +14,7 @@ spec:
       labels:
         app: homepage
     spec:
-      # Homepage runs as root by default; PUID/PGID below plus this block keep it non-root. The
-      # config is a read-only ConfigMap, so nothing here chowns or writes it.
+      # Homepage runs as root by default; PUID/PGID below plus this block keep it non-root.
       securityContext:
         runAsNonRoot: true
         runAsUser: 1000
@@ -23,6 +22,28 @@ spec:
         fsGroup: 1000
         seccompProfile:
           type: RuntimeDefault
+      initContainers:
+      # Homepage writes its own defaults into /app/config for every config file it does not find, so
+      # that directory must be writable: mount a ConfigMap over it, or leave it unwritable, and init
+      # fails. Which files it treats as required moves between releases (v2.4.0 wants proxmox.yaml,
+      # absent from the docs' example), so shipping a fixed file list is a losing game. Seed a
+      # writable directory instead and let the app fill in whatever its version demands.
+      - name: seed-config
+        image: ghcr.io/gethomepage/homepage:v2.4.0
+        command:
+        - sh
+        - -c
+        - cp -a /config-src/. /app/config/ || true
+        volumeMounts:
+        - name: config
+          mountPath: /app/config
+        - name: config-src
+          mountPath: /config-src
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
       containers:
       - name: homepage
         image: ghcr.io/gethomepage/homepage:v2.4.0
@@ -69,48 +90,15 @@ spec:
             drop:
             - ALL
         volumeMounts:
-        # File by file, not the whole directory. Homepage copies its own defaults into /app/config for
-        # anything not supplied, so that directory must stay writable: mounting the ConfigMap over it
-        # made startup fail with EROFS while copying /app/src/skeleton/kubernetes.yaml.
+        # Writable and only seeded, never mounted over: the app adds whatever config files its version
+        # wants, plus its logs. Our files arrive from the init container.
         - name: config
-          mountPath: /app/config/settings.yaml
-          subPath: settings.yaml
-          readOnly: true
-        - name: config
-          mountPath: /app/config/services.yaml
-          subPath: services.yaml
-          readOnly: true
-        - name: config
-          mountPath: /app/config/kubernetes.yaml
-          subPath: kubernetes.yaml
-          readOnly: true
-        # The rest of Homepage's config set. Every file must exist, or the app tries to copy its
-        # skeleton in - which needs a writable /app/config and fails with EACCES/EROFS.
-        - name: config
-          mountPath: /app/config/widgets.yaml
-          subPath: widgets.yaml
-          readOnly: true
-        - name: config
-          mountPath: /app/config/bookmarks.yaml
-          subPath: bookmarks.yaml
-          readOnly: true
-        - name: config
-          mountPath: /app/config/docker.yaml
-          subPath: docker.yaml
-          readOnly: true
-        - name: config
-          mountPath: /app/config/custom.css
-          subPath: custom.css
-          readOnly: true
-        - name: config
-          mountPath: /app/config/custom.js
-          subPath: custom.js
-          readOnly: true
-        - name: config-logs
-          mountPath: /app/config/logs
+          mountPath: /app/config
       volumes:
-      - name: config
+      # Content-hashed name, so editing any config file changes the hash and rolls the pod - the only
+      # update path now that nothing is mounted with subPath.
+      - name: config-src
         configMap:
           name: homepage-config
-      - name: config-logs
+      - name: config
         emptyDir: {}
