@@ -1,0 +1,40 @@
+# One file per rule group; see node-health-alerts.yaml for why the split buys review and
+# not isolation (Prometheus reloads the rule set as a whole).
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: node-memory-alerts
+  namespace: monitoring
+  labels:
+    prometheus: kube-prometheus-stack-prometheus
+    app: kube-prometheus-stack-prometheus
+spec:
+  groups:
+  # kube-prometheus-stack already ships NodeMemoryHighUtilization (>90% for 15m, the same
+  # series) but at severity=warning, which reaches Discord and stops there. These are the
+  # page band for that metric, plus the kubelet's own eviction signal - upstream ships it
+  # as severity=info, so it has never paged anyone.
+  - name: node-memory
+    rules:
+    - alert: NodeMemoryCritical
+      # Same series and the same 90% line as the upstream warning, 10m not 15m so the page
+      # arrives first. Measured 2026-10-02: cluster nodes sit at 41%, 66% and 70%.
+      expr: |
+        100 - (node_memory_MemAvailable_bytes{job="node-exporter"}
+          / node_memory_MemTotal_bytes{job="node-exporter"} * 100) > 90
+      for: 10m
+      labels:
+        severity: critical
+      annotations:
+        summary: "{{ $labels.instance }} above 90% memory for 10m (now {{ printf \"%.1f\" $value }}%)"
+        description: "MemAvailable has been under 10% of total on {{ $labels.instance }} for 10 minutes. Whether this ends in evicted pods depends on the kubelet's eviction thresholds; MicroK8s keeps the upstream kubelet defaults (hard eviction at memory.available<100Mi) unless node-config/ overrides them. Before assuming a workload leak, check what is resident - here Longhorn, monitoring and kube-system are the largest consumers, and the Cluster Nodes dashboard breaks it down."
+        runbook_url: "https://headlamp.kube.stevearnett.com"
+    - alert: NodeEvictedPods
+      expr: increase(kubelet_evictions[15m]) > 0
+      for: 5m
+      labels:
+        severity: critical
+      annotations:
+        summary: "kubelet on {{ $labels.node }} evicted pods ({{ $labels.eviction_signal }})"
+        description: "The kubelet reclaims memory by evicting pods, which is where node pressure stops being a number and becomes a workload outage. Nothing has ever fired this here (checked 2026-10-02: kubelet_evictions and OOMKilled both empty), so treat any value as new. The eviction_signal says which resource ran out - memory.available, nodefs.available or imagefs.available. Evicted pods are deleted, so the culprit is found in `kubectl get events -A` and the workload's previous pod state."
+        runbook_url: "https://prometheus.kube.stevearnett.com/graph"
