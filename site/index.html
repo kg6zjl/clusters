@@ -21,20 +21,28 @@
 
 <header class="page-head">
   <p class="eyebrow">Home cluster</p>
-  <h1>I let an AI agent manage my cluster. It can't change anything without me.</h1>
+  <h1>I let an AI agent manage my cluster. The catch? It can't change anything without me.</h1>
   <p class="lede">
-    Hermes runs as a pod in a three node Kubernetes cluster at home. It has read-only RBAC, no access
-    to any secret, and no way to reach the outside world except a short list of things I approved. To
-    change anything it opens a pull request, and I review and merge it.
+    Hermes runs as a pod in my home Kubernetes cluster. It has read-only RBAC, no access
+    to any secrets, and no way to modify itself - except via a PR. To
+    change anything at all it opens a pull request, and I review and merge it.
   </p>
   <p class="small">
-    Everything it does and everything the cluster notices arrives in a few Discord channels. The
-    guardrails, what it monitors, how it alerts, and what's still broken. No addresses, no
-    hostnames, no credentials.
+    Everything it does and everything the cluster notifies (alerts/notifications) arrives in a few Discord channels. The
+    guardrails, what it monitors, how it alerts, and what's still broken.
   </p>
 </header>
 
 <main>
+
+<figure class="shot narrow">
+  <a class="zoom" href="assets/img/discord-bot.png">
+    <img src="assets/img/discord-bot.png" alt="Discord bot screenshot" width="1008" height="2008" loading="lazy">
+  </a>
+  <figcaption>
+    <strong>Hermes in action.</strong> The AI agent and human communicate through Discord channels.
+  </figcaption>
+</figure>
 
 <section aria-labelledby="why">
   <h2 id="why">Why bother with this at all</h2>
@@ -56,7 +64,9 @@
   </p>
 
   <figure class="shot">
-    <img src="assets/img/loop.svg" alt="Flow diagram of the change path: something breaks or a version moves, a branch and commit are made by either me or Hermes, a pull request is opened, required checks run, a human decides who merges, the merge goes to main, and Flux reconciles it." width="822" height="1096" loading="lazy">
+    <a class="zoom" href="assets/img/loop.svg">
+      <img src="assets/img/loop.svg" alt="Flow diagram of the only write path. Three authors open a pull request on the same queue: me, Hermes and Renovate. Required checks run: a failure goes back to the pull request along a red arrow and a pass goes forward along a green one to a gate asking who merges, which only a human can pass. The merge goes to main, Flux reconciles, and the result is a new state. An amber dashed arrow returns from Flux to me when a reconcile fails and raises an alert, so the only way out is another pull request through the same gate." width="518" height="846" loading="lazy">
+    </a>
     <figcaption>
       <strong>The only write path.</strong> Including for me. No apply, no patch, no "just this once" —
       because the moment there is, the rest of this stops being true.
@@ -169,15 +179,6 @@
       the problem, working through it is.
     </li>
     <li>
-      <strong>Log history is short.</strong> I get hours of searchable logs, not weeks. Enough to
-      answer "what happened last night", not "what happened last month".
-    </li>
-    <li>
-      <strong>One channel is the whole record.</strong> Discord holds the alerts, the policy
-      findings, the reconcile errors and the pull requests, so there is exactly one place to look.
-      That is also a single point of failure, and nothing here archives it.
-    </li>
-    <li>
       <strong>The image registry is open inside the cluster.</strong> Any workload can pull any image
       in it. Fine while everything there is a public base image or a build output. Not fine the day
       that stops being true.
@@ -194,10 +195,6 @@
     and the decisions that keep it quiet enough to trust. <a href="workflow.html">The loop</a> is how
     a change actually gets in. <a href="stack.html">The stack</a> is every tool, and why that one.
   </p>
-  <p class="small">
-    Corrections welcome. This describes a running system, not a product, and the parts that broke are
-    the parts worth reading.
-  </p>
 </section>
 
 </main>
@@ -207,5 +204,12 @@
     <p>Notes from a GitOps home cluster. Source is the <code>site/</code> directory of the cluster repository. <a href="guardrails.html">Guardrails →</a></p>
   </div>
 </footer>
+
+<dialog class="lightbox" id="lightbox" aria-label="Screenshot, full size">
+  <img alt="">
+  <button class="lightbox-close" type="button">Close</button>
+</dialog>
+
+<script src="assets/lightbox.js" defer></script>
 </body>
 </html>

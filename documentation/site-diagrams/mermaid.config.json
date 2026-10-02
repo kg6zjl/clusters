@@ -1,4 +1,5 @@
 {
+  "layout": "elk",
   "theme": "base",
   "themeVariables": {
     "background": "#0c1014",

@@ -1,20 +1,26 @@
 flowchart TB
-%% Five independent controls. That they are independent is the point, and it is why they are
-%% drawn as five stacked boxes with no arrows between them rather than as a chain: any one of
-%% them being wrong has to leave the other four standing. A single gate that "mostly works" is
-%% one bug away from nothing; five narrow ones are one bug away from four.
-%%
-%% The invisible links exist only to force one box per row.
+%% Five independent controls. That they are independent is the point, and it is why they are drawn
+%% as five stacked boxes with no arrows between them rather than as a chain: any one of them being
+%% wrong has to leave the other four standing. A single gate that "mostly works" is one bug away
+%% from nothing; five narrow ones are one bug away from four.
 
-  rbac["1. RBAC<br/>get, list, watch — no write verb anywhere.<br/>No secrets, no pods/exec, no token minting."] ~~~ netpol
-  netpol["2. Network policy<br/>default-deny both directions.<br/>Egress is a short written list."] ~~~ admission
-  admission["3. Admission<br/>Kyverno policies on the agent's own identity,<br/>so a merged pull request cannot widen it."] ~~~ secrets
-  secrets["4. Secrets<br/>one path in, from a vault.<br/>The agent has no path to any value."] ~~~ prgate
-  prgate["5. The pull request<br/>a human merges everything,<br/>with a different identity to the author."]
+%% Every one of these is a file in git, so widening any of them is a diff somebody reads.
 
-  note["Every one of these is a file in git, so widening the first four is a diff somebody reads."]
+%% The invisible links exist only to force one box per row. They assert nothing.
 
-  prgate -.-> note
+  rbac["1. RBAC<br/>read-only: no write verb,<br/>no secrets, no exec"]
+  netpol["2. Network policy<br/>default-deny both directions"]
+  admission["3. Admission<br/>Kyverno on the agent's<br/>own identity"]
+  secrets["4. Secrets<br/>one path in, from a vault"]
+  prgate["5. The pull request<br/>a human merges everything"]
 
+  rbac ~~~ netpol
+  netpol ~~~ admission
+  admission ~~~ secrets
+  secrets ~~~ prgate
+
+  %% All five are the same blue on purpose. Colouring them differently would imply a hierarchy or
+  %% a ranking between controls that does not exist — the argument of this figure is that they are
+  %% peers, and the drawing should not argue against it.
   classDef control fill:#121820,stroke:#71b7ff,stroke-width:2px,color:#e7edf3
   class rbac,netpol,admission,secrets,prgate control

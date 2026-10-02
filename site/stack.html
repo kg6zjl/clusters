@@ -31,27 +31,6 @@
 
 <main>
 
-<section aria-labelledby="map">
-  <h2 id="map">The map</h2>
-  <p>
-    Grouped by job rather than by namespace or vendor. The only arrows drawn are the ones that
-    are the actual design; everything else is just "this is in the box".
-  </p>
-
-  <figure class="shot">
-    <img src="assets/img/system.svg" alt="Diagram of the cluster grouped by job. Source of truth: Git and Flux CD. What runs: the applications, Longhorn, Traefik and MetalLB. What keeps the agent honest: read-only RBAC, Kyverno, NetworkPolicy and the pull request. What notices: Prometheus, Alertmanager and Grafana with Loki. What acts: Hermes, the CI runners, Renovate and Ansible. Where it all reaches me: Discord channels and ntfy." width="1563" height="1290" loading="lazy">
-    <figcaption>
-      <strong>The shape of it.</strong> One reconciler writing from git, four controls between the
-      agent and that writer, and every notification leaving through Discord or a push.
-    </figcaption>
-  </figure>
-
-  <p class="small">
-    Read it left to right as a question: what is true, what runs, what stops the agent changing the
-    first thing, what notices, what is allowed to act, and how it reaches me.
-  </p>
-</section>
-
 <section aria-labelledby="tools">
   <h2 id="tools">The tools</h2>
 
@@ -189,9 +168,8 @@
       </tr>
       <tr>
         <td>Grafana Alloy, and Loki</td>
-        <td>Log shipping and storage. Short retention on purpose: hours answers "what happened last
-          night", and weeks is a cost I have decided not to pay yet. The gap is real and it is
-          listed as a weakness rather than described as a plan.</td>
+        <td>Log shipping and storage. Alloy ships logs from every pod; Loki stores them and Grafana
+          queries them.</td>
       </tr>
       <tr>
         <td>blackbox-exporter</td>
@@ -286,9 +264,6 @@
     <li><strong>The distribution was a lateral move.</strong> I moved off one Kubernetes
       distribution and onto another, which cost days and bought nothing. Pick a distribution on its
       merits once.</li>
-    <li><strong>Log retention is the cheapest thing I skipped.</strong> Hours of history is the
-      single gap that has made an investigation genuinely hard, and it is not an expensive
-      problem to solve.</li>
     <li><strong>Two things here do one job between them.</strong> The cluster grew faster than the
       questions it was being asked, and that shows up as components whose only justification is
       that they were easy to add.</li>

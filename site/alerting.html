@@ -34,7 +34,9 @@
   <h2 id="shape">The shape</h2>
 
   <figure class="shot">
-    <img src="assets/img/alerting.svg" alt="A rule fires in git and goes to Alertmanager, which reaches a push notification for criticals, an alerts channel, and a security channel. Separately, once an hour and only for allow-listed alert names, an alert-detector posts to the agent, which investigates and opens a pull request, then replies in the alerts channel." width="960" height="918" loading="lazy">
+    <a class="zoom" href="assets/img/alerting.svg">
+      <img src="assets/img/alerting.svg" alt="An alert rule in git fires and goes to Alertmanager, which fans out three ways to reach me and a fourth to reach the agent. The three are an amber ntfy push for criticals only, an alerts channel and a security channel. The fourth is the alert-detector, drawn blue as the gate: it runs hourly, only for allow-listed alert names, posts once to Hermes, and Hermes replies in the alerts channel after opening a pull request." width="530" height="743" loading="lazy">
+    </a>
     <figcaption>
       <strong>Two exits.</strong> One wakes me. The other only ever opens a pull request, so it lands
       in the same review queue with the same human at the end of it — just started without me being
@@ -58,26 +60,38 @@
   </p>
 
   <figure class="shot">
-    <img src="assets/img/discord.svg" alt="Four producers each holding one channel webhook: Alertmanager, Flux notifications, a GitHub webhook and CI. They post to an alerts channel, a security channel, a pull-requests channel, a flux-failures channel and a CI channel. The agent's token sidecar mints a short-lived App token for the container the model drives, which posts back to the alerts and pull-request channels." width="1459" height="810" loading="lazy">
+    <a class="zoom" href="assets/img/discord.svg">
+      <img src="assets/img/discord.svg" alt="Five producers in a column on the left post into four Discord channels in a column on the right, drawn green: alerts, security, pull-requests and general. Alertmanager feeds both alerts and security. Flux feeds alerts and Alertmanager feeds alerts, so the two lines converge on that one channel. The GitHub webhook and CI both feed pull-requests, converging there. Hermes, drawn blue, feeds general." width="606" height="493" loading="lazy">
+    </a>
     <figcaption>
-      <strong>Four producers, four webhooks, one outbound identity.</strong> The asymmetry on the
-      right is the whole security argument for this page.
+      <strong>Five producers, four channels.</strong> The four on the left are channel webhooks:
+      each can add a message to the one channel it was created in and nothing else. Hermes is the
+      odd one out.
     </figcaption>
   </figure>
 
   <ul>
-    <li><strong><code>#alerts</code></strong> — everything firing, every severity. The record, with
-      links to the graphs.</li>
+    <li><strong><code>#alerts</code></strong> — everything firing, every severity, plus the reconcile
+      errors Flux reports. The record, with links to the graphs.</li>
     <li><strong><code>#security</code></strong> — policy and scan findings. Separate because they
       are not incidents, and because "the cluster is fine" and "the cluster is fine but something
       was refused" are different sentences.</li>
-    <li><strong><code>#pull-requests</code></strong> — every change, from me and from the agent. The
-      place the loop is visible.</li>
-    <li><strong><code>#flux-failures</code></strong> — reconcile errors only, and only the ones
-      that don't heal themselves.</li>
+    <li><strong><code>#pull-requests</code></strong> — every change, from me and from the agent, plus
+      a failed check in CI. The place the loop is visible.</li>
+    <li><strong><code>#general</code></strong> — what the agent posts in when it has something to say
+      that is neither an alert nor a pull request.</li>
     <li><strong>A push notification</strong>, separately, for criticals only. Discord is where I read;
       the phone is what wakes me up.</li>
   </ul>
+  <p class="small">
+    Three of the four channels are backed by a webhook each, and a webhook is bound to the channel
+    it was created in. That is why two producers sharing a channel have to share a webhook — Flux
+    posts through Alertmanager's, and CI through the same one the GitHub webhook uses — and why the
+    lines above converge in pairs. Fewer credentials to hold is the point. The cost is that losing
+    one webhook silences one channel carrying two producers' output, not one producer's. Hermes is
+    the exception: it holds an app token rather than a channel webhook, so it is scoped to the
+    channels it was granted instead of being confined to one.
+  </p>
 
   <div class="note">
     <span class="label">Why a webhook is a good credential here</span>
@@ -125,6 +139,21 @@
     Silences follow the same rule. A mute that lives only in the Alertmanager API doesn't survive a
     rebuild of the pipeline. If a maintenance window has to be declarative, it's a route in git matched
     on every shape the host appears as, with a written reason and an expiry.
+  </p>
+  <p>
+    Alertmanager can't report its own death. Every notification it would send travels through it, so a
+    rule that fires on an unhealthy Alertmanager is delivered by the unhealthy Alertmanager. The
+    external probe has the same hole: it can see the host go down, and the only thing that could tell
+    anyone is the host that went down.
+  </p>
+  <p>
+    So there is a scheduled job that runs outside the pipeline and posts straight to the push service
+    — a different process on a different machine, which survives the failure it is reporting. It
+    checks two things: that Alertmanager still answers its readiness endpoint, and that the
+    always-firing rule above is still firing in Prometheus. That second one matters more than it
+    looks: from inside, a Prometheus that has stopped evaluating is indistinguishable from one with
+    nothing to report. If either check fails, the phone buzzes by a path that does not involve
+    Alertmanager at all. That is the break glass.
   </p>
 </section>
 

@@ -57,6 +57,17 @@ for src in "${sources[@]}"; do
   # page's, and ignore mermaid.config.json entirely. Normalising here means a diagram is styled
   # by assets/style.css like everything else and scales with its container.
   node /usr/local/bin/normalize-svg.js "$dest"
+
+  # A bare "%%" line in a source is a Mermaid comment the parser does not recognise as one: it
+  # becomes a visible node with "%%" printed in it, sitting in the middle of the diagram. The
+  # render still succeeds and the file still looks like a diagram, so nothing else catches it --
+  # seven of these shipped at once before this check existed. A "%%" line with text after it is a
+  # real comment and is fine; only the empty one is a node.
+  if grep -q 'flowchart-%%' "$dest"; then
+    echo "render: $name.mmd drew a stray '%%' node - put text after a '%%' line, or delete it" >&2
+    failed=1
+    continue
+  fi
 done
 
 if [ "$failed" -ne 0 ]; then

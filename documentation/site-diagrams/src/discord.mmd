@@ -1,56 +1,37 @@
 flowchart LR
-%% Discord is the whole human interface here, and it is worth being precise about why that is
-%% safe rather than just convenient.
-%%
-%% Everything posting into Discord holds a channel webhook. A webhook can add one message to the
-%% one channel it was created in and do nothing else: it cannot read history, cannot react,
-%% cannot join another channel, and no API client anywhere holds it. Four producers, four
-%% webhooks — and losing any one of them silences exactly one channel.
-%%
-%% The agent's outbound path is the only other credential, and it is the opposite shape: one
-%% Discord App token, minted and re-minted by a sidecar that the model's own container never
-%% holds. A compromise there yields a token that dies within the hour.
-%%
-%% One consequence worth stating plainly: because a channel webhook is bound to the channel it
-%% was born in, the security channel's webhook cannot be swapped for the alerts channel's URL.
-%% That separation is a property of the credential, not a routing rule somebody has to maintain.
+%% Discord is the whole human interface here, and worth being precise about why that is safe rather
+%% than just convenient. Every webhook is bound to one channel and can only add a message to it: no
+%% history, no reactions, no other channel. Two producers that share a channel therefore have to
+%% share a webhook, which is why #alerts takes both cluster alerts and reconcile errors. The lines
+%% do that work, not words on them.
 
-  subgraph producers["Producers — each holds one channel webhook"]
-    am["Alertmanager<br/>firing alerts"]
-    fluxnotif["Flux notifications<br/>reconcile errors only"]
-    github["GitHub webhook<br/>via Crossplane"]
-    ci["CI<br/>a failed required check"]
+  subgraph producers["Producers"]
+    am["Alertmanager"]
+    fluxnotif["Flux notifications"]
+    github["GitHub webhook"]
+    ci["CI"]
+    hermes["Hermes"]
   end
 
   subgraph channels["Discord channels"]
-    alerts["#alerts"]
-    security["#security"]
-    prs["#pull-requests"]
-    fluxfail["#flux-failures"]
-    cic["#ci"]
+    alerts["#alerts<br/>cluster alerts and<br/>reconcile errors"]
+    security["#security<br/>policy and scan findings"]
+    prs["#pull-requests<br/>every change,<br/>and failed checks"]
+    general["#general"]
   end
 
-  subgraph agentbox["Hermes"]
-    minter["token sidecar<br/>re-mints hourly"]
-    agent["the container the<br/>model drives"]
-  end
-
-  me["me, reading them"]
-
-  am -->|"webhook A"| alerts
-  am -->|"webhook B,<br/>a different channel"| security
-  fluxnotif --> fluxfail
+  am --> alerts
+  am --> security
+  fluxnotif --> alerts
   github --> prs
-  ci --> cic
+  ci --> prs
+  hermes --> general
 
-  minter -->|"short-lived<br/>App token"| agent
-  agent -->|"posts and replies"| alerts
-  agent --> prs
+  %% Green is where everything lands. Hermes is blue because it is the one producer here that is
+  %% not a channel webhook: it holds an app token, minted short-lived by a sidecar, and posts to the
+  %% channels it was granted rather than being confined to one.
+  classDef ok fill:#17251d,stroke:#4f8f6a,stroke-width:2px,color:#dce9e0
+  classDef control fill:#121820,stroke:#71b7ff,stroke-width:2px,color:#e7edf3
 
-  me --> prs
-  me --> alerts
-
-  trust["A channel webhook can post to one channel.<br/>It cannot read, and it cannot post anywhere else.<br/>A stolen webhook costs a noisy channel, not the workspace."]
-
-  alerts -.-> trust
-  security -.-> trust
+  class alerts,security,prs,general ok
+  class hermes control

@@ -114,22 +114,38 @@ pre code { font-size: 1em; }
 
 /* ---------- figures ---------- */
 
-/* Diagrams and screenshots break out of the 54rem measure. A diagram that has to fit inside the
-   line length renders at about 60% scale, which turns 15px labels into 9px ones; giving figures
-   their own wider measure is cheaper than redrawing every diagram to be tall and narrow.
-   Centred on the column rather than left-aligned to it, so the text above and below it stays
-   where the eye expects. */
+/* Figures sit inside the 54rem measure, capped so a tall one cannot fill the viewport. A click
+   opens the full-resolution file over the page (lightbox below), so inline size only has to read. */
 figure.shot { margin: 2rem 0; }
 
 figure.shot img,
 figure.shot svg {
   display: block;
-  width: 100%;
+  max-width: 100%;
+  /* A portrait diagram at the full column width renders thousands of pixels tall. max-height with
+     width:auto scales the width down with the ratio instead of squashing the box. */
+  max-height: 30rem;
+  width: auto;
   height: auto;
   margin: 0 auto;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--bg-soft);
+}
+
+/* The phone screenshot keeps a smaller measure than the diagrams: even capped, a 1008x2008
+   portrait shot is the tallest thing on any page. Sized on the figure so the caption matches it. */
+figure.shot.narrow {
+  width: 18rem;
+  max-width: 100%;
+  margin-inline: auto;
+}
+
+/* Block, because the image inside it is block-level and an inline box around a block splits into
+   two fragments. zoom-in because it is a click target, which is the whole affordance here. */
+a.zoom {
+  display: block;
+  cursor: zoom-in;
 }
 
 figcaption {
@@ -168,6 +184,62 @@ figcaption strong { color: var(--ink-soft); }
 
 .shot-pending .path { font-size: 0.82rem; color: var(--ink-dim); }
 .shot-pending .hint { font-size: 0.86rem; color: var(--ink-soft); max-width: 34rem; }
+
+/* ---------- lightbox ---------- */
+
+/* Click a zoomable figure to open it full size over the page; click away, or press Escape, to
+   close. Native dialog rather than a div and a keydown handler: showModal brings the top layer, a
+   focus trap and Escape handling with it, which is most of the accessibility work for a dozen
+   lines, and ::backdrop needs no positioning to sit under the page. The box is the full viewport
+   rather than a panel, so a click anywhere that is not the image closes it - a backdrop click
+   reports the dialog itself as its target, which is what the handler in lightbox.js tests for.
+   The dvh lines are the same declaration with the mobile URL bar accounted for, which vh is not;
+   a browser that has never heard of dvh keeps the vh line and scrolls instead of clipping. */
+.lightbox {
+  width: 100vw;
+  max-width: 100vw;
+  height: 100vh;
+  height: 100dvh;
+  max-height: 100vh;
+  max-height: 100dvh;
+  margin: 0;
+  padding: 2rem;
+  border: 0;
+  background: transparent;
+  overflow: auto;
+}
+
+.lightbox[open] {
+  display: grid;
+  place-items: center;
+}
+
+.lightbox::backdrop { background: rgba(4, 7, 10, 0.92); }
+
+.lightbox img {
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
+  height: auto;
+  border-radius: 8px;
+  box-shadow: 0 1.5rem 4rem rgba(0, 0, 0, 0.6);
+}
+
+.lightbox-close {
+  position: fixed;
+  top: 0.9rem;
+  right: 0.9rem;
+  padding: 0.4rem 0.7rem;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--bg-soft);
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+
+.lightbox-close:hover { color: var(--ink); }
 
 /* ---------- callout ---------- */
 
@@ -221,10 +293,8 @@ footer p { margin: 0; }
 }
 
 @media (min-width: 76rem) {
-  /* 68rem of measure, centred on the 54rem column. main is width-constrained rather than
-     max-width-constrained so the breakout has a real containing block to centre against. */
+  /* Fixed measure at desktop width; figures no longer break out of it. */
   main { width: 54rem; }
-  figure.shot { width: 68rem; margin-left: 50%; transform: translateX(-50%); }
 }
 
 @media (prefers-reduced-motion: reduce) {

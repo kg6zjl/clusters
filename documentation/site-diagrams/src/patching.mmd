@@ -1,39 +1,38 @@
 flowchart TB
-%% Two different problems that people usually solve with one bad habit: logging in and running
-%% something. The hosts are machines with an operating system. The cluster is a set of pinned
-%% versions in a repository. Both are handled as code; neither is handled by a shell.
-%%
-%% The dashed arrow is the consequence that makes host reboots a dashboard annotation rather than
-%% a page — the patching mechanism is *designed* to restart nodes on a timetable, so a restart is
-%% the mechanism working rather than an incident.
+%% Three reasons a change exists, one gate, and two ways it is applied.
 
-  subgraph hosts["The hosts — machines with an operating system"]
-    direction TB
-    playbooks["Ansible playbooks<br/>in the same repository"]
-    resolve["secrets resolved from the<br/>vault at run time,<br/>nothing lands in git"]
-    updates["unattended security updates"]
-    reboot["reboot one host at a time,<br/>ordered so control-plane<br/>quorum never drops"]
-    playbooks --> resolve --> updates --> reboot
+%% A change is only ever written by opening a pull request, and that pull request only counts once a
+%% human merges it. What the merged diff then touches decides who applies it: a manifest goes
+%% through Flux to the cluster, and a node-configuration change goes through Ansible to the machines.
+%% Nothing here is a shell run on a host.
+
+  subgraph byrequest["When I ask for a change"]
+    ask["via Hermes,<br/>or a pull request<br/>I write myself"]
   end
 
-  subgraph manifests["The cluster — pinned versions in a repository"]
-    direction TB
-    renovate["Renovate<br/>checks hourly,<br/>one pull request per version"]
-    pins["chart versions, image tags,<br/>action versions, CLI pins<br/>— nothing floats on latest"]
-    renovate --> pins
+  subgraph upstream["When something upstream moves"]
+    renovate["Renovate<br/>proposes the version"]
   end
 
-  pr["The same review queue<br/>required checks, then a human"]
-  fleet["The fleet, running<br/>the new version"]
+  subgraph machine["When a machine needs updating"]
+    nodeconfig["a change to<br/>node configuration"]
+  end
 
-  hosts --> pr
-  manifests --> pr
-  pr -->|"merge"| fleet
-  fleet -.->|"a scheduled restart,<br/>not an incident"| reboot
+  pr["A pull request,<br/>merged by a human"]
+  flux["Flux<br/>applies manifests"]
+  ansible["Ansible<br/>runs the playbooks"]
 
-  note["Renovate proposes and never merges.<br/>A pin nobody merges simply stays pinned — that is the price<br/>of nothing quietly upgrading itself underneath you."]
+  ask --> pr
+  renovate --> pr
+  nodeconfig --> pr
 
-  renovate -.-> note
+  pr -->|"touches the cluster"| flux
+  pr -->|"touches the machines"| ansible
 
-  classDef gate fill:#121820,stroke:#71b7ff,stroke-width:2px,color:#e7edf3
-  class pr gate
+  %% Blue is the gate every change passes, green is where a merged change lands. The three reasons
+  %% stay uncoloured: they are just three ways a pull request gets opened, not a ranking.
+  classDef control fill:#121820,stroke:#71b7ff,stroke-width:2px,color:#e7edf3
+  classDef ok fill:#17251d,stroke:#4f8f6a,stroke-width:2px,color:#dce9e0
+
+  class pr control
+  class flux,ansible ok
