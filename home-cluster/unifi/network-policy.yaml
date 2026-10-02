@@ -18,27 +18,13 @@ spec:
       port: 53
     - protocol: TCP
       port: 53
-  # UniFi console, direct. UniFi OS proxies the Network app on 443 - :8443 fails. Port 53 is here
-  # because the console is also the LAN resolver, and the audit has to ask it directly.
+  # UniFi console, direct. UniFi OS proxies the Network app on 443 - :8443 fails.
   - to:
     - ipBlock:
         cidr: 192.168.1.1/32
     ports:
     - protocol: TCP
       port: 443
-    - protocol: UDP
-      port: 53
-    - protocol: TCP
-      port: 53
-  # Public control resolver, so one client can compare the LAN answer against the global one.
-  - to:
-    - ipBlock:
-        cidr: 1.1.1.1/32
-    ports:
-    - protocol: UDP
-      port: 53
-    - protocol: TCP
-      port: 53
   ingress:
   # Prometheus scrapes the exporter from the monitoring namespace.
   - from:
