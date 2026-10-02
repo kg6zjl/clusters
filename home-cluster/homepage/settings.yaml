@@ -1,0 +1,17 @@
+title: Home Cluster
+theme: dark
+color: slate
+statusStyle: dot
+layout:
+  Media:
+    style: row
+    columns: 4
+  Monitoring:
+    style: row
+    columns: 4
+  Home & Network:
+    style: row
+    columns: 4
+  Tools:
+    style: row
+    columns: 4

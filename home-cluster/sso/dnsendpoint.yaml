@@ -1,7 +1,9 @@
 ---
-# external-dns in this cluster runs with --source=ingress, not --source=traefik, so it does NOT read
-# IngressRoutes. This DNSEndpoint is what actually publishes the name; the hostname annotation is
-# inert by itself.
+# This comment used to claim external-dns runs with --source=ingress only and cannot read
+# IngressRoutes. That is no longer true: --source=traefik-proxy is enabled
+# (kube-system/external-dns-helmrelease.yaml) and the sso IngressRoute declares this host, so this
+# DNSEndpoint is probably redundant. Left in place deliberately - with policy: sync, retiring it means
+# watching the record survive the removal rather than assuming it.
 #
 # Points at the same MetalLB address the other *.kube.stevearnett.com records use, because this name
 # is served by the same wildcard Traefik entrypoint.

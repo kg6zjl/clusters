@@ -1,0 +1,119 @@
+# href is what the browser opens (the published *.kube names). siteMonitor is what the pod polls for
+# the status dot, and it goes to the in-cluster Service, not back out through Traefik - so every
+# monitor has a matching egress rule in network-policy.yaml, and nothing here needs the internet.
+- Media:
+    - Sonarr:
+        href: https://sonarr.kube.stevearnett.com
+        siteMonitor: http://sonarr.media.svc.cluster.local:8989
+        icon: sonarr.png
+        description: TV
+    - Radarr:
+        href: https://radarr.kube.stevearnett.com
+        siteMonitor: http://radarr.media.svc.cluster.local:7878
+        icon: radarr.png
+        description: Films
+    - Lidarr:
+        href: https://lidarr.kube.stevearnett.com
+        siteMonitor: http://lidarr.media.svc.cluster.local:8686
+        icon: lidarr.png
+        description: Music
+    - Prowlarr:
+        href: https://prowlarr.kube.stevearnett.com
+        siteMonitor: http://prowlarr.media.svc.cluster.local:9696
+        icon: prowlarr.png
+        description: Indexers
+    - Seerr:
+        href: https://overseerr.kube.stevearnett.com
+        siteMonitor: http://seerr.media.svc.cluster.local:5055
+        icon: overseerr.png
+        description: Requests
+    - Jellyfin:
+        href: https://media.kube.stevearnett.com
+        siteMonitor: http://jellyfin.media.svc.cluster.local:8096
+        icon: jellyfin.png
+        description: Playback
+    - qBittorrent:
+        href: https://qb.kube.stevearnett.com
+        icon: qbittorrent.png
+        description: Downloads
+- Monitoring:
+    - Grafana:
+        href: https://grafana.kube.stevearnett.com
+        siteMonitor: http://kube-prometheus-stack-grafana.monitoring.svc.cluster.local:80
+        icon: grafana.png
+        description: Dashboards
+    - Prometheus:
+        href: https://prometheus.kube.stevearnett.com
+        siteMonitor: http://kube-prometheus-stack-prometheus.monitoring.svc.cluster.local:9090
+        icon: prometheus.png
+        description: Metrics
+    - Alertmanager:
+        href: https://alerts.kube.stevearnett.com
+        siteMonitor: http://kube-prometheus-stack-alertmanager.monitoring.svc.cluster.local:9093
+        description: Firing alerts
+    - Longhorn:
+        href: https://longhorn.kube.stevearnett.com
+        siteMonitor: http://longhorn-frontend.longhorn-system.svc.cluster.local:80
+        icon: longhorn.png
+        description: Storage
+- Home & Network:
+    - Home Assistant:
+        href: https://ha.kube.stevearnett.com
+        siteMonitor: http://home-assistant.home-assistant.svc.cluster.local:8123
+        icon: home-assistant.png
+        description: Automation
+    - UniFi:
+        href: https://unifi.stevearnett.com
+        icon: unifi.png
+        description: Gateway and wifi
+    - ADSB:
+        href: https://adsb.kube.stevearnett.com
+        siteMonitor: http://adsb-ultrafeeder.adsb.svc.cluster.local:80
+        description: Aircraft
+    - MeshMonitor:
+        href: https://meshmonitor.kube.stevearnett.com
+        siteMonitor: http://meshmonitor.meshtastic.svc.cluster.local:3001
+        description: Mesh
+    - NetAlertX:
+        href: https://netalertx.kube.stevearnett.com
+        siteMonitor: http://netalertx.netalertx.svc.cluster.local:20211
+        description: LAN devices
+    - Node-RED:
+        href: https://nodered.kube.stevearnett.com
+        siteMonitor: http://nodered.nodered.svc.cluster.local:1880
+        icon: node-red.png
+        description: Flows
+    - Speedtest:
+        href: https://speedtest.kube.stevearnett.com
+        siteMonitor: http://speedtest-tracker.speedtest.svc.cluster.local:80
+        icon: speedtest-tracker.png
+        description: Line speed
+- Tools:
+    - Chat:
+        href: https://chat.kube.stevearnett.com
+        siteMonitor: http://open-webui.ai-services.svc.cluster.local:8080
+        icon: open-webui.png
+        description: Open WebUI
+    - ComfyUI:
+        href: https://comfy.kube.stevearnett.com
+        icon: comfyui.png
+        description: Image generation
+    - Hermitage:
+        href: https://hermes.kube.stevearnett.com
+        siteMonitor: http://hermes-dashboard.ai-services.svc.cluster.local:9119
+        description: The agent's own dashboard
+    - Headlamp:
+        href: https://headlamp.kube.stevearnett.com
+        siteMonitor: http://headlamp.headlamp.svc.cluster.local:80
+        icon: headlamp.png
+        description: Cluster UI
+    - Flux:
+        href: https://flux.kube.stevearnett.com
+        description: GitOps
+    - Traefik:
+        href: https://traefik.kube.stevearnett.com
+        icon: traefik.png
+        description: Ingress
+    - Registry:
+        href: https://registry.kube.stevearnett.com
+        description: OCI images

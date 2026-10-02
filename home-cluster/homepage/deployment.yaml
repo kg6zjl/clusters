@@ -1,0 +1,85 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: homepage
+  namespace: homepage
+spec:
+  replicas: 1
+  revisionHistoryLimit: 5
+  selector:
+    matchLabels:
+      app: homepage
+  template:
+    metadata:
+      labels:
+        app: homepage
+    spec:
+      # Homepage runs as root by default; PUID/PGID below plus this block keep it non-root. The
+      # config is a read-only ConfigMap, so nothing here chowns or writes it.
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+      - name: homepage
+        image: ghcr.io/gethomepage/homepage:v2.4.0
+        ports:
+        - containerPort: 3000
+          protocol: TCP
+        env:
+        # Required by Homepage when it is not served from localhost: without it the request is
+        # refused rather than answered.
+        - name: HOMEPAGE_ALLOWED_HOSTS
+          value: home.kube.stevearnett.com
+        - name: PUID
+          value: "1000"
+        - name: PGID
+          value: "1000"
+        - name: TZ
+          value: America/New_York
+        resources:
+          requests:
+            cpu: 50m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        # tcpSocket, not httpGet: Homepage validates the Host header against
+        # HOMEPAGE_ALLOWED_HOSTS, and a probe's Host is the pod IP, so an HTTP probe would be
+        # refused by the app and the pod would never become Ready.
+        readinessProbe:
+          tcpSocket:
+            port: 3000
+          initialDelaySeconds: 5
+          periodSeconds: 15
+        livenessProbe:
+          tcpSocket:
+            port: 3000
+          initialDelaySeconds: 15
+          periodSeconds: 30
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+        volumeMounts:
+        - name: config
+          mountPath: /app/config
+          readOnly: true
+        # Nested inside the read-only config mount: Homepage writes its own logs under here, and a
+        # read-only volume would otherwise make that fail.
+        - name: config-logs
+          mountPath: /app/config/logs
+        - name: tmp
+          mountPath: /tmp
+      volumes:
+      - name: config
+        configMap:
+          name: homepage-config
+      - name: config-logs
+        emptyDir: {}
+      - name: tmp
+        emptyDir: {}
