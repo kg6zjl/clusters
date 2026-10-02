@@ -23,6 +23,9 @@ spec:
       # One attempt: the script exits 0 once it has paged, so a retry only re-sends a page that may
       # already have landed, and the default 6 retries outlive the 120s deadline.
       backoffLimit: 0
+      # History limits only evict once later Jobs exist, so a rare failure sat 26h. TTL
+      # bounds it by time instead. 900 matches blackbox-probe-reconciler in this namespace.
+      ttlSecondsAfterFinished: 900
       template:
         metadata:
           labels:
