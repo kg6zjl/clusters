@@ -82,6 +82,15 @@ data:
       model: "deepseek/deepseek-v4.1-flash"
       model_provider: openrouter
 
+    # Operator-approved dangerous-command classes. The initContainer re-seeds
+    # /opt/data/config.yaml from this ConfigMap, so without them here each restart drops them.
+    command_allowlist:
+    - command parser limit or malformed executable payload
+    - git force push (rewrites remote history)
+    - git force push short flag (rewrites remote history)
+    - script execution via -e/-c flag
+    - shell command via -c/-lc flag
+
     # Inbound webhooks, for intra-net senders only: Alertmanager, the CI runners, a
     # detector CronJob, LAN tooling. Nothing here faces the internet - the pod sits
     # behind the LAN and hermes-agent-allow-webhook is the whole allowlist. The HMAC
