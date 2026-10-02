@@ -1,0 +1,1 @@
+# Not used: there is no Docker socket in this pod. Present so Homepage never tries to create it.

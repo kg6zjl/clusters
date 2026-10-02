@@ -1,0 +1,4 @@
+# Search only. Cluster and resource widgets need API access this pod deliberately does not have.
+- search:
+    provider: duckduckgo
+    target: _blank
