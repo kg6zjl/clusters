@@ -1,5 +1,0 @@
-[wheel]
-allow = true
-
-[source]
-pipeline_scan_paths = ["."]

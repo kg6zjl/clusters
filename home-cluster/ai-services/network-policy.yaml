@@ -18,19 +18,31 @@ spec:
       port: 53
     - protocol: TCP
       port: 53
-    - protocol: TCP
-      port: 443
-  # Ollama + ComfyUI on GPU host (beast) - 192.168.1.161
+  # Every pod's own Services, on the three ports anything here actually calls:
+  # alert-detector -> redis 6379 (dedupe + wake counter) and -> hermes-webhook 8644 (its
+  # POST target); open-webui -> comfy-local 8080, the facade onto beast's ComfyUI.
   - to:
-    - ipBlock:
-        cidr: 192.168.1.161/32
+    - podSelector: {}
     ports:
     - protocol: TCP
-      port: 11434
+      port: 6379
     - protocol: TCP
       port: 8080
+    - protocol: TCP
+      port: 8644
+  # The single cross-namespace call in this namespace: alert-detector reads the firing
+  # alerts from Alertmanager's API. Namespace and port scoped, and selected onto the pod
+  # that makes the call, so nothing else here (the agent included) can reach monitoring.
   - to:
-    - namespaceSelector: {}
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: monitoring
+      podSelector:
+        matchLabels:
+          app.kubernetes.io/name: alertmanager
+    ports:
+    - protocol: TCP
+      port: 9093
   ingress:
   - from:
     - namespaceSelector:
