@@ -7,3 +7,4 @@ resources:
   - unpoller-deployment.yaml
   - unpoller-service.yaml
   - unpoller-servicemonitor.yaml
+  - dns-audit-job.yaml

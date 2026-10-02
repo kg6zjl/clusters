@@ -1,0 +1,100 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  # Bump the suffix to run again: Job names are immutable. No ttlSecondsAfterFinished on purpose - a
+  # self-deleting Job reads as a missing resource to Flux, which recreates it and re-runs it forever.
+  name: unifi-dns-audit-20261002
+  namespace: unifi
+spec:
+  backoffLimit: 1
+  template:
+    spec:
+      restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        runAsGroup: 65534
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+      - name: dns-audit
+        image: python:3.13-alpine
+        envFrom:
+        - secretRef:
+            name: unifi-ro-creds
+        env:
+        - name: PYTHONDONTWRITEBYTECODE
+          value: "1"
+        resources:
+          requests:
+            cpu: 10m
+            memory: 64Mi
+          limits:
+            cpu: 500m
+            memory: 256Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+        volumeMounts:
+        - name: tmp
+          mountPath: /tmp
+        args:
+        - -c
+        - |
+          import http.cookiejar, json, os, ssl, subprocess, urllib.request
+
+          def probe(server, name):
+              # Asking the resolver itself, from a client on the same LAN, is the only way to
+              # separate "the name is missing upstream" from "this resolver will not answer it".
+              out = subprocess.run(["nslookup", name, server], capture_output=True, text=True, timeout=15)
+              body = (out.stdout + out.stderr).strip().replace("\n", " | ")
+              print("DNS", server, name, "->", "rc=" + str(out.returncode), body[:400])
+
+          probe("192.168.1.1", "flux.kube.stevearnett.com")
+          probe("192.168.1.1", "home.kube.stevearnett.com")
+          probe("1.1.1.1", "home.kube.stevearnett.com")
+
+          BASE = "https://192.168.1.1"  # self-signed CN=unifi.local: verification off by design
+          ctx = ssl.create_default_context()
+          ctx.check_hostname = False
+          ctx.verify_mode = ssl.CERT_NONE
+          opener = urllib.request.build_opener(
+              urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()),
+              urllib.request.HTTPSHandler(context=ctx),
+          )
+          login = urllib.request.Request(
+              BASE + "/api/auth/login",
+              data=json.dumps({
+                  "username": os.environ["username"],
+                  "password": os.environ["password"],
+              }).encode(),
+              headers={"Content-Type": "application/json"},
+          )
+          resp = opener.open(login, timeout=30)
+          csrf = resp.headers.get("X-CSRF-Token", "")
+          print("login status=" + str(resp.status), "csrf=" + ("yes" if csrf else "no"))
+
+          def get(path):
+              req = urllib.request.Request(BASE + path, headers={"X-CSRF-Token": csrf})
+              return json.load(opener.open(req, timeout=30))
+
+          NET = ("name", "purpose", "ip_subnet", "vlan", "vlan_enabled", "dhcpd_enabled",
+                 "dhcpd_dns_enabled", "dhcpd_dns_1", "dhcpd_dns_2", "domain_name")
+          try:
+              for item in get("/proxy/network/api/s/default/rest/networkconf").get("data", []):
+                  print("NET", json.dumps({k: item[k] for k in NET if k in item}, default=str))
+          except Exception as exc:
+              print("networkconf ERROR", type(exc).__name__)
+
+          # Section keys only: /rest/setting also carries WLAN passphrases and SSH keys, so no values.
+          try:
+              keys = sorted(i.get("key", "?") for i in get("/proxy/network/api/s/default/rest/setting").get("data", []))
+              print("SETTINGS keys:", ", ".join(keys))
+          except Exception as exc:
+              print("setting ERROR", type(exc).__name__)
+      volumes:
+      - name: tmp
+        emptyDir: {}
