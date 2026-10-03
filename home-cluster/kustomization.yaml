@@ -1,7 +1,68 @@
+# Umbrella build target for CI. Nothing reconciles this root.
+#
+# Flux owns one `path` per Kustomization and kustomize roots cannot be nested across
+# owners, so this cannot also be the Flux entrypoint: reconciling it would take
+# ownership of every child away from the per-component Kustomizations in
+# flux-system/syncs/, collapsing their interval, prune, targetNamespace and SSA field
+# ownership into one. The component sync is the model, not this file.
+#
+# It exists so one `kustomize build .` covers the whole tree. Before this listed four
+# entries (flux-system, flux-system/syncs, adsb, one bare coredns patch), CI validated
+# only Flux's own bootstrap while 40 component roots went unbuilt - a broken overlay in
+# any of them passed Lint, Validate and Secret Scan and surfaced as a failed reconcile.
+# The reconcile being the first thing to notice is the failure this prevents.
+#
+# Listing every component directory also catches cross-component collisions that
+# per-root builds miss: two directories declaring the same ClusterRole or NetPol name
+# error here instead of fighting over SSA field ownership in the cluster.
+#
+# This list is derived from the sync paths in flux-system/syncs/ and enforced by
+# check_sync_coverage.py - do not hand-edit it without adding the matching sync file.
+# `cluster-secrets` is deliberately absent: no sync reconciles it, and it needs a
+# .dockerconfigjson generated at runtime, so it cannot build here. Registry auth is the
+# runner pod's projected token now; see registry/README.md.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
+  - adsb
+  - ai-services
+  - arc-systems
+  - cert-manager
+  - cloudflared
+  - crossplane
+  - crossplane/config
+  - crossplane/provider
+  - external-secrets
+  - falco
+  - flux-instance
+  - flux-notifications
+  - flux-operator
   - flux-system
   - flux-system/syncs
-  - adsb
-  - kube-system/coredns-configmap-patch.yaml
+  - github-runners
+  - headlamp
+  - home-assistant
+  - homepage
+  - kube-system
+  - kyverno
+  - kyverno/policies
+  - local-services
+  - longhorn-system
+  - media
+  - meshtastic
+  - metallb-system
+  - metallb-system/pools
+  - monitoring
+  - mqtt
+  - netalertx
+  - nodered
+  - onepassword-connect
+  - registry
+  - renovate
+  - security-scanning
+  - speedtest
+  - spegel
+  - sso
+  - traefik
+  - unifi
+  - vpn
