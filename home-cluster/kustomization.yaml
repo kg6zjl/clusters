@@ -57,6 +57,7 @@ resources:
   - netalertx
   - nodered
   - onepassword-connect
+  - plane
   - registry
   - renovate
   - security-scanning

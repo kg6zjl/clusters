@@ -45,3 +45,4 @@ resources:
   - kyverno-kustomization.yaml
   - kyverno-policies-kustomization.yaml
   - falco-kustomization.yaml
+  - plane-kustomization.yaml
