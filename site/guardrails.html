@@ -55,6 +55,192 @@
   </figure>
 </section>
 
+<section aria-labelledby="gate">
+  <h2 id="gate">What the gate is actually made of</h2>
+  <p>
+    Control five is the only one that isn't a file. The other four can be read straight out of the
+    repository — a Role, a policy, a NetworkPolicy, each with a diff and a history. The merge gate
+    is a setting on GitHub, so rather than describe it from memory, here it is read back off the API
+    for <code>main</code> on 2 October 2026. It changes rarely, which is exactly why it should be
+    written down: a control nobody re-reads is a control nobody notices drifting.
+  </p>
+
+  <h3>On the branch</h3>
+  <table>
+    <thead><tr><th>Setting</th><th>Value</th><th>What it stops</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>Require a pull request review</td>
+        <td>on</td>
+        <td>Merging without anyone looking at the diff</td>
+      </tr>
+      <tr>
+        <td>Require approval from a code owner</td>
+        <td>on</td>
+        <td>The agent approving its own work — see below</td>
+      </tr>
+      <tr>
+        <td>Dismiss stale approvals</td>
+        <td>on</td>
+        <td>Reviewing a diff, then pushing more commits under the same approval</td>
+      </tr>
+      <tr>
+        <td>Enforce for administrators</td>
+        <td>on</td>
+        <td>Me skipping my own rules, which is the one I'd skip first</td>
+      </tr>
+      <tr>
+        <td>Require up to date before merging</td>
+        <td>on</td>
+        <td>Merge conflicts resolved by whoever merges, on a diff nobody re-read</td>
+      </tr>
+      <tr>
+        <td>Require linear history</td>
+        <td>on</td>
+        <td>Merge commits, so the history stays readable as a log of intent</td>
+      </tr>
+      <tr>
+        <td>Allow force pushes</td>
+        <td>off</td>
+        <td>Rewriting merged history</td>
+      </tr>
+      <tr>
+        <td>Allow deletions</td>
+        <td>off</td>
+        <td>Deleting the branch that holds the only record of a change</td>
+      </tr>
+    </tbody>
+  </table>
+  <p class="small">
+    <code>main</code> is the only protected branch. The number of required approvals is zero, which
+    looks wrong and isn't: nothing is required <em>by number</em>, the review is required from a
+    code owner instead. That holds because <code>CODEOWNERS</code> is a wildcard — every file has an
+    owner, so every pull request needs one. Drop the wildcard and a zero count would mean no review
+    at all.
+  </p>
+  <p class="small">
+    The agent holds write access to this repository, so it is allowed to approve its own pull request in
+    principle. What stops it is the branch above, not its permissions: it is not the code owner, so it
+    cannot give the approval its own pull request needs. Its identity is described under
+    <a href="#secrets">secrets</a>.
+  </p>
+
+  <h3>What the reviewer is checking</h3>
+  <p>
+    The CI workflow has five jobs. Three are required checks, so a pull request cannot merge until
+    all three are green. Two more run and report but aren't required, for different reasons.
+  </p>
+  <ul>
+    <li>
+      <strong>Lint</strong> — YAML lint over the cluster tree. Catches the malformed manifest before
+      Flux tries to apply it and the reconcile fails visibly.
+    </li>
+    <li>
+      <strong>Validate</strong> — builds every root Flux reconciles with Kustomize, all forty of them,
+      read from the sync files rather than a hardcoded list so a new component is covered as soon as
+      its sync object lands. It also builds the cluster directory itself, which is mostly Flux's own
+      bootstrap, and checks that the registry's config is strict JSON, which Kustomize cannot see
+      because a broken string is still valid YAML.
+    </li>
+    <li>
+      <strong>Secret Scan</strong> — TruffleHog over this pull request's commits rather than its tip,
+      so a credential committed and then deleted in the same branch still fails the build. It reports
+      only credentials it can verify against the provider, and only across the commits this pull
+      request adds. It is not a sweep of everything ever merged. This is the check that makes
+      <code>AGENTS.md</code>'s instruction to grep before committing worth anything.
+    </li>
+    <li>
+      <strong>Kyverno policy tests</strong> — the admission policies' own fixtures. It runs and it
+      reports, but it is not a required check.
+    </li>
+    <li>
+      <strong>Notify failure</strong> — deliberately skipped unless something failed, which is why it
+      can't be required: a job that only reports on failure has nothing to report on a green run.
+    </li>
+  </ul>
+  <p>
+    The three required checks are all content gates. They verify that what is in the pull request is
+    well-formed and free of credentials the scanner can verify. None of them verifies that it's
+    <em>correct</em> — that is the review, and the review is the part that isn't automatable.
+  </p>
+  <p>
+    The workflow only starts when a pull request touches a fixed list of paths — the cluster tree, the
+    node playbooks, the workflows themselves, the local hooks, this site, and a few config files. A
+    pull request that only touches a README or a diagram source never runs it, so on that pull request
+    the three checks say nothing at all. I don't lean on GitHub's behaviour when a required check never
+    reports — that's the first thing to check if a merge is ever refused for no visible reason.
+  </p>
+
+  <h3>Before the branch exists</h3>
+  <p>
+    Two things run locally, and both are opt-in in a way worth being honest about. They only fire
+    when <code>core.hooksPath</code> points at the repository's <code>.githooks</code> directory,
+    which the agent's mounted git config does. On a clone where nobody has set that they are inert and
+    there is no signal that they're missing. The commit hook has one more quiet condition of its own:
+    with no <code>pre-commit</code> tool installed it still runs the rebase check and skips the rest.
+    They're a speed bump that catches a stale branch early, not the control that stops it. The control
+    that stops it is the branch protection above, which is why this layer failing open changes
+    nothing.
+  </p>
+  <ul>
+    <li>
+      <strong>On commit</strong> — a rebase check, then the pre-commit framework: secret scanning,
+      YAML parsing, trailing whitespace, a missing final newline, and large files. The rebase check
+      runs first and needs no network, so a stale branch gets caught on every commit rather than at
+      push time.
+    </li>
+    <li>
+      <strong>On push</strong> — the same rebase check, now with the network: it refuses a branch that
+      doesn't contain the current <code>origin/main</code>, because a stale pull request is one
+      GitHub will refuse to merge anyway, and finding that out here is cheaper.
+    </li>
+  </ul>
+  <p>
+    <code>CODEOWNERS</code> is the file that makes the code-owner rule mean anything. It assigns the
+    whole repository to me with a wildcard, and then repeats the important paths explicitly so the
+    intent survives being read at a glance: the agent's own identity files, its RBAC, the workflows
+    that gate its pull requests, and <code>CODEOWNERS</code> itself. Those are the files that decide
+    what the agent can reach and who reviews it, so a change to any of them needs a human, not a
+    pattern match. The wildcard is what makes the zero approval count above safe; the explicit list
+    is what makes it obvious at a glance who actually reviews the parts that matter.
+  </p>
+
+  <div class="note">
+    <span class="label">Where this is weaker than it sounds</span>
+    <p>
+      Five things it does not do, none of them hidden:
+    </p>
+    <ul>
+      <li>
+        <strong>The review count is zero.</strong> It is the setting I would re-read first, and it is
+        the one a reader cannot check for themselves.
+      </li>
+      <li>
+        <strong>Policy tests aren't a required check.</strong> The Kyverno fixtures run and report, but
+        a pull request that breaks an admission policy can still merge.
+      </li>
+      <li>
+        <strong>Nobody reviews that this stays on.</strong> Disabling a branch protection rule is
+        silent. Nothing in the repository fails when it happens, because the rule was never a file —
+        which is the whole reason this section exists, and also its limit.
+      </li>
+      <li>
+        <strong>Nothing validates the change against the live API.</strong> A Kustomize build proves
+        the tree assembles, not that the cluster will accept it. A field the server rejects, or a
+        server-side apply conflict with a resource some other manager owns, only shows up when Flux
+        reconciles. Catching that earlier needs a dry run against the real API, which nothing here
+        does.
+      </li>
+      <li>
+        <strong>The local hooks are a speed bump.</strong> They run for the agent and for any clone
+        that configured them. Anything that matters is caught again by the required checks or by the
+        merge being refused. Whitespace and file size are caught here and nowhere else, while the hook
+        is running, and neither can reach the cluster.
+      </li>
+    </ul>
+  </div>
+</section>
+
 <section aria-labelledby="reach">
   <h2 id="reach">Reach, not authority</h2>
   <table>
