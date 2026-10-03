@@ -1,6 +1,11 @@
 name: CI Lint
 
 on:
+  # Also on main pushes: the repo badge tracks this workflow on the default branch,
+  # so a pull_request-only gate can never turn it green.
+  push:
+    branches:
+      - main
   pull_request:
     branches:
       - main
