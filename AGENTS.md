@@ -196,6 +196,36 @@ grep -rE "password|secret|token|key|auth|credential" --include="*.yaml" .
 
 ### Debugging Commands
 
+#### If kubectl fails with "control characters are not allowed"
+
+```
+error loading config file "/Users/steve/.kube/cache/http/<hash>":
+yaml: control characters are not allowed
+```
+
+This is **not** a broken kubeconfig and **not** a cluster problem. It is one corrupt file in
+kubectl's client-side **discovery cache** under `~/.kube/cache/http/`, which kubectl parses as
+YAML on every invocation and aborts on. It happens after an interrupted discovery request.
+
+Fix by pointing `kubectl` at the real kubeconfig explicitly, bypassing the cache path:
+
+```bash
+KUBECONFIG="$HOME/.kube/config" kubectl get pods -n <namespace>
+```
+
+If the cache keeps regenerating the bad file, delete that one file (it is disposable local
+state, rebuilt on next use):
+
+```bash
+rm -f ~/.kube/cache/http/<hash>
+```
+
+Do **not** diagnose this as an API-server or credential problem — the request never leaves
+the machine. Do not delete the whole `~/.kube` directory to "reset" it; that destroys
+contexts and credentials.
+
+#### Routine commands
+
 ```bash
 # Pod logs
 kubectl logs -n <namespace> <pod>
