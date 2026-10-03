@@ -5,8 +5,55 @@ repos:
       - id: trailing-whitespace
       - id: end-of-file-fixer
       - id: check-yaml
+        # Without this, the hook rejects every multi-document manifest in the repo
+        # (gotk-components.yaml, adsb/pvc.yaml, flaresolverr.yaml and others), so it
+        # fails on any commit that touches one. A broken local hook teaches people to
+        # reach for --no-verify, which is worse than not having it.
+        args: [--allow-multiple-documents]
       - id: check-added-large-files
   - repo: https://github.com/gitleaks/gitleaks
     rev: v8.18.2
     hooks:
       - id: gitleaks
+
+  # The cluster's own gates, run locally so a break is found before it costs a runner.
+  # Each mirrors a check the CI Lint or Validate job runs, or closes a hole one of them
+  # had. Together they run in about 2.5s, so there is no reason to push first and find
+  # out. All three are pass_filenames: false because each takes the repo root, not the
+  # changed files, and each is scoped with `files` so unrelated commits skip them.
+  - repo: local
+    hooks:
+      - id: build-umbrella
+        name: build every Flux root (kustomize)
+        entry: sh home-cluster/flux-system/scripts/build_umbrella.sh
+        language: system
+        pass_filenames: false
+        files: ^home-cluster/
+        # A manifest change anywhere can break an unrelated root through a shared patch or
+        # a base it references, so this cannot be narrowed to the directory that changed.
+
+      - id: sync-coverage
+        name: sync registry matches the umbrella root
+        entry: python3 home-cluster/flux-system/scripts/check_sync_coverage.py .
+        language: python
+        additional_dependencies: [pyyaml]
+        pass_filenames: false
+        files: ^home-cluster/
+
+      - id: yamllint
+        name: yamllint (the CI Lint job's config)
+        entry: python -m yamllint -c home-cluster/yamllint.yaml home-cluster/
+        language: python
+        additional_dependencies: ['yamllint==1.38.0']
+        pass_filenames: false
+        files: ^home-cluster/.*\.ya?ml$
+
+      - id: registry-config-json
+        name: registry config.json is strict JSON
+        # zot refuses to start on a comment or trailing comma inside config.json, and no
+        # YAML or kustomize check can see it: a string with a stray "#" is still valid
+        # YAML. Same check as the CI Validate job, run at commit time instead.
+        entry: python3 home-cluster/registry/scripts/check_config_json.py home-cluster
+        language: system
+        pass_filenames: false
+        files: ^home-cluster/registry/

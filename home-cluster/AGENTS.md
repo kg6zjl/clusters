@@ -81,9 +81,23 @@ task apply
 
 ### Validate Manifests
 
+**Run `pre-commit run --all-files` before pushing.** It takes about 2.5s and covers
+everything below plus yamllint and the registry JSON check, so a break is found here
+rather than costing a runner slot. The hooks mirror the CI gates on purpose: a local gate
+that checks something different from the runner lets a break through to the runner, which
+is the waste this is meant to remove.
+
 ```bash
-# Validate Kustomize build (no errors = success)
-kubectl kustomize . 2>&1 > /dev/null && echo "SUCCESS" || echo "FAILED"
+# All local gates (~2.5s). This is the one to run.
+pre-commit run --all-files
+
+# Build every root Flux reconciles, from the umbrella root.
+# home-cluster/kustomization.yaml lists all 42 component directories, so this one build
+# covers them all - not just Flux's own bootstrap.
+sh home-cluster/flux-system/scripts/build_umbrella.sh
+
+# Check the sync registry and the umbrella root agree, in both directions.
+python3 home-cluster/flux-system/scripts/check_sync_coverage.py .
 
 # Dry-run apply to catch errors before applying
 kubectl apply -k . --dry-run=client
@@ -91,6 +105,10 @@ kubectl apply -k . --dry-run=client
 # Check for secrets in YAML files (run before committing)
 grep -rE "password|secret|token|key|auth|credential" --include="*.yaml" .
 ```
+
+> `kubectl kustomize .` on its own is **not** enough. Run from the repo root it builds
+> nothing relevant; run from `home-cluster/` it now builds every root, which is what
+> `build_umbrella.sh` does for you.
 
 ### Debugging Commands
 
@@ -211,6 +229,18 @@ spec:
         ports: []
         volumeMounts: []
 ```
+
+### Comments
+
+**A comment must not be longer than the diff it explains.** A one- or two-line change gets no
+comment at all: the rationale belongs in the PR body and the commit message, which are mandatory,
+reviewed, and do not rot inside the file.
+
+- Comment only what the code cannot say — an upstream quirk, a measured number, a deliberate
+  deviation from the obvious approach, a trap the next editor would fall into.
+- Never restate the change, narrate the file's history, or argue against an alternative you
+  rejected. That argument is a review comment, not a manifest comment.
+- Past three or four lines, the detail belongs in the PR body or a README beside the file.
 
 ### Secrets Management (CRITICAL)
 
@@ -358,7 +388,7 @@ root) that someone added by mistake, delete them in the PR — do not carry them
 
 ### STICK TO THE PROCESS
 
-- All cluster state changes must follow the defined pipeline: **PR -> GHA -> Local GH Runner**. 
+- All cluster state changes must follow the defined pipeline: **PR -> GHA -> Local GH Runner**.
 - No manual `kubectl` cluster edits or "Inception"-style workarounds.
 - Your local workspace is for drafting and validation only. The cluster source of truth is Git.
 - **OS/host-level changes (packages, netplan, swap, sysctl, cron, mounts, security updates) go through Ansible (`node-config/`) and are PR'd** — never ad-hoc SSH to thinkcentres/pikube. Only read-only debugging (get/logs/ping) is allowed outside the pipeline, plus the one-time `bootstrap.yaml --ask-become-pass` (run by the user).
@@ -372,7 +402,7 @@ root) that someone added by mistake, delete them in the PR — do not carry them
 
 - **NEVER poll in a tight loop.** Every tool call consumes tokens and cluster resources.
 - **Use Exponential Backoff:** If waiting for a job or pod, increase the wait time between checks (e.g., 30s -> 1m -> 2m -> 5m).
-- **Silent Monitoring:** Do not report status updates for every poll unless there is a significant change or failure. 
+- **Silent Monitoring:** Do not report status updates for every poll unless there is a significant change or failure.
 - **Maximum Polls:** After 3-5 failed/pending checks, stop polling and ask the user to check back later or provide a direct link for them to monitor.
 
 ### Before Pushing - Check Branch/PR Status
@@ -478,12 +508,20 @@ grep -E "ghp_|eyJ|CLOUDFLARE_|RENOVATE_|password:\s*['\"][^$]" --include="*.yaml
 
 ### Adding a New Service
 
-1. Create directory at repository root
-2. Add `namespace.yaml`, `kustomization.yaml`, and resource manifests
-3. Add `external-secrets.yaml` if the service requires secrets (add secrets to 1Password first!)
-4. Reference directory from root `kustomization.yaml`
-5. Add a Flux Kustomization sync in `flux-system/syncs/`
-6. Merge PR — Flux will reconcile automatically
+1. Create `home-cluster/<name>/` with `namespace.yaml`, `kustomization.yaml`, and resource
+   manifests
+2. Add `external-secrets.yaml` if the service requires secrets (add secrets to 1Password first!)
+3. Add a Flux Kustomization sync at `home-cluster/flux-system/syncs/<name>-kustomization.yaml`
+   with `path: ./home-cluster/<name>` — **and list the file in
+   `home-cluster/flux-system/syncs/kustomization.yaml`**, or Flux never sees it
+4. Add `<name>` to `resources` in `home-cluster/kustomization.yaml` so CI builds it
+5. `pre-commit run --all-files`, then merge — Flux will reconcile automatically
+
+**Steps 3 and 4 are both enforced** by `check_sync_coverage.py`, in both directions. The
+sync directory is the registry: a component exists when it has a sync file there, and the
+umbrella root must list its directory so `kustomize build .` builds it. Miss either and
+the component is reconciled but never built, or built but never reconciled — and both fail
+open, which is why they are checked rather than documented.
 
 ### Creating an Ingress
 

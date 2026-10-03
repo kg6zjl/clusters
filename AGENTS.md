@@ -9,7 +9,7 @@ This file provides guidance for AI coding agents operating in this repository.
 0. **NEVER make live changes to cluster hosts (thinkcentres, pikube, etc.) by hand or ad-hoc SSH** - OS/host-level changes (packages, netplan, swap, sysctl, cron, security updates, mounts) go through **Ansible (`node-config/`) and are PR'd** like everything else. Direct `kubectl apply`/`helm` AND direct host edits bypass the GitOps pipeline. The only exceptions are read-only debugging (get/logs/ping) and the one-time interactive bootstrap (`bootstrap.yaml --ask-become-pass`, run by the user, no agent sudo).
 0b. **NEVER SSH in as the `ansible` user** - the ansible automation account is `ansible-playbook` execution only. Any ad-hoc/interactive login as `ansible` is forbidden. Manual SSH uses your own `steve` account (read-only debugging only).
 1. **NEVER use kubectl apply, delete, edit, patch** - These break the GitOps model
-2. **NEVER use helm install, upgrade, rollback** - These break the GitOps model  
+2. **NEVER use helm install, upgrade, rollback** - These break the GitOps model
 3. **Only use kubectl for READ-ONLY operations** - get, describe, logs, etc.
 4. **All changes MUST go through PR → GitHub Actions → Flux**
 5. **If you break these rules, you lose permissions**
@@ -165,9 +165,23 @@ happened in PR #882.
 
 ### Validate Manifests
 
+**Run `pre-commit run --all-files` before pushing.** It takes about 2.5s and covers
+everything below plus yamllint and the registry JSON check, so a break is found here
+rather than costing a runner slot. The hooks mirror the CI gates on purpose: a local gate
+that checks something different from the runner lets a break through to the runner, which
+is the waste this is meant to remove.
+
 ```bash
-# Validate Kustomize build (no errors = success)
-kubectl kustomize . 2>&1 > /dev/null && echo "SUCCESS" || echo "FAILED"
+# All local gates (~2.5s). This is the one to run.
+pre-commit run --all-files
+
+# Build every root Flux reconciles, from the umbrella root.
+# home-cluster/kustomization.yaml lists all 42 component directories, so this one build
+# covers them all - not just Flux's own bootstrap.
+sh home-cluster/flux-system/scripts/build_umbrella.sh
+
+# Check the sync registry and the umbrella root agree, in both directions.
+python3 home-cluster/flux-system/scripts/check_sync_coverage.py .
 
 # Dry-run apply to catch errors before applying
 kubectl apply -k . --dry-run=client
@@ -176,7 +190,41 @@ kubectl apply -k . --dry-run=client
 grep -rE "password|secret|token|key|auth|credential" --include="*.yaml" .
 ```
 
+> `kubectl kustomize .` on its own is **not** enough. Run from the repo root it builds
+> nothing relevant; run from `home-cluster/` it now builds every root, which is what
+> `build_umbrella.sh` does for you.
+
 ### Debugging Commands
+
+#### If kubectl fails with "control characters are not allowed"
+
+```
+error loading config file "/Users/steve/.kube/cache/http/<hash>":
+yaml: control characters are not allowed
+```
+
+This is **not** a broken kubeconfig and **not** a cluster problem. It is one corrupt file in
+kubectl's client-side **discovery cache** under `~/.kube/cache/http/`, which kubectl parses as
+YAML on every invocation and aborts on. It happens after an interrupted discovery request.
+
+Fix by pointing `kubectl` at the real kubeconfig explicitly, bypassing the cache path:
+
+```bash
+KUBECONFIG="$HOME/.kube/config" kubectl get pods -n <namespace>
+```
+
+If the cache keeps regenerating the bad file, delete that one file (it is disposable local
+state, rebuilt on next use):
+
+```bash
+rm -f ~/.kube/cache/http/<hash>
+```
+
+Do **not** diagnose this as an API-server or credential problem — the request never leaves
+the machine. Do not delete the whole `~/.kube` directory to "reset" it; that destroys
+contexts and credentials.
+
+#### Routine commands
 
 ```bash
 # Pod logs
@@ -242,6 +290,18 @@ spec:
         ports: []
         volumeMounts: []
 ```
+
+### Comments
+
+**A comment must not be longer than the diff it explains.** A one- or two-line change gets no
+comment at all: the rationale belongs in the PR body and the commit message, which are mandatory,
+reviewed, and do not rot inside the file.
+
+- Comment only what the code cannot say — an upstream quirk, a measured number, a deliberate
+  deviation from the obvious approach, a trap the next editor would fall into.
+- Never restate the change, narrate the file's history, or argue against an alternative you
+  rejected. That argument is a review comment, not a manifest comment.
+- Past three or four lines, the detail belongs in the PR body or a README beside the file.
 
 ### 🛡️ INFRASTRUCTURE & SECURITY POLICY
 When proposing or implementing architectural changes (e.g., CI/CD, migration to ARC, or new services):
@@ -455,12 +515,20 @@ grep -E "ghp_|eyJ|CLOUDFLARE_|RENOVATE_|password:\s*['\"][^$]" --include="*.yaml
 
 ### Adding a New Service
 
-1. Create directory at repository root
-2. Add `namespace.yaml`, `kustomization.yaml`, and resource manifests
-3. Add `external-secrets.yaml` if the service requires secrets (add secrets to 1Password first!)
-4. Reference directory from root `kustomization.yaml`
-5. Add a Flux Kustomization sync in `flux-system/syncs/`
-6. Merge PR — Flux will reconcile automatically
+1. Create `home-cluster/<name>/` with `namespace.yaml`, `kustomization.yaml`, and resource
+   manifests
+2. Add `external-secrets.yaml` if the service requires secrets (add secrets to 1Password first!)
+3. Add a Flux Kustomization sync at `home-cluster/flux-system/syncs/<name>-kustomization.yaml`
+   with `path: ./home-cluster/<name>` — **and list the file in
+   `home-cluster/flux-system/syncs/kustomization.yaml`**, or Flux never sees it
+4. Add `<name>` to `resources` in `home-cluster/kustomization.yaml` so CI builds it
+5. `pre-commit run --all-files`, then merge — Flux will reconcile automatically
+
+**Steps 3 and 4 are both enforced** by `check_sync_coverage.py`, in both directions. The
+sync directory is the registry: a component exists when it has a sync file there, and the
+umbrella root must list its directory so `kustomize build .` builds it. Miss either and
+the component is reconciled but never built, or built but never reconciled — and both fail
+open, which is why they are checked rather than documented.
 
 ### Creating an Ingress
 

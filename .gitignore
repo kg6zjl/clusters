@@ -18,3 +18,7 @@ BOOTSTRAP.md
 TOOLS.md
 repo/
 clusters/
+
+# Python bytecode from the repo's own check scripts
+__pycache__/
+*.pyc
