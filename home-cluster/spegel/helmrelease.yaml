@@ -40,5 +40,6 @@ spec:
         - https://quay.io
         - https://registry.k8s.io
         - https://mirror.gcr.io
+        - https://artifacts.plane.so
       additionalMirrorTargets:
         - https://registry.kube.stevearnett.com
