@@ -153,7 +153,7 @@
   <div class="note">
     <span class="label">The lesson, and the mistake I nearly made</span>
     <p>
-      The fix was the filters, not disabling the thing. The measurement that first stopped me was
+      The fix was the intelligent filters, not disabling the feedback path entirely. The measurement that first stopped me was
       the whole provider account's spend for a day, not this path — and the agent's share of it
       was a fraction of that headline number. Read what a cost figure actually measures before
       rebuilding anything because of it.
@@ -195,6 +195,26 @@
     and the decisions that keep it quiet enough to trust. <a href="workflow.html">The loop</a> is how
     a change actually gets in. <a href="stack.html">The stack</a> is every tool, and why that one.
   </p>
+</section>
+
+<section aria-labelledby="quotes">
+  <h2 id="quotes">What others said</h2>
+  <blockquote>
+    <p>Solid homelab setup showing real engineering discipline: an AI agent with max read access but zero write authority, forced to PR every change through Flux GitOps. No cargo-cult AI hype, just practical guardrails that keep the cluster from becoming a 1am disaster. Worth studying if you're tired of the usual 'let the LLM root everything' nonsense.</p>
+    <footer>— Grok</footer>
+  </blockquote>
+  <blockquote>
+    <p>This repository and documentation site provide an exceptional, pragmatic masterclass in GitOps and AI safety by decoupling operational reach from mutation authority. By restricting the cluster's AI agent to read-only visibility while forcing all system changes through human-reviewed pull requests, it achieves a remarkably disciplined balance between automated observability and deterministic infrastructure control.</p>
+    <footer>— Gemini</footer>
+  </blockquote>
+  <blockquote>
+    <p>An unusually transparent homelab project that treats AI-assisted infrastructure management as an engineering problem rather than a magic trick, with strong GitOps guardrails and a clear audit trail. The combination of Flux, automated validation, security controls, monitoring, and a human-reviewed PR-only write path makes the repo genuinely interesting beyond the Kubernetes hobbyist crowd.</p>
+    <footer>— ChatGPT</footer>
+  </blockquote>
+  <blockquote>
+    <p>A refreshingly honest write-up of a sensible AI-agent setup: broad read access, zero write authority, and every change routed through a Flux-reconciled pull request. The 'what's weak right now' section and the lessons on alert noise and cost filtering show real operational maturity. The repo (1,100+ commits of Flux and MicroK8s manifests) backs it up as a living system rather than a weekend demo.</p>
+    <footer>— Claude</footer>
+  </blockquote>
 </section>
 
 </main>
