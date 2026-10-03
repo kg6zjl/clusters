@@ -63,21 +63,12 @@ spec:
       # report larger than both the apiserver's 3 MiB request cap and the trivy
       # client-server 2 MiB gRPC message cap, so those scans fail outright instead of
       # reporting anything at all.
-      # Jobs skip containerd, so Spegel's hosts.toml never applies. HTTP mirror.
-      # index.docker.io covers the docker.io rewrite (trivy-operator#2671). Private zot stays off; Spegel drops pull secrets.
+      # Spegel 404s tag pulls that omit ?ns=; trivy never sends it, and a rewritten ref does not fall back.
+      # docker.io is rewritten to index.docker.io before the mirror lookup (trivy-operator#2671).
       registry:
         mirror:
-          "docker.io": spegel-registry.spegel.svc.cluster.local:5000
-          "index.docker.io": spegel-registry.spegel.svc.cluster.local:5000
-          "ghcr.io": spegel-registry.spegel.svc.cluster.local:5000
-          "quay.io": spegel-registry.spegel.svc.cluster.local:5000
-          "registry.k8s.io": spegel-registry.spegel.svc.cluster.local:5000
-          "public.ecr.aws": spegel-registry.spegel.svc.cluster.local:5000
-          "gcr.io": spegel-registry.spegel.svc.cluster.local:5000
-          "mirror.gcr.io": spegel-registry.spegel.svc.cluster.local:5000
-          "artifacts.plane.so": spegel-registry.spegel.svc.cluster.local:5000
-      nonSslRegistries:
-        spegel: spegel-registry.spegel.svc.cluster.local:5000
+          "docker.io": mirror.gcr.io
+          "index.docker.io": mirror.gcr.io
       severity: "HIGH,CRITICAL"
       ignoreUnfixed: true
       timeout: "5m0s"
