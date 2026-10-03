@@ -117,3 +117,7 @@
     - Registry:
         href: https://registry.kube.stevearnett.com
         description: OCI images
+    - Plane:
+        href: https://kanban.kube.stevearnett.com
+        siteMonitor: http://plane-web.plane.svc.cluster.local:3000
+        description: Kanban

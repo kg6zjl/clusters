@@ -131,3 +131,10 @@ spec:
       port: 8080  # open-webui
     - protocol: TCP
       port: 9119  # hermes-dashboard
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: plane
+    ports:
+    - protocol: TCP
+      port: 3000  # plane-web
