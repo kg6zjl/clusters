@@ -516,6 +516,12 @@ grep -E "ghp_|eyJ|CLOUDFLARE_|RENOVATE_|password:\s*['\"][^$]" --include="*.yaml
    `home-cluster/flux-system/syncs/kustomization.yaml`**, or Flux never sees it
 4. Add `<name>` to `resources` in `home-cluster/kustomization.yaml` so CI builds it
 5. `pre-commit run --all-files`, then merge — Flux will reconcile automatically
+6. Add a tile to the homepage (`home.kube.stevearnett.com`) in the same PR:
+   `home-cluster/homepage/services.yaml` for the link, and — if the tile should show a
+   status dot — a `siteMonitor` line plus the matching egress rule in
+   `home-cluster/homepage/network-policy.yaml`. The policy is evaluated **after** Service
+   DNAT, so the rule names the container port, not the Service port. Without the tile the
+   service is reachable only by a URL nobody has been told.
 
 **Steps 3 and 4 are both enforced** by `check_sync_coverage.py`, in both directions. The
 sync directory is the registry: a component exists when it has a sync file there, and the
