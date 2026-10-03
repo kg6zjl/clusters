@@ -45,7 +45,8 @@ spec:
     # the same 558MiB image, and every one of them dies DeadlineExceeded and pages on KubeJobFailed
     # without ever producing a report. The image is scanned once per build instead, by digest, in
     # .github/workflows/build-runner-image.yaml.
-    excludeNamespaces: "github-runners"
+    # plane images are on artifacts.plane.so, which rate-limits anonymous pulls.
+    excludeNamespaces: "github-runners,plane"
     operator:
       builtInTrivyServer: true
       scanJobTTL: "30m"

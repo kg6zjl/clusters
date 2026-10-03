@@ -44,6 +44,4 @@ spec:
           port: 53
     - to:
         - podSelector: {}
-    - ports:
-        - protocol: TCP
-          port: 443
+    # No internet egress. plane-ce has no airgap flag; this is the airgap.
