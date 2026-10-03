@@ -157,6 +157,14 @@ spec:
           # .repo_delivered by the previous start, which never removes a bundled skill.
           # A fetch failure with a tree already on the PVC warns and continues: an
           # unreachable GitHub must not stop the agent from booting.
+          # curl/CA certs live in the container FS, not the volume, so the tools stamp above
+          # leaves them absent from the second boot on: the fetch failed `curl: not found`
+          # forever and the tree froze. Non-fatal, so a mirror outage cannot stop the boot.
+          if ! command -v curl >/dev/null 2>&1; then
+            { apt-get update -qq && \
+              apt-get install -y -qq --no-install-recommends ca-certificates curl >/dev/null; } || \
+              echo "skills: cannot install curl"
+          fi
           if curl -fsSL -m 60 -H "Authorization: Bearer $(cat /etc/hermes/github-token)" \
               https://codeload.github.com/kg6zjl/skills/tar.gz/refs/heads/main -o /tmp/skills.tgz; then
             rm -rf /tmp/skills-repo
