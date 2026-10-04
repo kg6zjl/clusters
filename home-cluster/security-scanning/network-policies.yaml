@@ -63,14 +63,6 @@ spec:
       port: 443
     - protocol: TCP
       port: 16443
-  # Spegel registry. Scan jobs skip containerd, so they must reach the mirror themselves.
-  - to:
-    - namespaceSelector:
-        matchLabels:
-          kubernetes.io/metadata.name: spegel
-    ports:
-    - protocol: TCP
-      port: 5000
   # trivy-server (ClientServer scan jobs): ClusterIP + in-namespace pod (port 4954)
   - to:
     - ipBlock:
